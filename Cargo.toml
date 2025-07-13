@@ -1,0 +1,22 @@
+[package]
+name = "yyaml"
+version = "0.1.0"
+edition = "2021"
+authors = ["Cyrup AI <dev@cyrup.ai>"]
+description = "Serde support for yaml-rust2"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/cyrup-ai/cyrun"
+keywords = ["yaml", "serde", "serialization", "deserialization", "parser"]
+categories = ["encoding", "parser-implementations"]
+
+[dependencies]
+yaml-rust2 = "0.10.2"
+thiserror = "2.0.12"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+indoc = "2.0"
+
+[lib]
+path = "./src/lib.rs"
+name = "yyaml"
