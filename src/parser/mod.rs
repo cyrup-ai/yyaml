@@ -3,14 +3,18 @@
 //! This module provides comprehensive YAML 1.2 parsing with zero infinite recursion,
 //! proper AST construction, and robust error handling.
 
+// Core parsing components
 pub mod ast;
 pub mod blocks;
 pub mod documents;
 pub mod flows;
 pub mod grammar;
 pub mod scalars;
+pub mod indentation;
+pub mod node_parser;
+pub mod state_machine;
 
-// Keep existing modules for compatibility
+// Legacy modules for backward compatibility
 pub mod block;
 pub mod document;
 pub mod flow;
@@ -20,21 +24,26 @@ pub use ast::*;
 
 use grammar::ParseContext;
 
-// Maintain backward compatibility
-pub use crate::parsing::{State, execute_state_machine, parse_node};
+// Export core parsing functionality
+pub use indentation::{
+    IndentationResult, calculate_block_entry_indent, validate_block_mapping_indentation,
+    validate_block_sequence_indentation,
+};
+pub use node_parser::parse_node;
+pub use state_machine::{State, execute_state_machine};
 pub use loader::YamlLoader;
 
 use crate::error::{Marker, ScanError};
 use crate::events::{Event, MarkedEventReceiver, TokenType};
-use crate::lexer::{LexError, Position, Token, TokenKind, YamlLexer};
-use crate::scanner::Scanner;
+use crate::lexer::{LexError, Position, TokenKind, YamlLexer};
+use crate::scanner::{Scanner, Token};
 use std::collections::{HashMap, VecDeque};
 
 /// High-performance YAML parser with complete grammar support
 #[derive(Debug)]
 pub struct YamlParser<'input> {
     lexer: YamlLexer<'input>,
-    token_buffer: VecDeque<Token<'input>>,
+    token_buffer: VecDeque<Token>,
     current_document: Option<Document<'input>>,
     parse_state: ParseState,
     recursion_depth: usize,
@@ -382,7 +391,7 @@ impl<'input> YamlParser<'input> {
 
     /// Utility methods
     #[inline]
-    fn peek_token(&mut self) -> Result<Option<&Token<'input>>, ParseError> {
+    fn peek_token(&mut self) -> Result<Option<&Token>, ParseError> {
         if self.token_buffer.is_empty() {
             match self.lexer.next_token() {
                 Ok(token) => {
@@ -398,7 +407,7 @@ impl<'input> YamlParser<'input> {
     }
 
     #[inline]
-    fn consume_token(&mut self) -> Result<Token<'input>, ParseError> {
+    fn consume_token(&mut self) -> Result<Token, ParseError> {
         if let Some(token) = self.token_buffer.pop_front() {
             Ok(token)
         } else {

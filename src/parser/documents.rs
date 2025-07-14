@@ -6,7 +6,8 @@
 use super::ast::{Document, Node, Stream};
 use super::grammar::{ContextStack, ParseContext};
 use super::{ParseError, ParseErrorKind, YamlParser};
-use crate::lexer::{Position, TokenKind};
+use crate::events::TokenType;
+use crate::lexer::Position;
 
 /// Document parser with multi-document stream support
 pub struct DocumentParser;
@@ -20,7 +21,7 @@ impl DocumentParser {
 
         // Parse stream start if present
         if let Some(token) = parser.peek_token()? {
-            if matches!(token.kind, TokenKind::StreamStart) {
+            if matches!(token.1, TokenType::StreamStart(_)) {
                 parser.consume_token()?;
             }
         }
@@ -31,7 +32,7 @@ impl DocumentParser {
 
             // Check for stream end
             if let Some(token) = parser.peek_token()? {
-                if matches!(token.kind, TokenKind::StreamEnd) {
+                if matches!(token.1, TokenType::StreamEnd) {
                     break;
                 }
             } else {
@@ -67,7 +68,7 @@ impl DocumentParser {
 
         // Check for explicit document start
         let has_explicit_start = if let Some(token) = parser.peek_token()? {
-            if matches!(token.kind, TokenKind::DocumentStart) {
+            if matches!(token.1, TokenType::DocumentStart) {
                 parser.consume_token()?; // consume ---
                 true
             } else {
@@ -84,8 +85,8 @@ impl DocumentParser {
         parser.skip_insignificant_tokens()?;
 
         let content = if let Some(token) = parser.peek_token()? {
-            match token.kind {
-                TokenKind::DocumentEnd | TokenKind::DocumentStart | TokenKind::StreamEnd => {
+            match token.1 {
+                TokenType::DocumentEnd | TokenType::DocumentStart | TokenType::StreamEnd => {
                     // Empty document
                     None
                 }
@@ -97,7 +98,7 @@ impl DocumentParser {
 
         // Check for explicit document end
         let has_explicit_end = if let Some(token) = parser.peek_token()? {
-            if matches!(token.kind, TokenKind::DocumentEnd) {
+            if matches!(token.1, TokenType::DocumentEnd) {
                 parser.consume_token()?; // consume ...
                 true
             } else {
@@ -134,29 +135,29 @@ impl DocumentParser {
         })?;
 
         // Clone the data we need before consuming
-        let token_kind = token.kind.clone();
-        let token_position = token.position;
+        let token_kind = token.1.clone();
+        let token_position = Position { line: token.0.line, column: token.0.col, byte_offset: token.0.index };
 
         match token_kind {
             // Block sequence
-            TokenKind::BlockEntry => {
+            TokenType::BlockEntry => {
                 let entry_token = parser.consume_token()?;
                 super::blocks::BlockParser::parse_sequence(parser, entry_token, 0)
             }
 
             // Flow collections
-            TokenKind::FlowSequenceStart => {
+            TokenType::FlowSequenceStart => {
                 let start_token = parser.consume_token()?;
                 super::flows::FlowParser::parse_sequence(parser, start_token)
             }
 
-            TokenKind::FlowMappingStart => {
+            TokenType::FlowMappingStart => {
                 let start_token = parser.consume_token()?;
                 super::flows::FlowParser::parse_mapping(parser, start_token)
             }
 
             // Scalars (potentially mapping keys)
-            TokenKind::Scalar { .. } => {
+            TokenType::Scalar(..) => {
                 // Check if this could be a block mapping
                 if Self::is_document_level_mapping_key(parser)? {
                     let key_token = parser.consume_token()?;
@@ -171,40 +172,40 @@ impl DocumentParser {
             }
 
             // Explicit key indicator
-            TokenKind::Key => {
+            TokenType::Key => {
                 let key_token = parser.consume_token()?;
                 super::blocks::BlockParser::parse_mapping(parser, key_token, 0)
             }
 
             // Anchors
-            TokenKind::Anchor(name) => {
+            TokenType::Anchor(name) => {
                 let anchor_token = parser.consume_token()?;
                 let anchored_node = Self::parse_document_content(parser)?;
                 Ok(Node::Anchor(super::ast::AnchorNode::new(
                     name,
                     Box::new(anchored_node),
-                    anchor_token.position,
+                    Position { line: anchor_token.0.line, column: anchor_token.0.col, byte_offset: anchor_token.0.index },
                 )))
             }
 
             // Aliases
-            TokenKind::Alias(name) => {
+            TokenType::Alias(name) => {
                 let alias_token = parser.consume_token()?;
                 Ok(Node::Alias(super::ast::AliasNode::new(
                     name,
-                    alias_token.position,
+                    Position { line: alias_token.0.line, column: alias_token.0.col, byte_offset: alias_token.0.index },
                 )))
             }
 
             // Tags
-            TokenKind::Tag { handle, suffix } => {
+            TokenType::Tag(handle, suffix) => {
                 let tag_token = parser.consume_token()?;
                 let tagged_node = Self::parse_document_content(parser)?;
                 Ok(Node::Tagged(super::ast::TaggedNode::new(
                     handle,
                     suffix,
                     Box::new(tagged_node),
-                    tag_token.position,
+                    Position { line: tag_token.0.line, column: tag_token.0.col, byte_offset: tag_token.0.index },
                 )))
             }
 
@@ -225,33 +226,33 @@ impl DocumentParser {
         loop {
             if let Some(token) = parser.peek_token()? {
                 // Clone the data we need
-                let token_kind = token.kind.clone();
+                let token_kind = token.1.clone();
 
                 match token_kind {
-                    TokenKind::YamlDirective { major, minor } => {
+                    TokenType::VersionDirective(major, minor) => {
                         let directive_token = parser.consume_token()?;
                         directives.push(DirectiveInfo::Yaml {
                             major,
                             minor,
-                            position: directive_token.position,
+                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
                         });
                     }
 
-                    TokenKind::TagDirective { handle, prefix } => {
+                    TokenType::TagDirective(handle, prefix) => {
                         let directive_token = parser.consume_token()?;
                         directives.push(DirectiveInfo::Tag {
                             handle,
                             prefix,
-                            position: directive_token.position,
+                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
                         });
                     }
 
-                    TokenKind::ReservedDirective { name, value } => {
+                    TokenType::Reserved(name) => {
                         let directive_token = parser.consume_token()?;
                         directives.push(DirectiveInfo::Reserved {
                             name,
-                            value,
-                            position: directive_token.position,
+                            value: String::new(), // Reserved directives don't have values in TokenType::Reserved
+                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
                         });
                     }
 
@@ -284,7 +285,7 @@ impl DocumentParser {
 
         // Look for value indicator
         let is_key = if let Some(token) = parser.peek_token()? {
-            matches!(token.kind, TokenKind::Value)
+            matches!(token.1, TokenType::Value)
         } else {
             false
         };
@@ -300,11 +301,11 @@ impl DocumentParser {
         parser: &mut YamlParser<'input>,
     ) -> Result<(), ParseError> {
         while let Some(token) = parser.peek_token()? {
-            match token.kind {
-                TokenKind::Whitespace(_) | TokenKind::LineBreak | TokenKind::Comment(_) => {
+            match token.1 {
+                TokenType::StreamStart(_) | TokenType::StreamEnd => {
                     parser.consume_token()?;
                 }
-                TokenKind::DocumentStart | TokenKind::DocumentEnd => {
+                TokenType::DocumentStart | TokenType::DocumentEnd => {
                     // Don't consume document markers
                     break;
                 }

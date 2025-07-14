@@ -4,8 +4,8 @@
 //! URI validation, and escape sequence processing according to YAML 1.2.
 
 use crate::error::{Marker, ScanError};
-use crate::scanner::state::ScannerState;
 use crate::scanner::ScannerConfig;
+use crate::scanner::state::ScannerState;
 
 /// Scan tag with handle and suffix resolution
 #[inline]
@@ -22,7 +22,7 @@ pub fn scan_tag<T: Iterator<Item = char>>(
 
     // Scan tag handle
     let handle = scan_tag_handle(state)?;
-    
+
     // Scan tag suffix
     let suffix = scan_tag_suffix(state)?;
 
@@ -39,12 +39,12 @@ fn scan_verbatim_tag<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<(String, String), ScanError> {
     let start_mark = state.mark();
-    
+
     // Consume '<'
     state.consume_char()?;
-    
+
     let mut uri = String::with_capacity(64);
-    
+
     loop {
         match state.peek_char()? {
             '>' => {
@@ -65,7 +65,7 @@ fn scan_verbatim_tag<T: Iterator<Item = char>>(
                 ));
             }
         }
-        
+
         // Prevent runaway tags
         if uri.len() > 4096 {
             return Err(ScanError::new(
@@ -91,11 +91,11 @@ fn scan_tag_handle<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<String, ScanError> {
     let mut handle = String::with_capacity(16);
-    
+
     // Check for secondary tag indicator
     if matches!(state.peek_char(), Ok('!')) {
         handle.push(state.consume_char()?);
-        
+
         // Scan handle name
         while let Ok(ch) = state.peek_char() {
             if is_tag_handle_char(ch) {
@@ -120,7 +120,7 @@ fn scan_tag_suffix<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<String, ScanError> {
     let mut suffix = String::with_capacity(32);
-    
+
     loop {
         match state.peek_char() {
             Ok('%') => {
@@ -132,7 +132,7 @@ fn scan_tag_suffix<T: Iterator<Item = char>>(
             }
             _ => break,
         }
-        
+
         // Prevent runaway suffixes
         if suffix.len() > 1024 {
             return Err(ScanError::new(
@@ -152,30 +152,26 @@ fn decode_uri_escape<T: Iterator<Item = char>>(
 ) -> Result<String, ScanError> {
     // Consume '%'
     state.consume_char()?;
-    
+
     let mut bytes = Vec::new();
-    
+
     // Read sequence of %XX encodings
     loop {
         // Read two hex digits
-        let hex_str = format!(
-            "{}{}",
-            read_hex_digit(state)?,
-            read_hex_digit(state)?
-        );
-        
+        let hex_str = format!("{}{}", read_hex_digit(state)?, read_hex_digit(state)?);
+
         let byte = u8::from_str_radix(&hex_str, 16)
             .map_err(|_| ScanError::new(state.mark(), "invalid URI escape sequence"))?;
-        
+
         bytes.push(byte);
-        
+
         // Check if next is another escape
         if !matches!(state.peek_char(), Ok('%')) {
             break;
         }
         state.consume_char()?; // consume next '%'
     }
-    
+
     // Convert bytes to UTF-8 string
     String::from_utf8(bytes)
         .map_err(|_| ScanError::new(state.mark(), "invalid UTF-8 in URI escape sequence"))
@@ -267,7 +263,7 @@ fn validate_tag_handle(handle: &str, position: Marker) -> Result<(), ScanError> 
     }
 
     // Validate characters in handle name
-    let handle_name = &handle[1..handle.len()-1];
+    let handle_name = &handle[1..handle.len() - 1];
     for ch in handle_name.chars() {
         if !is_tag_handle_char(ch) {
             return Err(ScanError::new(
@@ -359,8 +355,8 @@ fn validate_tag_uri(uri: &str, position: Marker) -> Result<(), ScanError> {
 /// Resolve tag handle to full URI
 pub fn resolve_tag_handle(handle: &str, suffix: &str) -> Result<String, String> {
     let prefix = match handle {
-        "" | "!" => "!",  // Local tag
-        "!!" => "tag:yaml.org,2002:",  // Global tag
+        "" | "!" => "!",              // Local tag
+        "!!" => "tag:yaml.org,2002:", // Global tag
         _ => {
             // Named handle - would need tag directive mapping
             return Err(format!("unresolved tag handle '{}'", handle));

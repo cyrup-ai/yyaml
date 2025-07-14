@@ -23,13 +23,13 @@ pub fn scan_directive<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<Directive, ScanError> {
     let start_mark = state.mark();
-    
+
     // Skip whitespace after %
     skip_whitespace(state);
-    
+
     // Read directive name
     let name = scan_directive_name(state)?;
-    
+
     match name.as_str() {
         "YAML" => scan_yaml_directive(state, start_mark),
         "TAG" => scan_tag_directive(state, start_mark),
@@ -44,7 +44,7 @@ fn scan_directive_name<T: Iterator<Item = char>>(
 ) -> Result<String, ScanError> {
     let mut name = String::with_capacity(16);
     let start_mark = state.mark();
-    
+
     // First character must be letter
     match state.peek_char()? {
         ch if ch.is_ascii_alphabetic() => {
@@ -57,12 +57,12 @@ fn scan_directive_name<T: Iterator<Item = char>>(
             ));
         }
     }
-    
+
     // Subsequent characters can be letters, digits, hyphen, underscore
     while let Ok(ch) = state.peek_char() {
         if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
             name.push(state.consume_char()?);
-            
+
             if name.len() > 32 {
                 return Err(ScanError::new(
                     start_mark,
@@ -73,11 +73,11 @@ fn scan_directive_name<T: Iterator<Item = char>>(
             break;
         }
     }
-    
+
     if name.is_empty() {
         return Err(ScanError::new(start_mark, "empty directive name"));
     }
-    
+
     Ok(name)
 }
 
@@ -90,10 +90,10 @@ fn scan_yaml_directive<T: Iterator<Item = char>>(
     // Require at least one space
     require_whitespace(state, "YAML directive")?;
     skip_whitespace(state);
-    
+
     // Scan major version number
     let major = scan_version_number(state, "major version")?;
-    
+
     // Require dot separator
     if state.consume_char()? != '.' {
         return Err(ScanError::new(
@@ -101,19 +101,19 @@ fn scan_yaml_directive<T: Iterator<Item = char>>(
             "expected '.' in YAML version directive",
         ));
     }
-    
+
     // Scan minor version number
     let minor = scan_version_number(state, "minor version")?;
-    
+
     // Validate version
     validate_yaml_version(major, minor, start_mark)?;
-    
+
     // Skip trailing whitespace
     skip_whitespace(state);
-    
+
     // Ensure line ends properly
     ensure_line_end(state, "YAML directive")?;
-    
+
     Ok(Directive::Version { major, minor })
 }
 
@@ -126,26 +126,26 @@ fn scan_tag_directive<T: Iterator<Item = char>>(
     // Require at least one space
     require_whitespace(state, "TAG directive")?;
     skip_whitespace(state);
-    
+
     // Scan tag handle
     let handle = scan_tag_handle_directive(state)?;
-    
+
     // Require whitespace between handle and prefix
     require_whitespace(state, "TAG directive handle")?;
     skip_whitespace(state);
-    
+
     // Scan tag prefix
     let prefix = scan_tag_prefix_directive(state)?;
-    
+
     // Validate handle and prefix
     validate_tag_directive(&handle, &prefix, start_mark)?;
-    
+
     // Skip trailing whitespace
     skip_whitespace(state);
-    
+
     // Ensure line ends properly
     ensure_line_end(state, "TAG directive")?;
-    
+
     Ok(Directive::Tag { handle, prefix })
 }
 
@@ -157,27 +157,27 @@ fn scan_reserved_directive<T: Iterator<Item = char>>(
     _start_mark: Marker,
 ) -> Result<Directive, ScanError> {
     let mut args = Vec::new();
-    
+
     // Skip initial whitespace
     skip_whitespace(state);
-    
+
     // Scan arguments until end of line
     while !is_line_end(state)? {
         // Skip whitespace before argument
         skip_whitespace(state);
-        
+
         if is_line_end(state)? {
             break;
         }
-        
+
         // Scan one argument
         let arg = scan_directive_argument(state)?;
         args.push(arg);
-        
+
         // Skip whitespace after argument
         skip_whitespace(state);
     }
-    
+
     Ok(Directive::Reserved { name, args })
 }
 
@@ -189,12 +189,12 @@ fn scan_version_number<T: Iterator<Item = char>>(
 ) -> Result<u32, ScanError> {
     let mut number_str = String::with_capacity(8);
     let start_mark = state.mark();
-    
+
     // Read digits
     while let Ok(ch) = state.peek_char() {
         if ch.is_ascii_digit() {
             number_str.push(state.consume_char()?);
-            
+
             if number_str.len() > 6 {
                 return Err(ScanError::new(
                     start_mark,
@@ -205,14 +205,14 @@ fn scan_version_number<T: Iterator<Item = char>>(
             break;
         }
     }
-    
+
     if number_str.is_empty() {
         return Err(ScanError::new(
             start_mark,
             &format!("expected {} number", context),
         ));
     }
-    
+
     number_str.parse::<u32>().map_err(|_| {
         ScanError::new(
             start_mark,
@@ -228,16 +228,13 @@ fn scan_tag_handle_directive<T: Iterator<Item = char>>(
 ) -> Result<String, ScanError> {
     let mut handle = String::with_capacity(32);
     let start_mark = state.mark();
-    
+
     // Must start with !
     if state.consume_char()? != '!' {
-        return Err(ScanError::new(
-            start_mark,
-            "tag handle must start with '!'",
-        ));
+        return Err(ScanError::new(start_mark, "tag handle must start with '!'"));
     }
     handle.push('!');
-    
+
     // Scan handle characters
     while let Ok(ch) = state.peek_char() {
         if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_') {
@@ -253,7 +250,7 @@ fn scan_tag_handle_directive<T: Iterator<Item = char>>(
                 &format!("invalid character '{}' in tag handle", ch),
             ));
         }
-        
+
         if handle.len() > 64 {
             return Err(ScanError::new(
                 start_mark,
@@ -261,7 +258,7 @@ fn scan_tag_handle_directive<T: Iterator<Item = char>>(
             ));
         }
     }
-    
+
     // Handle must end with ! (except for primary handle "!")
     if handle != "!" && !handle.ends_with('!') {
         return Err(ScanError::new(
@@ -269,7 +266,7 @@ fn scan_tag_handle_directive<T: Iterator<Item = char>>(
             "tag handle must end with '!' (except primary handle)",
         ));
     }
-    
+
     Ok(handle)
 }
 
@@ -280,7 +277,7 @@ fn scan_tag_prefix_directive<T: Iterator<Item = char>>(
 ) -> Result<String, ScanError> {
     let mut prefix = String::with_capacity(128);
     let start_mark = state.mark();
-    
+
     // Scan prefix characters (URI characters plus percent encoding)
     while let Ok(ch) = state.peek_char() {
         if is_tag_prefix_char(ch) {
@@ -296,7 +293,7 @@ fn scan_tag_prefix_directive<T: Iterator<Item = char>>(
                 &format!("invalid character '{}' in tag prefix", ch),
             ));
         }
-        
+
         if prefix.len() > 1024 {
             return Err(ScanError::new(
                 start_mark,
@@ -304,11 +301,11 @@ fn scan_tag_prefix_directive<T: Iterator<Item = char>>(
             ));
         }
     }
-    
+
     if prefix.is_empty() {
         return Err(ScanError::new(start_mark, "empty tag prefix"));
     }
-    
+
     Ok(prefix)
 }
 
@@ -318,13 +315,13 @@ fn scan_directive_argument<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<String, ScanError> {
     let mut arg = String::with_capacity(64);
-    
+
     while let Ok(ch) = state.peek_char() {
         if ch.is_whitespace() || is_line_end_char(ch) {
             break;
         }
         arg.push(state.consume_char()?);
-        
+
         if arg.len() > 256 {
             return Err(ScanError::new(
                 state.mark(),
@@ -332,7 +329,7 @@ fn scan_directive_argument<T: Iterator<Item = char>>(
             ));
         }
     }
-    
+
     Ok(arg)
 }
 
@@ -343,24 +340,28 @@ fn scan_percent_encoding<T: Iterator<Item = char>>(
 ) -> Result<String, ScanError> {
     // Consume '%'
     let percent = state.consume_char()?;
-    
+
     // Read two hex digits
     let hex1 = match state.consume_char()? {
         ch if ch.is_ascii_hexdigit() => ch,
-        ch => return Err(ScanError::new(
-            state.mark(),
-            &format!("invalid hex digit '{}' in percent encoding", ch),
-        )),
+        ch => {
+            return Err(ScanError::new(
+                state.mark(),
+                &format!("invalid hex digit '{}' in percent encoding", ch),
+            ));
+        }
     };
-    
+
     let hex2 = match state.consume_char()? {
         ch if ch.is_ascii_hexdigit() => ch,
-        ch => return Err(ScanError::new(
-            state.mark(),
-            &format!("invalid hex digit '{}' in percent encoding", ch),
-        )),
+        ch => {
+            return Err(ScanError::new(
+                state.mark(),
+                &format!("invalid hex digit '{}' in percent encoding", ch),
+            ));
+        }
     };
-    
+
     Ok(format!("{}{}{}", percent, hex1, hex2))
 }
 
@@ -386,7 +387,7 @@ fn require_whitespace<T: Iterator<Item = char>>(
             &format!("expected whitespace in {}", context),
         ));
     }
-    
+
     skip_whitespace(state);
     Ok(())
 }
@@ -413,9 +414,9 @@ fn ensure_line_end<T: Iterator<Item = char>>(
     context: &str,
 ) -> Result<(), ScanError> {
     match state.peek_char() {
-        Ok('#') => Ok(()), // Comment starts
+        Ok('#') => Ok(()),                        // Comment starts
         Ok(ch) if is_line_end_char(ch) => Ok(()), // Newline
-        Err(_) => Ok(()), // EOF
+        Err(_) => Ok(()),                         // EOF
         Ok(ch) => Err(ScanError::new(
             state.mark(),
             &format!("unexpected character '{}' after {}", ch, context),
@@ -427,8 +428,31 @@ fn ensure_line_end<T: Iterator<Item = char>>(
 #[inline]
 fn is_tag_prefix_char(ch: char) -> bool {
     // URI characters excluding % (handled separately)
-    ch.is_ascii_alphanumeric() ||
-    matches!(ch, '-' | '_' | '.' | '~' | ':' | '/' | '?' | '#' | '[' | ']' | '@' | '!' | '$' | '&' | '\'' | '(' | ')' | '*' | '+' | ',' | ';' | '=')
+    ch.is_ascii_alphanumeric()
+        || matches!(
+            ch,
+            '-' | '_'
+                | '.'
+                | '~'
+                | ':'
+                | '/'
+                | '?'
+                | '#'
+                | '['
+                | ']'
+                | '@'
+                | '!'
+                | '$'
+                | '&'
+                | '\''
+                | '('
+                | ')'
+                | '*'
+                | '+'
+                | ','
+                | ';'
+                | '='
+        )
 }
 
 // Validation functions
@@ -460,11 +484,7 @@ fn validate_yaml_version(major: u32, minor: u32, position: Marker) -> Result<(),
 
 /// Validate TAG directive components
 #[inline]
-fn validate_tag_directive(
-    handle: &str,
-    prefix: &str,
-    position: Marker,
-) -> Result<(), ScanError> {
+fn validate_tag_directive(handle: &str, prefix: &str, position: Marker) -> Result<(), ScanError> {
     // Validate handle format
     if handle != "!" && handle != "!!" && (!handle.starts_with('!') || !handle.ends_with('!')) {
         return Err(ScanError::new(
@@ -472,7 +492,7 @@ fn validate_tag_directive(
             "invalid tag handle format (must be !, !!, or !word!)",
         ));
     }
-    
+
     // Validate handle length
     if handle.len() > 64 {
         return Err(ScanError::new(
@@ -480,19 +500,19 @@ fn validate_tag_directive(
             "tag handle too long (max 64 characters)",
         ));
     }
-    
+
     // Validate prefix
     if prefix.is_empty() {
         return Err(ScanError::new(position, "empty tag prefix"));
     }
-    
+
     if prefix.len() > 1024 {
         return Err(ScanError::new(
             position,
             "tag prefix too long (max 1024 characters)",
         ));
     }
-    
+
     Ok(())
 }
 

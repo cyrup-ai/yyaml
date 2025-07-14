@@ -4,8 +4,8 @@
 //! type inference, pattern matching, and complete standard compliance.
 
 use super::types::*;
-use crate::semantic::SemanticError;
 use crate::lexer::Position;
+use crate::semantic::SemanticError;
 use std::collections::HashMap;
 
 /// YAML schema processor for type inference and validation
@@ -184,18 +184,39 @@ impl CoreSchema {
         let mut resolvers = HashMap::new();
 
         // Standard YAML 1.2 tags - cast function items to TypeResolverFn for zero-allocation HashMap
-        resolvers.insert("tag:yaml.org,2002:null", Self::resolve_null as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:bool", Self::resolve_bool as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:null",
+            Self::resolve_null as TypeResolverFn,
+        );
+        resolvers.insert(
+            "tag:yaml.org,2002:bool",
+            Self::resolve_bool as TypeResolverFn,
+        );
         resolvers.insert("tag:yaml.org,2002:int", Self::resolve_int as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:float", Self::resolve_float as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:float",
+            Self::resolve_float as TypeResolverFn,
+        );
         resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:binary", Self::resolve_binary as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:timestamp", Self::resolve_timestamp as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:binary",
+            Self::resolve_binary as TypeResolverFn,
+        );
+        resolvers.insert(
+            "tag:yaml.org,2002:timestamp",
+            Self::resolve_timestamp as TypeResolverFn,
+        );
         resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq as TypeResolverFn);
         resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map as TypeResolverFn);
         resolvers.insert("tag:yaml.org,2002:set", Self::resolve_set as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:omap", Self::resolve_omap as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:pairs", Self::resolve_pairs as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:omap",
+            Self::resolve_omap as TypeResolverFn,
+        );
+        resolvers.insert(
+            "tag:yaml.org,2002:pairs",
+            Self::resolve_pairs as TypeResolverFn,
+        );
 
         Self { resolvers }
     }
@@ -275,11 +296,13 @@ impl JsonSchema {
 
     pub fn resolve_tag(&self, tag: &str) -> Result<YamlType, SemanticError> {
         if let Some(resolver) = self.resolvers.get(tag) {
-            resolver("").ok_or_else(|| YamlType::tag_resolution_failed_error(
-                tag,
-                "JSON schema resolution failed",
-                Position::default(),
-            ))
+            resolver("").ok_or_else(|| {
+                YamlType::tag_resolution_failed_error(
+                    tag,
+                    "JSON schema resolution failed",
+                    Position::default(),
+                )
+            })
         } else {
             Err(YamlType::unknown_tag_error(tag, Position::default()))
         }
@@ -329,15 +352,15 @@ impl FailsafeSchema {
 
     pub fn resolve_tag(&self, tag: &str) -> Result<YamlType, SemanticError> {
         if let Some(resolver) = self.resolvers.get(tag) {
-            resolver("").ok_or_else(|| YamlType::tag_resolution_failed_error(
-                tag,
-                "Failsafe schema resolution failed",
-                Position::default(),
-            ))
-        } else {
-            Err(SemanticError::UnknownTag {
-                tag: tag.to_string(),
+            resolver("").ok_or_else(|| {
+                YamlType::tag_resolution_failed_error(
+                    tag,
+                    "Failsafe schema resolution failed",
+                    Position::default(),
+                )
             })
+        } else {
+            Err(YamlType::unknown_tag_error(tag, Position::default()))
         }
     }
 

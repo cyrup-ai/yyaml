@@ -228,7 +228,9 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
     #[inline]
     pub fn peek_char(&mut self) -> Result<char, ScanError> {
         self.ensure_buffer(1);
-        self.buffer.front().copied()
+        self.buffer
+            .front()
+            .copied()
             .ok_or_else(|| ScanError::new(self.mark, "unexpected end of input"))
     }
 

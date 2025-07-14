@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Custom tag resolver trait for extensibility
-pub trait CustomTagResolver<'input> {
+pub trait CustomTagResolver<'input>: std::fmt::Debug {
     /// Resolve custom tag to YAML type
     fn resolve(&self, tag: &str, value: &str) -> Result<YamlType, String>;
     /// Validate custom tag format
@@ -136,11 +136,10 @@ impl<'input> TagResolver<'input> {
                     if let Some(prefix) = context.get_tag_handle(handle) {
                         Ok(format!("{}{}", prefix, tag_suffix))
                     } else {
-                        Err(SemanticError::UnknownTagHandle {
-                            handle: handle.to_string(),
-                            position: context.current_position(),
-                            available_handles: self.get_available_handles(),
-                        })
+                        Err(YamlType::unknown_tag_handle_error(
+                            handle,
+                            context.current_position(),
+                        ))
                     }
                 }
             }
@@ -168,29 +167,41 @@ impl<'input> TagResolver<'input> {
                 match resolver.resolve(full_tag, "") {
                     Ok(yaml_type) => return Ok(yaml_type),
                     Err(err) => {
-                        return Err(SemanticError::CustomTagResolutionFailed {
-                            tag: full_tag.to_string(),
-                            resolver: name.clone(),
-                            error: err,
-                        });
+                        return Err(YamlType::custom_tag_resolution_failed_error(
+                            full_tag,
+                            &format!("Custom resolver '{}' failed: {}", name, err),
+                            Position::default(),
+                        ));
                     }
                 }
             }
         }
 
         // Fallback to unknown
-        Err(SemanticError::UnknownTag {
-            tag: full_tag.to_string(),
-        })
+        Err(YamlType::unknown_tag_error(full_tag, Position::default()))
     }
 
     /// Infer tag from node content for implicit typing
     pub fn infer_tag_from_node(&mut self, node: &Node<'input>) -> YamlType {
         match node {
-            Node::Scalar { value, .. } => self.schema_processor.infer_scalar_type(value),
-            Node::Sequence { .. } => YamlType::Seq,
-            Node::Mapping { .. } => YamlType::Map,
-            Node::Alias { .. } => YamlType::Unknown, // Resolve through alias system
+            Node::Scalar(scalar_node) => {
+                self.schema_processor.infer_scalar_type(&scalar_node.value)
+            }
+            Node::Sequence(_) => YamlType::Seq,
+            Node::Mapping(_) => YamlType::Map,
+            Node::Alias(_) => YamlType::Unknown, // Resolve through alias system
+            Node::Anchor(anchor_node) => {
+                // Infer from the anchored content
+                self.infer_tag_from_node(&anchor_node.node)
+            }
+            Node::Tagged(tagged_node) => {
+                // Use the explicit tag, resolve it to YamlType
+                match self.resolve_type(&tagged_node.tag, &tagged_node.node) {
+                    Ok(yaml_type) => yaml_type,
+                    Err(_) => YamlType::Unknown, // Fallback for unresolvable tags
+                }
+            }
+            Node::Null(_) => YamlType::Null,
         }
     }
 
@@ -358,6 +369,7 @@ impl<'input> Default for TagResolver<'input> {
 }
 
 // Simple custom resolver implementations for common cases
+#[derive(Debug)]
 pub struct SimpleCustomResolver {
     name: String,
     tag_prefix: String,

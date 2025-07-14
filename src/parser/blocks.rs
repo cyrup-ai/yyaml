@@ -8,6 +8,7 @@ use super::ast::{
 };
 use super::grammar::{ContextStack, ParseContext};
 use super::{ParseError, ParseErrorKind, YamlParser};
+use crate::events::TokenType;
 use crate::lexer::{Position, Token, TokenKind};
 
 /// Block collection parser with indentation tracking
@@ -43,17 +44,17 @@ impl BlockParser {
             parser.skip_insignificant_tokens()?;
 
             let item = if let Some(token) = parser.peek_token()? {
-                match &token.kind {
+                match &token.1 {
                     // Nested block entry at same level
-                    TokenKind::BlockEntry
-                        if Self::is_at_sequence_indent(token.position, sequence_indent) =>
+                    TokenType::BlockEntry
+                        if Self::is_at_sequence_indent(Position { line: token.0.line, column: token.0.col, byte_offset: token.0.index }, sequence_indent) =>
                     {
                         // Empty item (dash followed by another dash)
                         Node::Null(NullNode::new(start_pos))
                     }
 
                     // End of sequence (dedent or other structure)
-                    _ if !Self::is_continuation_of_sequence(token.position, sequence_indent) => {
+                    _ if !Self::is_continuation_of_sequence(Position { line: token.0.line, column: token.0.col, byte_offset: token.0.index }, sequence_indent) => {
                         // Current item is null/empty
                         Node::Null(NullNode::new(start_pos))
                     }
@@ -74,9 +75,9 @@ impl BlockParser {
             parser.skip_insignificant_tokens()?;
 
             if let Some(token) = parser.peek_token()? {
-                match &token.kind {
-                    TokenKind::BlockEntry
-                        if Self::is_at_sequence_indent(token.position, sequence_indent) =>
+                match &token.1 {
+                    TokenType::BlockEntry
+                        if Self::is_at_sequence_indent(Position { line: token.0.line, column: token.0.col, byte_offset: token.0.index }, sequence_indent) =>
                     {
                         parser.consume_token()?; // consume '-'
                         continue; // Parse next item

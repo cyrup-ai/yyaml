@@ -9,6 +9,7 @@ use super::types::{
     Cycle, CycleDetectionAlgorithm, CycleSeverity, CycleType, DetectionMetrics, ReferenceId,
 };
 use crate::semantic::SemanticError;
+use crate::lexer::Position;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -103,10 +104,11 @@ impl CycleDetector {
 
         // Depth limit check
         if self.recursion_stack.len() >= self.max_depth {
-            return Err(SemanticError::new(
-                "Maximum recursion depth exceeded in cycle detection",
-                None,
-            ));
+            return Err(SemanticError::ValidationDepthExceeded {
+                max_depth: self.max_depth,
+                current_depth: self.recursion_stack.len(),
+                position: Position::default(),
+            });
         }
 
         // Check if we've found a back edge (cycle)

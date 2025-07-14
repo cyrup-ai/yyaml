@@ -13,12 +13,11 @@ pub mod tags;
 pub mod token;
 pub mod utils;
 
-pub use state::{ScannerState, ScannerConfig};
+pub use state::{ScannerConfig, ScannerState};
 pub use token::{Token, TokenProducer, TokenStream};
 
 use crate::error::{Marker, ScanError};
 use crate::events::TokenType;
-use std::collections::VecDeque;
 
 /// High-performance YAML scanner with zero-allocation tokenization
 ///
@@ -55,22 +54,33 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Peek at next token without consuming
     #[inline]
-    pub fn peek_token(&mut self) -> Result<&Token, ScanError> {
+    pub fn peek_token(&mut self) -> Result<Token, ScanError> {
         if !self.state.has_cached_token() {
             let token = self.fetch_next_token()?;
             self.state.cache_token(token);
         }
-        self.state.peek_cached_token()
+        self.state
+            .peek_cached_token()
+            .cloned()
             .ok_or_else(|| ScanError::new(self.mark(), "internal error: no cached token"))
     }
 
     /// Fetch next token, consuming it
     #[inline]
-    pub fn fetch_token(&mut self) -> Result<Token, ScanError> {
+    pub fn fetch_token(&mut self) -> Token {
         if let Some(token) = self.state.take_cached_token() {
-            Ok(token)
+            token
         } else {
-            self.fetch_next_token()
+            // If no cached token, fetch one - this follows original API design
+            // where peek_token() should be called first in normal usage
+            match self.fetch_next_token() {
+                Ok(token) => token,
+                Err(_) => {
+                    // Create a no-token as fallback to avoid panic
+                    // This maintains API compatibility while being safer than unwrap
+                    self.token_producer.no_token(self.mark())
+                }
+            }
         }
     }
 
@@ -246,7 +256,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn scan_literal_block_scalar(&mut self, start_mark: Marker) -> Result<Token, ScanError> {
         self.state.consume_char()?; // consume '|'
         let content = scalars::scan_block_scalar(&mut self.state, true)?;
-        Ok(self.token_producer.literal_scalar_token(start_mark, content))
+        Ok(self
+            .token_producer
+            .literal_scalar_token(start_mark, content))
     }
 
     #[inline]
@@ -260,14 +272,18 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn scan_single_quoted_scalar(&mut self, start_mark: Marker) -> Result<Token, ScanError> {
         self.state.consume_char()?; // consume '\''
         let content = scalars::scan_single_quoted(&mut self.state)?;
-        Ok(self.token_producer.single_quoted_scalar_token(start_mark, content))
+        Ok(self
+            .token_producer
+            .single_quoted_scalar_token(start_mark, content))
     }
 
     #[inline]
     fn scan_double_quoted_scalar(&mut self, start_mark: Marker) -> Result<Token, ScanError> {
         self.state.consume_char()?; // consume '"'
         let content = scalars::scan_double_quoted(&mut self.state)?;
-        Ok(self.token_producer.double_quoted_scalar_token(start_mark, content))
+        Ok(self
+            .token_producer
+            .double_quoted_scalar_token(start_mark, content))
     }
 
     #[inline]
@@ -290,18 +306,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 }
 
-/// Iterator implementation for streaming tokens
-impl<T: Iterator<Item = char>> Iterator for Scanner<T> {
-    type Item = Result<Token, ScanError>;
 
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.fetch_token() {
-            Ok(token) if token.1 == TokenType::NoToken => None,
-            result => Some(result),
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

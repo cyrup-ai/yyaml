@@ -4,8 +4,8 @@
 //! plain, quoted, and block scalars with proper escape handling.
 
 use crate::error::ScanError;
-use crate::scanner::state::ScannerState;
 use crate::scanner::ScannerConfig;
+use crate::scanner::state::ScannerState;
 
 /// Scan plain scalar with efficient character classification
 #[inline]
@@ -31,7 +31,9 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
                 // Check if ':' is followed by space (value indicator)
                 if ch == ':' {
                     if let Some(next) = state.peek_char_at(1) {
-                        if matches!(next, ' ' | '\t' | '\n' | '\r') || (in_flow && matches!(next, ',' | '[' | ']' | '{' | '}')) {
+                        if matches!(next, ' ' | '\t' | '\n' | '\r')
+                            || (in_flow && matches!(next, ',' | '[' | ']' | '{' | '}'))
+                        {
                             break;
                         }
                     } else {
@@ -57,7 +59,7 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
                 if !in_flow {
                     let current_mark = state.mark();
                     state.consume_char()?; // consume newline
-                    
+
                     // Skip any additional newlines
                     while matches!(state.peek_char(), Ok('\n') | Ok('\r')) {
                         state.consume_char()?;
@@ -217,10 +219,10 @@ fn process_escape_sequence<T: Iterator<Item = char>>(
         '"' => Ok('"'),
         '/' => Ok('/'),
         '\\' => Ok('\\'),
-        'N' => Ok('\u{0085}'),  // NEL (Next Line)
-        '_' => Ok('\u{00A0}'),  // NBSP (Non-breaking space)
-        'L' => Ok('\u{2028}'),  // Line Separator
-        'P' => Ok('\u{2029}'),  // Paragraph Separator
+        'N' => Ok('\u{0085}'), // NEL (Next Line)
+        '_' => Ok('\u{00A0}'), // NBSP (Non-breaking space)
+        'L' => Ok('\u{2028}'), // Line Separator
+        'P' => Ok('\u{2029}'), // Paragraph Separator
         'x' => read_hex_escape(state, 2),
         'u' => read_hex_escape(state, 4),
         'U' => read_hex_escape(state, 8),
@@ -231,7 +233,10 @@ fn process_escape_sequence<T: Iterator<Item = char>>(
             }
             Ok(' ') // Fold to space
         }
-        ch => Err(ScanError::new(state.mark(), &format!("invalid escape sequence '\\{}'", ch))),
+        ch => Err(ScanError::new(
+            state.mark(),
+            &format!("invalid escape sequence '\\{}'", ch),
+        )),
     }
 }
 
@@ -242,16 +247,18 @@ fn read_hex_escape<T: Iterator<Item = char>>(
     digits: usize,
 ) -> Result<char, ScanError> {
     let mut value = 0u32;
-    
+
     for i in 0..digits {
         match state.consume_char()? {
             ch @ '0'..='9' => value = value * 16 + (ch as u32 - '0' as u32),
             ch @ 'a'..='f' => value = value * 16 + (ch as u32 - 'a' as u32 + 10),
             ch @ 'A'..='F' => value = value * 16 + (ch as u32 - 'A' as u32 + 10),
-            ch => return Err(ScanError::new(
-                state.mark(),
-                &format!("invalid hex digit '{}' in escape sequence", ch),
-            )),
+            ch => {
+                return Err(ScanError::new(
+                    state.mark(),
+                    &format!("invalid hex digit '{}' in escape sequence", ch),
+                ));
+            }
         }
     }
 
@@ -270,13 +277,13 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
     literal: bool,
 ) -> Result<String, ScanError> {
     let mut result = String::with_capacity(128);
-    
+
     // Parse block scalar header
     let (chomping, explicit_indent) = parse_block_scalar_header(state)?;
-    
+
     // Skip to next line
     skip_to_next_line(state)?;
-    
+
     // Determine base indentation
     let base_indent = if let Some(indent) = explicit_indent {
         indent
@@ -298,7 +305,7 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
 
         // Read indentation
         let line_indent = count_indentation(state)?;
-        
+
         if line_indent < base_indent {
             // Less indented line ends the scalar
             break;
@@ -442,7 +449,7 @@ fn detect_block_scalar_indent<T: Iterator<Item = char>>(
 
     loop {
         let indent = count_indentation(state)?;
-        
+
         // Check if line is non-empty
         match state.peek_char() {
             Ok('\n') | Ok('\r') => {
@@ -474,7 +481,7 @@ fn count_indentation<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<usize, ScanError> {
     let mut count = 0;
-    
+
     while matches!(state.peek_char(), Ok(' ')) {
         state.consume_char()?;
         count += 1;
@@ -496,7 +503,12 @@ fn consume_line_break<T: Iterator<Item = char>>(
             }
         }
         '\n' => {}
-        ch => return Err(ScanError::new(state.mark(), &format!("expected line break, found '{}'", ch))),
+        ch => {
+            return Err(ScanError::new(
+                state.mark(),
+                &format!("expected line break, found '{}'", ch),
+            ));
+        }
     }
     Ok(())
 }

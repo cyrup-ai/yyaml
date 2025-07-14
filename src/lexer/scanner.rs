@@ -9,7 +9,7 @@ use std::str::Chars;
 
 use super::position::*;
 use super::tokens::*;
-use super::unicode::{chars, normalization, UnicodeProcessor};
+use super::unicode::{UnicodeProcessor, chars, normalization};
 use super::{LexError, LexErrorKind};
 
 /// High-performance YAML scanner
@@ -194,9 +194,8 @@ impl<'input> Scanner<'input> {
 
             if self.indent_stack.last() != Some(&indent) {
                 return Err(LexError::new(
-                    LexErrorKind::InvalidNumber,
+                    LexErrorKind::UnexpectedCharacter("invalid indentation level".to_string()),
                     start_pos,
-                    "invalid indentation level",
                 ));
             }
 
@@ -331,9 +330,8 @@ impl<'input> Scanner<'input> {
             .map_or(false, |&ch| chars::is_anchor_char(ch))
         {
             return Err(LexError::new(
-                LexErrorKind::InvalidAnchor,
+                LexErrorKind::InvalidAnchor("anchor name cannot be empty".to_string()),
                 position.current(),
-                "anchor name cannot be empty",
             ));
         }
 
@@ -390,9 +388,8 @@ impl<'input> Scanner<'input> {
                 self.consume_char(position);
             } else {
                 return Err(LexError::new(
-                    LexErrorKind::InvalidTag,
+                    LexErrorKind::InvalidTag("invalid character in verbatim tag".to_string()),
                     position.current(),
-                    "invalid character in verbatim tag",
                 ));
             }
         }
@@ -400,7 +397,6 @@ impl<'input> Scanner<'input> {
         Err(LexError::new(
             LexErrorKind::UnexpectedEndOfInput,
             position.current(),
-            "unterminated verbatim tag",
         ))
     }
 
@@ -508,9 +504,8 @@ impl<'input> Scanner<'input> {
         let end_offset = self.current_offset;
         if start_offset == end_offset {
             return Err(LexError::new(
-                LexErrorKind::InvalidDirective,
+                LexErrorKind::InvalidDirective("directive name cannot be empty".to_string()),
                 position.current(),
-                "directive name cannot be empty",
             ));
         }
 
@@ -526,9 +521,8 @@ impl<'input> Scanner<'input> {
 
         if !self.check_char('.') {
             return Err(LexError::new(
-                LexErrorKind::InvalidDirective,
+                LexErrorKind::InvalidDirective("expected '.' in YAML version".to_string()),
                 position.current(),
-                "expected '.' in YAML version",
             ));
         }
         self.consume_char(position); // .
@@ -553,19 +547,14 @@ impl<'input> Scanner<'input> {
         let end_offset = self.current_offset;
         if start_offset == end_offset {
             return Err(LexError::new(
-                LexErrorKind::InvalidDirective,
+                LexErrorKind::InvalidDirective("expected version number".to_string()),
                 position.current(),
-                "expected version number",
             ));
         }
 
-        self.input[start_offset..end_offset].parse().map_err(|_| {
-            LexError::new(
-                LexErrorKind::InvalidNumber,
-                position.current(),
-                "invalid version number",
-            )
-        })
+        self.input[start_offset..end_offset]
+            .parse()
+            .map_err(|_| LexError::new(LexErrorKind::InvalidNumber, position.current()))
     }
 
     /// Scan TAG directive parameters
@@ -585,9 +574,8 @@ impl<'input> Scanner<'input> {
 
         if !self.check_char('!') {
             return Err(LexError::new(
-                LexErrorKind::InvalidTag,
+                LexErrorKind::InvalidTag("tag handle must start with '!'".to_string()),
                 position.current(),
-                "tag handle must start with '!'",
             ));
         }
         self.consume_char(position); // !
@@ -686,7 +674,6 @@ impl<'input> Scanner<'input> {
         Err(LexError::new(
             LexErrorKind::UnterminatedString,
             start_pos,
-            "unterminated single-quoted string",
         ))
     }
 
@@ -712,10 +699,9 @@ impl<'input> Scanner<'input> {
                         Ok(processed) => processed,
                         Err(e) => {
                             return Err(LexError::new(
-                                LexErrorKind::InvalidEscape,
+                                LexErrorKind::InvalidEscape(format!("escape error: {}", e)),
                                 position.current(),
-                                format!("escape error: {}", e),
-                            ))
+                            ));
                         }
                     }
                 } else {
@@ -746,7 +732,6 @@ impl<'input> Scanner<'input> {
         Err(LexError::new(
             LexErrorKind::UnterminatedString,
             start_pos,
-            "unterminated double-quoted string",
         ))
     }
 
@@ -823,9 +808,8 @@ impl<'input> Scanner<'input> {
         if let Some(&ch) = self.chars.peek() {
             if !chars::can_start_plain_scalar(ch) {
                 return Err(LexError::new(
-                    LexErrorKind::UnexpectedCharacter,
+                    LexErrorKind::UnexpectedCharacter(format!("unexpected character '{}'", ch)),
                     start_pos,
-                    format!("unexpected character '{}'", ch),
                 ));
             }
         }
@@ -842,9 +826,8 @@ impl<'input> Scanner<'input> {
         let end_offset = self.current_offset;
         if start_offset == end_offset {
             return Err(LexError::new(
-                LexErrorKind::UnexpectedCharacter,
+                LexErrorKind::UnexpectedCharacter("empty plain scalar".to_string()),
                 start_pos,
-                "empty plain scalar",
             ));
         }
 

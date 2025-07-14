@@ -8,6 +8,7 @@ use super::types::{
     ReferenceId, ReferenceNode,
 };
 use crate::semantic::SemanticError;
+use crate::lexer::Position;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Reference graph for tracking node relationships
@@ -87,10 +88,10 @@ impl<'input> ReferenceGraph<'input> {
     ) -> Result<(), SemanticError> {
         // Validate nodes exist
         if !self.nodes.contains_key(&from) || !self.nodes.contains_key(&to) {
-            return Err(SemanticError::new(
-                "Cannot add edge: one or both nodes do not exist",
-                None,
-            ));
+            return Err(SemanticError::InternalError {
+                message: "Cannot add edge: one or both nodes do not exist".to_string(),
+                position: Position::default(),
+            });
         }
 
         let edge = ReferenceEdge {

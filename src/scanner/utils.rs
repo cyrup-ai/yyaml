@@ -122,7 +122,8 @@ pub fn is_blank(ch: char) -> bool {
 /// Check if character can start a plain scalar
 #[inline]
 pub fn can_start_plain_scalar(ch: char) -> bool {
-    !matches!(ch,
+    !matches!(
+        ch,
         // Flow indicators
         ',' | '[' | ']' | '{' | '}' |
         // Key/value indicators
@@ -169,9 +170,9 @@ pub fn can_continue_plain_scalar(ch: char, in_flow: bool) -> bool {
 /// Check if character needs escaping in double-quoted strings
 #[inline]
 pub fn needs_escaping_in_double_quoted(ch: char) -> bool {
-    matches!(ch,
-        '"' | '\\' | '\0'..='\x1F' | '\x7F' |
-        '\u{85}' | '\u{A0}' | '\u{2028}' | '\u{2029}'
+    matches!(
+        ch,
+        '"' | '\\' | '\0'..='\x1F' | '\x7F' | '\u{85}' | '\u{A0}' | '\u{2028}' | '\u{2029}'
     )
 }
 
@@ -242,7 +243,10 @@ pub fn read_exact_chars<T: Iterator<Item = char>>(
             Err(_) => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!("unexpected end of input in {} (expected {} characters, got {})", context, n, i),
+                    &format!(
+                        "unexpected end of input in {} (expected {} characters, got {})",
+                        context, n, i
+                    ),
                 ));
             }
         }

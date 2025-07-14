@@ -36,7 +36,7 @@ fn scan_name<T: Iterator<Item = char>>(
         match state.peek_char() {
             Ok(ch) if is_anchor_char(ch) => {
                 result.push(state.consume_char()?);
-                
+
                 // Check length limit
                 if result.len() > 1024 {
                     return Err(ScanError::new(
@@ -159,12 +159,13 @@ fn is_document_marker_context(ch: char) -> bool {
 #[inline]
 fn is_unicode_format_char(ch: char) -> bool {
     // Unicode format characters that might cause issues
-    matches!(ch,
+    matches!(
+        ch,
         '\u{200B}' |  // Zero Width Space
         '\u{200C}' |  // Zero Width Non-Joiner
         '\u{200D}' |  // Zero Width Joiner
         '\u{2060}' |  // Word Joiner
-        '\u{FEFF}'    // Zero Width No-Break Space (BOM)
+        '\u{FEFF}' // Zero Width No-Break Space (BOM)
     )
 }
 
@@ -181,7 +182,10 @@ pub fn validate_anchor_name(name: &str) -> Result<(), String> {
     // Check first character
     if let Some(first) = name.chars().next() {
         if !is_valid_first_anchor_char(first) {
-            return Err(format!("invalid first character '{}' in anchor name", first));
+            return Err(format!(
+                "invalid first character '{}' in anchor name",
+                first
+            ));
         }
     }
 
@@ -207,7 +211,8 @@ pub fn validate_anchor_name(name: &str) -> Result<(), String> {
 #[inline]
 fn is_reserved_anchor_name(name: &str) -> bool {
     // Reserved names that might cause confusion with YAML constructs
-    matches!(name,
+    matches!(
+        name,
         // Boolean values
         "true" | "false" | "True" | "False" | "TRUE" | "FALSE" |
         // Null values

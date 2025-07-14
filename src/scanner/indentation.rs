@@ -75,7 +75,8 @@ impl IndentationTracker {
     /// Get current block type
     #[inline]
     pub fn current_block_type(&self) -> BlockType {
-        self.levels.last()
+        self.levels
+            .last()
             .map(|level| level.block_type)
             .unwrap_or(BlockType::Root)
     }
@@ -125,9 +126,7 @@ impl IndentationTracker {
             popped_types.push(popped.block_type);
         }
 
-        self.current_base = self.levels.last()
-            .map(|level| level.column)
-            .unwrap_or(-1);
+        self.current_base = self.levels.last().map(|level| level.column).unwrap_or(-1);
 
         popped_types
     }
@@ -135,7 +134,8 @@ impl IndentationTracker {
     /// Check if simple key is allowed at current level
     #[inline]
     pub fn simple_key_allowed(&self) -> bool {
-        self.levels.last()
+        self.levels
+            .last()
             .map(|level| level.simple_key_allowed)
             .unwrap_or(true)
     }

@@ -21,7 +21,7 @@ pub fn scan_document_start<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<(), ScanError> {
     let start_mark = state.mark();
-    
+
     // Verify we're at start of line or after whitespace
     if !is_valid_marker_context(state)? {
         return Err(ScanError::new(
@@ -29,21 +29,26 @@ pub fn scan_document_start<T: Iterator<Item = char>>(
             "document start marker must be at start of line or after whitespace",
         ));
     }
-    
+
     // Consume the three dashes
     for i in 0..3 {
         match state.consume_char()? {
             '-' => continue,
-            ch => return Err(ScanError::new(
-                state.mark(),
-                &format!("expected '-' at position {} in document start marker, found '{}'", i, ch),
-            )),
+            ch => {
+                return Err(ScanError::new(
+                    state.mark(),
+                    &format!(
+                        "expected '-' at position {} in document start marker, found '{}'",
+                        i, ch
+                    ),
+                ));
+            }
         }
     }
-    
+
     // Verify marker is followed by proper boundary
     validate_marker_boundary(state, DocumentMarker::Start)?;
-    
+
     Ok(())
 }
 
@@ -53,7 +58,7 @@ pub fn scan_document_end<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<(), ScanError> {
     let start_mark = state.mark();
-    
+
     // Verify we're at start of line or after whitespace
     if !is_valid_marker_context(state)? {
         return Err(ScanError::new(
@@ -61,21 +66,26 @@ pub fn scan_document_end<T: Iterator<Item = char>>(
             "document end marker must be at start of line or after whitespace",
         ));
     }
-    
+
     // Consume the three dots
     for i in 0..3 {
         match state.consume_char()? {
             '.' => continue,
-            ch => return Err(ScanError::new(
-                state.mark(),
-                &format!("expected '.' at position {} in document end marker, found '{}'", i, ch),
-            )),
+            ch => {
+                return Err(ScanError::new(
+                    state.mark(),
+                    &format!(
+                        "expected '.' at position {} in document end marker, found '{}'",
+                        i, ch
+                    ),
+                ));
+            }
         }
     }
-    
+
     // Verify marker is followed by proper boundary
     validate_marker_boundary(state, DocumentMarker::End)?;
-    
+
     Ok(())
 }
 
@@ -101,20 +111,20 @@ fn validate_marker_boundary<T: Iterator<Item = char>>(
         DocumentMarker::Start => "document start",
         DocumentMarker::End => "document end",
     };
-    
+
     match state.peek_char() {
         // EOF is always valid boundary
         Err(_) => Ok(()),
-        
+
         // Whitespace is valid boundary
         Ok(' ') | Ok('\t') | Ok('\n') | Ok('\r') => Ok(()),
-        
-        // Comment is valid boundary  
+
+        // Comment is valid boundary
         Ok('#') => Ok(()),
-        
+
         // Flow indicators are valid in flow context
         Ok(',') | Ok('[') | Ok(']') | Ok('{') | Ok('}') if state.in_flow_context() => Ok(()),
-        
+
         // Invalid boundary
         Ok(ch) => Err(ScanError::new(
             state.mark(),
@@ -128,20 +138,14 @@ fn validate_marker_boundary<T: Iterator<Item = char>>(
 
 /// Check if sequence looks like document start
 #[inline]
-pub fn is_document_start_sequence<T: Iterator<Item = char>>(
-    state: &mut ScannerState<T>,
-) -> bool {
-    state.check_chars(&['-', '-', '-']) && 
-    check_document_boundary(state, 3)
+pub fn is_document_start_sequence<T: Iterator<Item = char>>(state: &mut ScannerState<T>) -> bool {
+    state.check_chars(&['-', '-', '-']) && check_document_boundary(state, 3)
 }
 
 /// Check if sequence looks like document end
 #[inline]
-pub fn is_document_end_sequence<T: Iterator<Item = char>>(
-    state: &mut ScannerState<T>,
-) -> bool {
-    state.check_chars(&['.', '.', '.']) && 
-    check_document_boundary(state, 3)
+pub fn is_document_end_sequence<T: Iterator<Item = char>>(state: &mut ScannerState<T>) -> bool {
+    state.check_chars(&['.', '.', '.']) && check_document_boundary(state, 3)
 }
 
 /// Check if characters after position form valid document marker boundary
@@ -153,13 +157,15 @@ fn check_document_boundary<T: Iterator<Item = char>>(
     match state.peek_char_at(offset) {
         // EOF is valid boundary
         None => true,
-        
+
         // Whitespace and comment are valid boundaries
         Some(' ') | Some('\t') | Some('\n') | Some('\r') | Some('#') => true,
-        
+
         // Flow indicators in flow context
-        Some(',') | Some('[') | Some(']') | Some('{') | Some('}') if state.in_flow_context() => true,
-        
+        Some(',') | Some('[') | Some(']') | Some('{') | Some('}') if state.in_flow_context() => {
+            true
+        }
+
         // Everything else is invalid
         _ => false,
     }
@@ -193,9 +199,7 @@ pub fn consume_document_marker<T: Iterator<Item = char>>(
 
 /// Check if we're at a potential document boundary
 #[inline]
-pub fn at_document_boundary<T: Iterator<Item = char>>(
-    state: &mut ScannerState<T>,
-) -> bool {
+pub fn at_document_boundary<T: Iterator<Item = char>>(state: &mut ScannerState<T>) -> bool {
     peek_document_marker(state).is_some()
 }
 
@@ -208,12 +212,12 @@ pub fn validate_document_marker_context<T: Iterator<Item = char>>(
         DocumentMarker::Start => "document start",
         DocumentMarker::End => "document end",
     };
-    
+
     // Document start is always valid
     if matches!(marker_type, DocumentMarker::Start) {
         return Ok(());
     }
-    
+
     // Document end validation
     if matches!(marker_type, DocumentMarker::End) {
         // Document end in flow context might be problematic
@@ -223,7 +227,7 @@ pub fn validate_document_marker_context<T: Iterator<Item = char>>(
                 "document end marker not allowed inside flow collections",
             ));
         }
-        
+
         // Document end should not be nested
         if state.flow_level() > 0 {
             return Err(ScanError::new(
@@ -232,7 +236,7 @@ pub fn validate_document_marker_context<T: Iterator<Item = char>>(
             ));
         }
     }
-    
+
     Ok(())
 }
 
@@ -261,6 +265,6 @@ pub fn format_marker_error(marker_type: DocumentMarker, context: &str) -> String
         DocumentMarker::Start => "document start",
         DocumentMarker::End => "document end",
     };
-    
+
     format!("{} marker '{}' {}", marker_name, marker_str, context)
 }

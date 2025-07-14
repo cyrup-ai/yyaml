@@ -1,7 +1,7 @@
 use super::{Parser, State};
 use crate::error::ScanError;
 use crate::events::{Event, TScalarStyle, TokenType};
-use crate::parsing::{
+use super::{
     IndentationResult, calculate_block_entry_indent, validate_block_mapping_indentation,
     validate_block_sequence_indentation,
 };

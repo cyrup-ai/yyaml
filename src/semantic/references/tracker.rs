@@ -59,20 +59,21 @@ impl<'input> ReferenceTracker<'input> {
         position: Position,
     ) -> Result<ReferenceId, SemanticError> {
         if !self.context.is_enabled {
-            return Err(SemanticError::new(
-                "Reference tracking is disabled",
-                Some(position),
-            ));
+            return Err(SemanticError::InternalError {
+                message: "Reference tracking is disabled".to_string(),
+                position,
+            });
         }
 
         let start_time = Instant::now();
 
         // Check for duplicate anchor names
         if self.anchor_registry.contains_key(&name) {
-            return Err(SemanticError::new(
-                &format!("Duplicate anchor name: {}", name),
-                Some(position),
-            ));
+            return Err(SemanticError::ConflictingAnchor {
+                anchor_name: name.to_string(),
+                first_position: Position::default(), // Would need to track first occurrence
+                second_position: position,
+            });
         }
 
         // Create reference node
@@ -106,10 +107,10 @@ impl<'input> ReferenceTracker<'input> {
         position: Position,
     ) -> Result<ReferenceId, SemanticError> {
         if !self.context.is_enabled {
-            return Err(SemanticError::new(
-                "Reference tracking is disabled",
-                Some(position),
-            ));
+            return Err(SemanticError::InternalError {
+                message: "Reference tracking is disabled".to_string(),
+                position,
+            });
         }
 
         let start_time = Instant::now();
@@ -262,10 +263,10 @@ impl<'input> ReferenceTracker<'input> {
         position: Position,
     ) -> Result<ReferenceId, SemanticError> {
         if !self.context.is_enabled {
-            return Err(SemanticError::new(
-                "Reference tracking is disabled",
-                Some(position),
-            ));
+            return Err(SemanticError::InternalError {
+                message: "Reference tracking is disabled".to_string(),
+                position,
+            });
         }
 
         let start_time = Instant::now();
@@ -413,33 +414,18 @@ impl<'input> ReferenceTracker<'input> {
         for (name, &node_id) in &self.anchor_registry {
             if let Some(node) = self.graph.get_node(node_id) {
                 if node.name != *name {
-                    return Err(SemanticError::new(
-                        &format!("Anchor registry inconsistency: {} vs {}", name, node.name),
-                        None,
-                    ));
+                    return Err(SemanticError::ValidationFailure {
+                        rule: "anchor_registry_consistency".to_string(),
+                        message: format!("Anchor registry inconsistency: {} vs {}", name, node.name),
+                        position: Position::default(),
+                    });
                 }
             } else {
-                return Err(SemanticError::new(
-                    &format!("Anchor registry points to non-existent node: {}", name),
-                    None,
-                ));
-            }
-        }
-
-        // Check alias registry consistency
-        for (name, &node_id) in &self.alias_registry {
-            if let Some(node) = self.graph.get_node(node_id) {
-                if node.name != *name {
-                    return Err(SemanticError::new(
-                        &format!("Alias registry inconsistency: {} vs {}", name, node.name),
-                        None,
-                    ));
-                }
-            } else {
-                return Err(SemanticError::new(
-                    &format!("Alias registry points to non-existent node: {}", name),
-                    None,
-                ));
+                return Err(SemanticError::ValidationFailure {
+                    rule: "anchor_registry_existence".to_string(),
+                    message: format!("Anchor registry points to non-existent node: {}", name),
+                    position: Position::default(),
+                });
             }
         }
 

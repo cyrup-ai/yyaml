@@ -15,7 +15,7 @@ mod events;
 pub mod lexer;
 mod linked_hash_map;
 pub mod parser;
-mod parsing;
+
 pub mod scanner;
 pub mod semantic;
 mod ser;

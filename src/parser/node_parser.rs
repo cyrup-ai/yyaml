@@ -1,7 +1,7 @@
 use crate::error::{Marker, ScanError};
 use crate::events::{Event, TScalarStyle, TokenType};
 use crate::parser::Parser;
-use crate::parsing::State;
+use super::state_machine::State;
 
 pub fn parse_node<T: Iterator<Item = char>>(
     parser: &mut Parser<T>,
