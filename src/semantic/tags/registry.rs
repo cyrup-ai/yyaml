@@ -197,7 +197,7 @@ impl<'input> TagRegistry<'input> {
 
     /// Get registry performance metrics
     pub fn get_metrics(&self) -> TagMetrics {
-        let cache_hit_rate = if self.lookup_count > 0 {
+        let _cache_hit_rate = if self.lookup_count > 0 {
             (self.cache_hits as f64 / self.lookup_count as f64) * 100.0
         } else {
             0.0

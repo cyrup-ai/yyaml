@@ -3,9 +3,9 @@
 //! Provides efficient storage and lookup for anchor definitions with
 //! metadata tracking and validation support.
 
-use crate::semantic::SemanticError;
 use crate::lexer::Position;
 use crate::parser::ast::Node;
+use crate::semantic::SemanticError;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -139,9 +139,7 @@ impl<'input> AnchorRegistry<'input> {
 
     /// Get anchors by path prefix
     pub fn anchors_by_path_prefix(&self, prefix: &str) -> Vec<&AnchorDefinition<'input>> {
-        self.find_anchors(|def| {
-            def.path_string().starts_with(prefix)
-        })
+        self.find_anchors(|def| def.path_string().starts_with(prefix))
     }
 
     /// Get recently defined anchors (within specified duration)
@@ -162,12 +160,10 @@ impl<'input> AnchorRegistry<'input> {
 
     /// Get registry statistics
     pub fn statistics(&self) -> RegistryStatistics {
-        let total_resolutions: usize = self.anchors.values()
-            .map(|def| def.resolution_count)
-            .sum();
+        let total_resolutions: usize = self.anchors.values().map(|def| def.resolution_count).sum();
 
         let unused_count = self.unused_anchors().len();
-        
+
         let avg_resolutions = if !self.anchors.is_empty() {
             total_resolutions as f64 / self.anchors.len() as f64
         } else {
@@ -190,7 +186,10 @@ impl<'input> AnchorRegistry<'input> {
         let mut name_variations: HashMap<String, Vec<String>> = HashMap::new();
         for name in self.anchors.keys() {
             let lower_name = name.to_lowercase();
-            name_variations.entry(lower_name).or_default().push(name.clone());
+            name_variations
+                .entry(lower_name)
+                .or_default()
+                .push(name.clone());
         }
 
         for (lower_name, variations) in name_variations {
@@ -277,6 +276,9 @@ impl<'input> AnchorDefinition<'input> {
             Node::Sequence(_) => "sequence",
             Node::Mapping(_) => "mapping",
             Node::Alias(_) => "alias",
+            Node::Anchor(_) => "anchor",
+            Node::Tagged(_) => "tagged",
+            Node::Null(_) => "null",
         }
     }
 
@@ -294,15 +296,14 @@ impl<'input> AnchorDefinition<'input> {
     fn check_node_for_alias(&self, node: &Node<'input>, alias_name: &str) -> bool {
         match node {
             Node::Alias(alias_node) => alias_node.name == alias_name,
-            Node::Sequence(seq) => {
-                seq.items.iter().any(|child| self.check_node_for_alias(child, alias_name))
-            }
-            Node::Mapping(map) => {
-                map.pairs.iter().any(|pair| {
-                    self.check_node_for_alias(&pair.key, alias_name) ||
-                    self.check_node_for_alias(&pair.value, alias_name)
-                })
-            }
+            Node::Sequence(seq) => seq
+                .items
+                .iter()
+                .any(|child| self.check_node_for_alias(child, alias_name)),
+            Node::Mapping(map) => map.pairs.iter().any(|pair| {
+                self.check_node_for_alias(&pair.key, alias_name)
+                    || self.check_node_for_alias(&pair.value, alias_name)
+            }),
             Node::Scalar(_) => false,
             Node::Anchor(anchor_node) => {
                 // Check if the anchored content contains the alias
@@ -345,10 +346,18 @@ impl RegistryValidationError {
     pub fn message(&self) -> String {
         match self {
             RegistryValidationError::PotentialNamingConflict { similar_names, .. } => {
-                format!("Potential naming conflict between anchors: {}", similar_names.join(", "))
+                format!(
+                    "Potential naming conflict between anchors: {}",
+                    similar_names.join(", ")
+                )
             }
-            RegistryValidationError::DeepNesting { anchor_name, depth, .. } => {
-                format!("Anchor '{}' has very deep nesting (depth: {})", anchor_name, depth)
+            RegistryValidationError::DeepNesting {
+                anchor_name, depth, ..
+            } => {
+                format!(
+                    "Anchor '{}' has very deep nesting (depth: {})",
+                    anchor_name, depth
+                )
             }
         }
     }

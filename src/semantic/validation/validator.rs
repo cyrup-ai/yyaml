@@ -39,6 +39,23 @@ impl<'input> DocumentValidator<'input> {
         }
     }
 
+    /// Create validator with specific configuration
+    pub fn with_config(config: &crate::semantic::SemanticConfig<'input>) -> Self {
+        let mut validator = Self::new();
+
+        // Configure based on strict mode
+        if config.strict_mode {
+            validator.validation_context.set_strict_mode(true);
+        }
+
+        // Add YAML version specific validation rules
+        if let Some((major, minor)) = config.yaml_version {
+            validator.validation_context.set_yaml_version(major, minor);
+        }
+
+        validator
+    }
+
     /// Validate a complete YAML document
     pub fn validate_document(
         &mut self,
@@ -49,7 +66,7 @@ impl<'input> DocumentValidator<'input> {
         let mut warnings = Vec::new();
 
         // Validate the document node
-        if let Some(node) = &document.node {
+        if let Some(node) = &document.content {
             warnings.extend(self.validate_node(node, analysis_context)?);
         }
 
@@ -104,7 +121,8 @@ impl<'input> DocumentValidator<'input> {
         if self.validation_context.is_depth_exceeded() {
             return Err(SemanticError::ValidationDepthExceeded {
                 max_depth: self.validation_context.max_depth,
-                current_path: self.validation_context.current_path(),
+                current_depth: self.validation_context.current_depth,
+                position: crate::lexer::Position::default(),
             });
         }
 
@@ -112,7 +130,9 @@ impl<'input> DocumentValidator<'input> {
         let node_id = node as *const _ as usize;
         if !self.validation_context.mark_visited(node_id) {
             return Err(SemanticError::CircularReference {
-                node_path: self.validation_context.current_path(),
+                alias_name: "unknown".to_string(),
+                path: self.validation_context.current_path(),
+                position: crate::lexer::Position::default(),
             });
         }
 

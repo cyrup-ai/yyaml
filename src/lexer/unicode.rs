@@ -10,7 +10,7 @@ pub struct UnicodeProcessor;
 
 impl UnicodeProcessor {
     /// Process escape sequences in a string
-    pub fn process_escapes(input: &str) -> Result<Cow<str>, EscapeError> {
+    pub fn process_escapes(input: &str) -> Result<Cow<'_, str>, EscapeError> {
         if !input.contains('\\') {
             return Ok(Cow::Borrowed(input));
         }
@@ -342,7 +342,7 @@ pub mod normalization {
     use std::borrow::Cow;
 
     /// Normalize line endings to LF
-    pub fn normalize_line_endings(input: &str) -> Cow<str> {
+    pub fn normalize_line_endings(input: &str) -> Cow<'_, str> {
         if !input.contains('\r') {
             return Cow::Borrowed(input);
         }

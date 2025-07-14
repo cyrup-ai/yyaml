@@ -3,7 +3,7 @@
 //! Provides comprehensive statistics collection, validation warnings,
 //! and performance analysis for anchor and alias resolution.
 
-use super::{AnchorRegistry, AnchorDefinition};
+use super::AnchorRegistry;
 use crate::lexer::Position;
 
 /// Anchor resolution statistics
@@ -53,12 +53,13 @@ impl AnchorStatistics {
     pub fn record_alias_resolution(&mut self, resolution_time_ms: f64) {
         self.resolved_aliases += 1;
         self.total_aliases += 1;
-        
+
         // Update average resolution time
         if self.resolved_aliases == 1 {
             self.avg_resolution_time_ms = resolution_time_ms;
         } else {
-            let total_time = self.avg_resolution_time_ms * (self.resolved_aliases - 1) as f64 + resolution_time_ms;
+            let total_time = self.avg_resolution_time_ms * (self.resolved_aliases - 1) as f64
+                + resolution_time_ms;
             self.avg_resolution_time_ms = total_time / self.resolved_aliases as f64;
         }
     }
@@ -76,7 +77,7 @@ impl AnchorStatistics {
     }
 
     /// Record circular reference detection
-    pub fn record_circular_reference(&mut self, anchor_name: String, max_depth: usize) {
+    pub fn record_circular_reference(&mut self, _anchor_name: String, max_depth: usize) {
         self.circular_references_detected += 1;
         if max_depth > self.max_resolution_depth {
             self.max_resolution_depth = max_depth;
@@ -109,9 +110,13 @@ impl AnchorStatistics {
     }
 
     /// Check if performance is acceptable based on thresholds
-    pub fn is_performance_acceptable(&self, min_cache_hit_rate: f64, max_avg_resolution_time: f64) -> bool {
-        self.cache_hit_rate() >= min_cache_hit_rate && 
-        self.avg_resolution_time_ms <= max_avg_resolution_time
+    pub fn is_performance_acceptable(
+        &self,
+        min_cache_hit_rate: f64,
+        max_avg_resolution_time: f64,
+    ) -> bool {
+        self.cache_hit_rate() >= min_cache_hit_rate
+            && self.avg_resolution_time_ms <= max_avg_resolution_time
     }
 
     /// Get performance summary
@@ -136,7 +141,7 @@ impl AnchorStatistics {
     /// Generate performance report
     pub fn generate_report(&self) -> String {
         let summary = self.performance_summary();
-        
+
         format!(
             "Anchor Resolution Performance Report\n\
              =====================================\n\
@@ -183,7 +188,7 @@ impl PerformanceSummary {
         let time_score = (1.0 / (1.0 + self.avg_resolution_time / 10.0)).min(1.0) * 100.0;
         let memory_score = (1.0 / (1.0 + self.memory_efficiency / 1024.0)).min(1.0) * 100.0;
         let circular_score = (100.0 - self.circular_reference_rate).max(0.0);
-        
+
         (cache_score + resolution_score + time_score + memory_score + circular_score) / 5.0
     }
 }
@@ -227,25 +232,64 @@ impl AnchorValidationWarning {
     /// Get warning message
     pub fn message(&self) -> String {
         match self {
-            AnchorValidationWarning::UnusedAnchor { name, definition_age_ms, .. } => {
-                format!("Anchor '{}' is defined but never used (age: {}ms)", name, definition_age_ms)
+            AnchorValidationWarning::UnusedAnchor {
+                name,
+                definition_age_ms,
+                ..
+            } => {
+                format!(
+                    "Anchor '{}' is defined but never used (age: {}ms)",
+                    name, definition_age_ms
+                )
             }
-            AnchorValidationWarning::CircularReference { anchor_name, reference_path, .. } => {
-                format!("Circular reference detected for anchor '{}': {}", anchor_name, reference_path)
+            AnchorValidationWarning::CircularReference {
+                anchor_name,
+                reference_path,
+                ..
+            } => {
+                format!(
+                    "Circular reference detected for anchor '{}': {}",
+                    anchor_name, reference_path
+                )
             }
-            AnchorValidationWarning::DeepNesting { anchor_name, depth, .. } => {
-                format!("Anchor '{}' has deep nesting (depth: {}), may impact performance", anchor_name, depth)
+            AnchorValidationWarning::DeepNesting {
+                anchor_name, depth, ..
+            } => {
+                format!(
+                    "Anchor '{}' has deep nesting (depth: {}), may impact performance",
+                    anchor_name, depth
+                )
             }
-            AnchorValidationWarning::PotentialMemoryIssue { anchor_name, estimated_size_bytes, .. } => {
-                format!("Anchor '{}' may use significant memory ({} bytes)", anchor_name, estimated_size_bytes)
+            AnchorValidationWarning::PotentialMemoryIssue {
+                anchor_name,
+                estimated_size_bytes,
+                ..
+            } => {
+                format!(
+                    "Anchor '{}' may use significant memory ({} bytes)",
+                    anchor_name, estimated_size_bytes
+                )
             }
-            AnchorValidationWarning::NamingConflict { anchor_names, similarity_score } => {
-                format!("Potential naming conflict between anchors {} (similarity: {:.1}%)", 
-                       anchor_names.join(", "), similarity_score * 100.0)
+            AnchorValidationWarning::NamingConflict {
+                anchor_names,
+                similarity_score,
+            } => {
+                format!(
+                    "Potential naming conflict between anchors {} (similarity: {:.1}%)",
+                    anchor_names.join(", "),
+                    similarity_score * 100.0
+                )
             }
-            AnchorValidationWarning::PerformanceIssue { anchor_name, resolution_count, avg_resolution_time_ms, .. } => {
-                format!("Performance issue with anchor '{}': {} resolutions, avg {:.2}ms", 
-                       anchor_name, resolution_count, avg_resolution_time_ms)
+            AnchorValidationWarning::PerformanceIssue {
+                anchor_name,
+                resolution_count,
+                avg_resolution_time_ms,
+                ..
+            } => {
+                format!(
+                    "Performance issue with anchor '{}': {} resolutions, avg {:.2}ms",
+                    anchor_name, resolution_count, avg_resolution_time_ms
+                )
             }
         }
     }
@@ -253,11 +297,11 @@ impl AnchorValidationWarning {
     /// Get warning position
     pub fn position(&self) -> Position {
         match self {
-            AnchorValidationWarning::UnusedAnchor { position, .. } |
-            AnchorValidationWarning::CircularReference { position, .. } |
-            AnchorValidationWarning::DeepNesting { position, .. } |
-            AnchorValidationWarning::PotentialMemoryIssue { position, .. } |
-            AnchorValidationWarning::PerformanceIssue { position, .. } => *position,
+            AnchorValidationWarning::UnusedAnchor { position, .. }
+            | AnchorValidationWarning::CircularReference { position, .. }
+            | AnchorValidationWarning::DeepNesting { position, .. }
+            | AnchorValidationWarning::PotentialMemoryIssue { position, .. }
+            | AnchorValidationWarning::PerformanceIssue { position, .. } => *position,
             AnchorValidationWarning::NamingConflict { .. } => Position::default(),
         }
     }
@@ -266,16 +310,24 @@ impl AnchorValidationWarning {
     pub fn severity(&self) -> WarningSeverity {
         match self {
             AnchorValidationWarning::CircularReference { .. } => WarningSeverity::High,
-            AnchorValidationWarning::PotentialMemoryIssue { estimated_size_bytes, .. } => {
-                if *estimated_size_bytes > 1024 * 1024 { // 1MB
+            AnchorValidationWarning::PotentialMemoryIssue {
+                estimated_size_bytes,
+                ..
+            } => {
+                if *estimated_size_bytes > 1024 * 1024 {
+                    // 1MB
                     WarningSeverity::High
-                } else if *estimated_size_bytes > 64 * 1024 { // 64KB
+                } else if *estimated_size_bytes > 64 * 1024 {
+                    // 64KB
                     WarningSeverity::Medium
                 } else {
                     WarningSeverity::Low
                 }
             }
-            AnchorValidationWarning::PerformanceIssue { avg_resolution_time_ms, .. } => {
+            AnchorValidationWarning::PerformanceIssue {
+                avg_resolution_time_ms,
+                ..
+            } => {
                 if *avg_resolution_time_ms > 100.0 {
                     WarningSeverity::High
                 } else if *avg_resolution_time_ms > 10.0 {
@@ -293,8 +345,8 @@ impl AnchorValidationWarning {
                     WarningSeverity::Low
                 }
             }
-            AnchorValidationWarning::UnusedAnchor { .. } |
-            AnchorValidationWarning::NamingConflict { .. } => WarningSeverity::Low,
+            AnchorValidationWarning::UnusedAnchor { .. }
+            | AnchorValidationWarning::NamingConflict { .. } => WarningSeverity::Low,
         }
     }
 }
@@ -312,7 +364,7 @@ impl WarningSeverity {
     pub fn as_str(&self) -> &'static str {
         match self {
             WarningSeverity::Low => "LOW",
-            WarningSeverity::Medium => "MEDIUM", 
+            WarningSeverity::Medium => "MEDIUM",
             WarningSeverity::High => "HIGH",
         }
     }
@@ -350,7 +402,8 @@ impl AnchorValidator {
     fn check_unused_anchors<'input>(
         registry: &AnchorRegistry<'input>,
     ) -> Vec<AnchorValidationWarning> {
-        registry.unused_anchors()
+        registry
+            .unused_anchors()
             .into_iter()
             .map(|def| AnchorValidationWarning::UnusedAnchor {
                 name: def.name.to_string(),
@@ -370,7 +423,8 @@ impl AnchorValidator {
         for (i, name1) in anchor_names.iter().enumerate() {
             for name2 in anchor_names.iter().skip(i + 1) {
                 let similarity = Self::calculate_similarity(name1, name2);
-                if similarity > 0.8 { // 80% similarity threshold
+                if similarity > 0.8 {
+                    // 80% similarity threshold
                     warnings.push(AnchorValidationWarning::NamingConflict {
                         anchor_names: vec![name1.to_string(), name2.to_string()],
                         similarity_score: similarity,
@@ -386,11 +440,13 @@ impl AnchorValidator {
     fn check_deep_nesting<'input>(
         registry: &AnchorRegistry<'input>,
     ) -> Vec<AnchorValidationWarning> {
-        registry.anchors_in_order()
+        registry
+            .anchors_in_order()
             .into_iter()
             .filter_map(|def| {
                 let depth = Self::calculate_node_depth(&def.node);
-                if depth > 10 { // Configurable threshold
+                if depth > 10 {
+                    // Configurable threshold
                     Some(AnchorValidationWarning::DeepNesting {
                         anchor_name: def.name.to_string(),
                         depth,
@@ -407,11 +463,13 @@ impl AnchorValidator {
     fn check_memory_issues<'input>(
         registry: &AnchorRegistry<'input>,
     ) -> Vec<AnchorValidationWarning> {
-        registry.anchors_in_order()
+        registry
+            .anchors_in_order()
             .into_iter()
             .filter_map(|def| {
                 let estimated_size = Self::estimate_node_size(&def.node);
-                if estimated_size > 64 * 1024 { // 64KB threshold
+                if estimated_size > 64 * 1024 {
+                    // 64KB threshold
                     Some(AnchorValidationWarning::PotentialMemoryIssue {
                         anchor_name: def.name.to_string(),
                         estimated_size_bytes: estimated_size,
@@ -428,14 +486,16 @@ impl AnchorValidator {
     fn check_performance_issues<'input>(
         registry: &AnchorRegistry<'input>,
     ) -> Vec<AnchorValidationWarning> {
-        registry.frequently_used_anchors(10) // 10+ resolutions
+        registry
+            .frequently_used_anchors(10) // 10+ resolutions
             .into_iter()
             .filter_map(|def| {
                 // Simulate average resolution time based on complexity
                 let complexity = Self::calculate_node_depth(&def.node);
                 let estimated_time = complexity as f64 * 2.0; // 2ms per depth level
-                
-                if estimated_time > 20.0 { // 20ms threshold
+
+                if estimated_time > 20.0 {
+                    // 20ms threshold
                     Some(AnchorValidationWarning::PerformanceIssue {
                         anchor_name: def.name.to_string(),
                         resolution_count: def.resolution_count,
@@ -454,18 +514,18 @@ impl AnchorValidator {
         if s1 == s2 {
             return 1.0;
         }
-        
+
         let len1 = s1.len();
         let len2 = s2.len();
-        
+
         if len1 == 0 || len2 == 0 {
             return 0.0;
         }
-        
+
         // Simple Levenshtein distance approximation
         let max_len = len1.max(len2);
         let min_len = len1.min(len2);
-        
+
         1.0 - (max_len - min_len) as f64 / max_len as f64
     }
 
@@ -475,19 +535,33 @@ impl AnchorValidator {
             crate::parser::ast::Node::Scalar(_) => 1,
             crate::parser::ast::Node::Alias(_) => 1,
             crate::parser::ast::Node::Sequence(seq) => {
-                1 + seq.values.iter()
+                1 + seq
+                    .items
+                    .iter()
                     .map(|child| Self::calculate_node_depth(child))
                     .max()
                     .unwrap_or(0)
             }
             crate::parser::ast::Node::Mapping(map) => {
-                1 + map.pairs.iter()
-                    .map(|(key, value)| {
-                        Self::calculate_node_depth(key).max(Self::calculate_node_depth(value))
+                1 + map
+                    .pairs
+                    .iter()
+                    .map(|pair| {
+                        Self::calculate_node_depth(&pair.key)
+                            .max(Self::calculate_node_depth(&pair.value))
                     })
                     .max()
                     .unwrap_or(0)
             }
+            crate::parser::ast::Node::Anchor(anchor_node) => {
+                // Add 1 for the anchor layer plus depth of wrapped node
+                1 + Self::calculate_node_depth(&anchor_node.node)
+            }
+            crate::parser::ast::Node::Tagged(tagged_node) => {
+                // Add 1 for the tag layer plus depth of wrapped node
+                1 + Self::calculate_node_depth(&tagged_node.node)
+            }
+            crate::parser::ast::Node::Null(_) => 1,
         }
     }
 
@@ -501,14 +575,37 @@ impl AnchorValidator {
                 std::mem::size_of_val(alias) + alias.name.len()
             }
             crate::parser::ast::Node::Sequence(seq) => {
-                std::mem::size_of_val(seq) + 
-                seq.values.iter().map(|child| Self::estimate_node_size(child)).sum::<usize>()
+                std::mem::size_of_val(seq)
+                    + seq
+                        .items
+                        .iter()
+                        .map(|child| Self::estimate_node_size(child))
+                        .sum::<usize>()
             }
             crate::parser::ast::Node::Mapping(map) => {
-                std::mem::size_of_val(map) +
-                map.pairs.iter()
-                    .map(|(key, value)| Self::estimate_node_size(key) + Self::estimate_node_size(value))
-                    .sum::<usize>()
+                std::mem::size_of_val(map)
+                    + map
+                        .pairs
+                        .iter()
+                        .map(|pair| {
+                            Self::estimate_node_size(&pair.key)
+                                + Self::estimate_node_size(&pair.value)
+                        })
+                        .sum::<usize>()
+            }
+            crate::parser::ast::Node::Anchor(anchor_node) => {
+                std::mem::size_of_val(anchor_node)
+                    + anchor_node.name.len()
+                    + Self::estimate_node_size(&anchor_node.node)
+            }
+            crate::parser::ast::Node::Tagged(tagged_node) => {
+                std::mem::size_of_val(tagged_node)
+                    + tagged_node.handle.as_ref().map(|h| h.len()).unwrap_or(0)
+                    + tagged_node.suffix.len()
+                    + Self::estimate_node_size(&tagged_node.node)
+            }
+            crate::parser::ast::Node::Null(null_node) => {
+                std::mem::size_of_val(null_node)
             }
         }
     }

@@ -50,6 +50,7 @@ pub enum TokenType {
     StreamEnd,
     VersionDirective(u32, u32),
     TagDirective(String, String),
+    Reserved(String),
     NoToken,
 }
 

@@ -11,7 +11,7 @@ use crate::scanner::state::ScannerState;
 #[inline]
 pub fn scan_tag<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
-    config: &ScannerConfig,
+    _config: &ScannerConfig,
 ) -> Result<(String, String), ScanError> {
     let start_mark = state.mark();
 

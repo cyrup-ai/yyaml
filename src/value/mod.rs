@@ -427,11 +427,13 @@ impl Serialize for Yaml {
 }
 
 /// Deserializer implementation for Value references
+#[allow(dead_code)] // May be used for future deserialization extensions
 struct ValueDeserializer<'a> {
     value: &'a Value,
 }
 
 impl<'a> ValueDeserializer<'a> {
+    #[allow(dead_code)] // May be used for future deserialization extensions
     fn new(value: &'a Value) -> Self {
         ValueDeserializer { value }
     }

@@ -11,7 +11,7 @@ use crate::scanner::state::ScannerState;
 #[inline]
 pub fn scan_plain_scalar<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
-    config: &ScannerConfig,
+    _config: &ScannerConfig,
 ) -> Result<String, ScanError> {
     let mut result = String::with_capacity(32);
     let mut spaces = String::new();
@@ -57,7 +57,7 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
             if matches!(ch, '\n' | '\r') {
                 // Check if next line would change indentation in block context
                 if !in_flow {
-                    let current_mark = state.mark();
+                    let _current_mark = state.mark();
                     state.consume_char()?; // consume newline
 
                     // Skip any additional newlines
@@ -130,7 +130,7 @@ pub fn scan_single_quoted<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<String, ScanError> {
     let mut result = String::with_capacity(32);
-    let start_mark = state.mark();
+    let _start_mark = state.mark();
 
     loop {
         match state.peek_char()? {
@@ -156,7 +156,7 @@ pub fn scan_single_quoted<T: Iterator<Item = char>>(
                     result.push(' ');
                 }
             }
-            ch => {
+            _ch => {
                 result.push(state.consume_char()?);
             }
         }
@@ -169,7 +169,7 @@ pub fn scan_double_quoted<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<String, ScanError> {
     let mut result = String::with_capacity(32);
-    let start_mark = state.mark();
+    let _start_mark = state.mark();
 
     loop {
         match state.peek_char()? {
@@ -193,7 +193,7 @@ pub fn scan_double_quoted<T: Iterator<Item = char>>(
                     result.push(' ');
                 }
             }
-            ch => {
+            _ch => {
                 result.push(state.consume_char()?);
             }
         }
@@ -248,7 +248,7 @@ fn read_hex_escape<T: Iterator<Item = char>>(
 ) -> Result<char, ScanError> {
     let mut value = 0u32;
 
-    for i in 0..digits {
+    for _i in 0..digits {
         match state.consume_char()? {
             ch @ '0'..='9' => value = value * 16 + (ch as u32 - '0' as u32),
             ch @ 'a'..='f' => value = value * 16 + (ch as u32 - 'a' as u32 + 10),
@@ -444,8 +444,8 @@ fn detect_block_scalar_indent<T: Iterator<Item = char>>(
     let mut min_indent = usize::MAX;
 
     // Look ahead to find first non-empty line
-    let saved_mark = state.mark();
-    let mut chars_consumed = Vec::new();
+    let _saved_mark = state.mark();
+    let mut _chars_consumed: Vec<char> = Vec::new();
 
     loop {
         let indent = count_indentation(state)?;

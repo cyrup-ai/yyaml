@@ -82,7 +82,7 @@ impl<'input> ValidationRuleSet<'input> {
 
     /// Create default rule set with standard YAML validation rules
     pub fn default() -> Self {
-        let mut rules = Self::new();
+        let rules = Self::new();
         // Default rules would be added here
         rules
     }

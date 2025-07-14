@@ -58,12 +58,12 @@ impl Sequence {
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> std::slice::Iter<Value> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Value> {
         self.0.iter()
     }
 
     #[inline(always)]
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<Value> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Value> {
         self.0.iter_mut()
     }
 

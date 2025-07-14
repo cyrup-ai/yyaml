@@ -315,7 +315,7 @@ pub fn validate_indentation_consistency(
 
 /// Calculate effective indentation considering tab stops
 #[inline]
-pub fn effective_indentation(spaces: usize, has_tabs: bool, tab_width: usize) -> usize {
+pub fn effective_indentation(spaces: usize, has_tabs: bool, _tab_width: usize) -> usize {
     if has_tabs {
         // This is approximation - actual calculation depends on where tabs occur
         spaces
@@ -331,7 +331,7 @@ pub fn validate_block_indentation(
     expected_block_type: BlockType,
 ) -> Result<(), ScanError> {
     let column = indentation.column as i32;
-    let min_required = tracker.min_indent_for_block(expected_block_type);
+    let _min_required = tracker.min_indent_for_block(expected_block_type);
 
     match expected_block_type {
         BlockType::Root => {

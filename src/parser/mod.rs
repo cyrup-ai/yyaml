@@ -9,9 +9,9 @@ pub mod blocks;
 pub mod documents;
 pub mod flows;
 pub mod grammar;
-pub mod scalars;
 pub mod indentation;
 pub mod node_parser;
+pub mod scalars;
 pub mod state_machine;
 
 // Legacy modules for backward compatibility
@@ -29,22 +29,140 @@ pub use indentation::{
     IndentationResult, calculate_block_entry_indent, validate_block_mapping_indentation,
     validate_block_sequence_indentation,
 };
+pub use loader::YamlLoader;
 pub use node_parser::parse_node;
 pub use state_machine::{State, execute_state_machine};
-pub use loader::YamlLoader;
 
 use crate::error::{Marker, ScanError};
 use crate::events::{Event, MarkedEventReceiver, TokenType};
+use crate::lexer::Token;
 use crate::lexer::{LexError, Position, TokenKind, YamlLexer};
-use crate::scanner::{Scanner, Token};
+use crate::scanner::Scanner;
 use std::collections::{HashMap, VecDeque};
+
+/// Zero-allocation parsing context that eliminates multiple mutable borrows
+/// while maintaining blazing-fast performance and elegant ergonomics
+#[derive(Debug)]
+pub struct ParsingContext<'a, 'input> {
+    pub lexer: &'a mut YamlLexer<'input>,
+    pub token_buffer: &'a mut VecDeque<Token<'input>>,
+    pub recursion_depth: &'a mut usize,
+    pub parse_state: &'a mut ParseState,
+}
+
+impl<'a, 'input> ParsingContext<'a, 'input> {
+    /// Create a new parsing context from parser state components
+    #[inline]
+    pub fn new(
+        lexer: &'a mut YamlLexer<'input>,
+        token_buffer: &'a mut VecDeque<Token<'input>>,
+        recursion_depth: &'a mut usize,
+        parse_state: &'a mut ParseState,
+    ) -> Self {
+        Self {
+            lexer,
+            token_buffer,
+            recursion_depth,
+            parse_state,
+        }
+    }
+
+    /// Peek at the next token without consuming it (zero-allocation)
+    #[inline]
+    pub fn peek_token(&mut self) -> Result<Option<&Token<'input>>, ParseError> {
+        if self.token_buffer.is_empty() {
+            match self.lexer.next_token() {
+                Ok(token) => {
+                    if matches!(token.kind, TokenKind::StreamEnd) {
+                        return Ok(None);
+                    }
+                    self.token_buffer.push_back(token);
+                }
+                Err(e) => return Err(ParseError::from_lex_error(e)),
+            }
+        }
+        Ok(self.token_buffer.front())
+    }
+
+    /// Consume the next token (zero-allocation)
+    #[inline]
+    pub fn consume_token(&mut self) -> Result<Token<'input>, ParseError> {
+        if let Some(token) = self.token_buffer.pop_front() {
+            return Ok(token);
+        }
+
+        match self.lexer.next_token() {
+            Ok(token) => {
+                if matches!(token.kind, TokenKind::StreamEnd) {
+                    Err(ParseError::new(
+                        ParseErrorKind::UnexpectedEndOfInput,
+                        token.position,
+                        "unexpected end of input",
+                    ))
+                } else {
+                    Ok(token)
+                }
+            }
+            Err(e) => Err(ParseError::from_lex_error(e)),
+        }
+    }
+
+    /// Get current parsing position
+    #[inline]
+    pub fn current_position(&self) -> Position {
+        self.token_buffer
+            .front()
+            .map(|t| t.position)
+            .unwrap_or_else(|| self.lexer.position())
+    }
+
+    /// Check recursion depth to prevent stack overflow
+    #[inline]
+    pub fn check_recursion_depth(&self) -> Result<(), ParseError> {
+        const MAX_RECURSION_DEPTH: usize = 1000;
+        if *self.recursion_depth >= MAX_RECURSION_DEPTH {
+            return Err(ParseError::new(
+                ParseErrorKind::RecursionLimitExceeded,
+                self.current_position(),
+                format!("recursion depth exceeded: {}", MAX_RECURSION_DEPTH),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Skip insignificant tokens (whitespace, comments) with blazing-fast performance
+    #[inline]
+    pub fn skip_insignificant_tokens(&mut self) -> Result<(), ParseError> {
+        loop {
+            match self.peek_token()? {
+                Some(token)
+                    if matches!(token.kind, TokenKind::Whitespace(_) | TokenKind::Comment(_)) =>
+                {
+                    self.consume_token()?; // Skip insignificant token
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
+    /// Check if at end of input
+    #[inline]
+    pub fn is_at_end(&mut self) -> Result<bool, ParseError> {
+        self.skip_insignificant_tokens()?;
+        Ok(self.peek_token()?.is_none())
+    }
+}
+
+// RecursionGuard removed: Manual depth tracking provides zero-allocation performance
+// RAII pattern would add overhead without functional benefit in this high-performance context
 
 /// High-performance YAML parser with complete grammar support
 #[derive(Debug)]
 pub struct YamlParser<'input> {
     lexer: YamlLexer<'input>,
-    token_buffer: VecDeque<Token>,
-    current_document: Option<Document<'input>>,
+    token_buffer: VecDeque<Token<'input>>,
+    _current_document: Option<Document<'input>>,
     parse_state: ParseState,
     recursion_depth: usize,
     max_recursion_depth: usize,
@@ -194,7 +312,7 @@ impl<'input> YamlParser<'input> {
         Self {
             lexer: YamlLexer::new(input),
             token_buffer: VecDeque::new(),
-            current_document: None,
+            _current_document: None,
             parse_state: ParseState::StreamStart,
             recursion_depth: 0,
             max_recursion_depth: config.max_recursion_depth,
@@ -312,16 +430,73 @@ impl<'input> YamlParser<'input> {
     }
 
     /// Internal node parsing implementation - delegates to specialized parsers
-    #[inline]
     fn parse_node_impl(&mut self) -> Result<Node<'input>, ParseError> {
+        // Check recursion depth before parsing
+        if self.recursion_depth >= self.max_recursion_depth {
+            return Err(ParseError::new(
+                ParseErrorKind::RecursionLimitExceeded,
+                Position::start(),
+                format!(
+                    "recursion depth exceeded maximum of {}",
+                    self.max_recursion_depth
+                ),
+            ));
+        }
+        
+        // Increment recursion depth
+        self.recursion_depth += 1;
+        
+        // Parse node and ensure decrement happens regardless of outcome
+        let result = self.parse_node_impl_inner();
+        
+        // Decrement recursion depth
+        self.recursion_depth -= 1;
+        
+        result
+    }
+    
+    fn parse_node_impl_inner(&mut self) -> Result<Node<'input>, ParseError> {
+        // Create parsing context from parser state components
+        let mut context = ParsingContext::new(
+            &mut self.lexer,
+            &mut self.token_buffer,
+            &mut self.recursion_depth,
+            &mut self.parse_state,
+        );
+
+        Self::parse_node_with_context_static(&mut context)
+    }
+
+    /// Static version of parse_node_with_context for use without self borrowing
+    fn parse_node_with_context_static(
+        context: &mut ParsingContext<'_, 'input>,
+    ) -> Result<Node<'input>, ParseError> {
+        // Check recursion depth before parsing
+        context.check_recursion_depth()?;
+        
+        // Increment recursion depth
+        *context.recursion_depth += 1;
+        
+        // Parse node and ensure decrement happens regardless of outcome
+        let result = Self::parse_node_with_context_static_inner(context);
+        
+        // Decrement recursion depth
+        *context.recursion_depth -= 1;
+        
+        result
+    }
+    
+    fn parse_node_with_context_static_inner(
+        context: &mut ParsingContext<'_, 'input>,
+    ) -> Result<Node<'input>, ParseError> {
         // Skip whitespace and comments
-        self.skip_insignificant_tokens()?;
+        context.skip_insignificant_tokens()?;
 
         // Get current position before consuming token
-        let current_pos = self.current_position();
+        let current_pos = context.current_position();
 
         // Consume the token to avoid borrowing conflicts
-        let token = self.consume_token().map_err(|_| {
+        let token = context.consume_token().map_err(|_| {
             ParseError::new(
                 ParseErrorKind::UnexpectedEndOfInput,
                 current_pos,
@@ -335,63 +510,84 @@ impl<'input> YamlParser<'input> {
                 scalars::ScalarParser::parse_scalar(token, &ParseContext::Document)
             }
 
-            // Flow sequences [...] - delegate to FlowParser
-            TokenKind::FlowSequenceStart => flows::FlowParser::parse_sequence(self, token),
+            // Flow collections
+            TokenKind::FlowSequenceStart => {
+                flows::FlowParser::parse_sequence(context, token, |ctx| {
+                    Self::parse_node_with_context_static(ctx)
+                })
+            }
 
-            // Flow mappings {...} - delegate to FlowParser
-            TokenKind::FlowMappingStart => flows::FlowParser::parse_mapping(self, token),
+            TokenKind::FlowMappingStart => {
+                flows::FlowParser::parse_mapping(context, token, |ctx| {
+                    Self::parse_node_with_context_static(ctx)
+                })
+            }
 
-            // Block sequences - delegate to BlockParser
-            TokenKind::BlockEntry => blocks::BlockParser::parse_sequence(self, token, 0),
+            // Block sequences
+            TokenKind::BlockEntry => {
+                blocks::BlockParser::parse_sequence_with_context(context, token, 0, |ctx| {
+                    Self::parse_node_with_context_static(ctx)
+                })
+            }
 
-            // Anchors &anchor
+            // Anchors
             TokenKind::Anchor(name) => {
-                let anchored_node = self.parse_node()?;
-                Ok(Node::Anchor(AnchorNode::new(
+                let position = token.position;
+                let anchored_node = Self::parse_node_with_context_static(context)?;
+                Ok(Node::Anchor(ast::AnchorNode::new(
                     name,
                     Box::new(anchored_node),
-                    token.position,
+                    position,
                 )))
             }
 
-            // Aliases *alias
-            TokenKind::Alias(name) => Ok(Node::Alias(AliasNode::new(name, token.position))),
+            // Aliases
+            TokenKind::Alias(name) => Ok(Node::Alias(ast::AliasNode::new(name, token.position))),
 
-            // Tags !tag
+            // Tags
             TokenKind::Tag { handle, suffix } => {
-                let tagged_node = self.parse_node()?;
-                Ok(Node::Tagged(TaggedNode::new(
+                let position = token.position;
+                let tagged_node = Self::parse_node_with_context_static(context)?;
+                Ok(Node::Tagged(ast::TaggedNode::new(
                     handle,
                     suffix,
                     Box::new(tagged_node),
-                    token.position,
+                    position,
                 )))
             }
 
-            // Check if this could be a block mapping key - put token back for lookahead
+            // Plain scalars that might be mapping keys
             _ => {
-                // Put token back for specialized parser to handle
-                self.token_buffer.push_front(token.clone());
+                // Check if this could be a mapping key
+                let token_position = token.position;
+                let is_mapping_key =
+                    blocks::BlockParser::is_potential_mapping_key_with_context(context, token_position, 0)?;
 
-                // Check if this could be a block mapping key
-                if blocks::BlockParser::is_potential_mapping_key(self, token.position, 0)? {
-                    let key_token = self.consume_token()?;
-                    blocks::BlockParser::parse_mapping(self, key_token, 0)
+                if is_mapping_key {
+                    blocks::BlockParser::parse_mapping_with_context(
+                        context,
+                        token,
+                        0,
+                        |ctx| Self::parse_node_with_context_static(ctx),
+                    )
                 } else {
-                    let bad_token = self.consume_token()?;
                     Err(ParseError::new(
                         ParseErrorKind::UnexpectedToken,
-                        bad_token.position,
-                        format!("unexpected token: {:?}", bad_token.kind),
+                        token.position,
+                        format!("unexpected token: {:?}", token.kind),
                     ))
                 }
             }
         }
     }
 
+    // Removed parse_node_with_context and parse_node_with_context_inner methods:
+    // These duplicated functionality already provided by parse_node_with_context_static
+    // Eliminating code bloat for zero-allocation, blazing-fast performance
+
     /// Utility methods
     #[inline]
-    fn peek_token(&mut self) -> Result<Option<&Token>, ParseError> {
+    fn peek_token(&mut self) -> Result<Option<&Token<'input>>, ParseError> {
         if self.token_buffer.is_empty() {
             match self.lexer.next_token() {
                 Ok(token) => {
@@ -407,7 +603,7 @@ impl<'input> YamlParser<'input> {
     }
 
     #[inline]
-    fn consume_token(&mut self) -> Result<Token, ParseError> {
+    fn consume_token(&mut self) -> Result<Token<'input>, ParseError> {
         if let Some(token) = self.token_buffer.pop_front() {
             Ok(token)
         } else {
@@ -418,18 +614,8 @@ impl<'input> YamlParser<'input> {
         }
     }
 
-    fn expect_token(&mut self, expected: TokenKind<'input>) -> Result<(), ParseError> {
-        let token = self.consume_token()?;
-        if std::mem::discriminant(&token.kind) == std::mem::discriminant(&expected) {
-            Ok(())
-        } else {
-            Err(ParseError::new(
-                ParseErrorKind::ExpectedToken,
-                token.position,
-                format!("expected {:?}, found {:?}", expected, token.kind),
-            ))
-        }
-    }
+    // Removed expect_token method: Unused utility adding binary bloat
+    // Token validation handled inline for blazing-fast performance
 
     fn expect_stream_start(&mut self) -> Result<(), ParseError> {
         if let Some(token) = self.peek_token()? {
@@ -506,7 +692,7 @@ impl ParseError {
         Self {
             kind: ParseErrorKind::LexicalError,
             position: error.position,
-            message: error.message.into_owned(),
+            message: error.kind.to_string().into(),
         }
     }
 }

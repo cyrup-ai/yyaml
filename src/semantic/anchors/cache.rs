@@ -71,9 +71,7 @@ impl CacheStatistics {
         cache: &HashMap<String, CachedResolution<'_>>,
         total_resolution_attempts: usize,
     ) -> Self {
-        let total_accesses: usize = cache.values()
-            .map(|cached| cached.access_count)
-            .sum();
+        let total_accesses: usize = cache.values().map(|cached| cached.access_count).sum();
 
         let avg_access_count = if !cache.is_empty() {
             total_accesses as f64 / cache.len() as f64
@@ -88,7 +86,8 @@ impl CacheStatistics {
         };
 
         // Rough memory usage estimate (string keys + cached nodes)
-        let memory_usage_estimate = cache.iter()
+        let memory_usage_estimate = cache
+            .iter()
             .map(|(key, _)| key.len() + std::mem::size_of::<CachedResolution<'_>>())
             .sum::<usize>();
 
@@ -124,18 +123,26 @@ impl<'input> CacheManager<'input> {
     /// Get cached resolution if available and not stale
     pub fn get(&mut self, alias_name: &str) -> Option<&Node<'input>> {
         self.total_resolution_attempts += 1;
-        
-        if let Some(cached) = self.cache.get_mut(alias_name) {
-            if !cached.is_stale(self.max_age) {
-                cached.access(false);
-                return Some(&cached.resolved_node);
-            } else {
-                // Remove stale entry
-                self.cache.remove(alias_name);
-            }
+
+        // First check if entry exists and is stale, removing if needed
+        let should_remove = if let Some(cached) = self.cache.get(alias_name) {
+            cached.is_stale(self.max_age)
+        } else {
+            false
+        };
+
+        if should_remove {
+            self.cache.remove(alias_name);
+            return None;
         }
-        
-        None
+
+        // Now safely get the entry and update access
+        if let Some(cached) = self.cache.get_mut(alias_name) {
+            cached.access(false);
+            Some(&cached.resolved_node)
+        } else {
+            None
+        }
     }
 
     /// Store resolution in cache
@@ -163,12 +170,15 @@ impl<'input> CacheManager<'input> {
         }
 
         // Collect entries sorted by access frequency (ascending)
-        let mut entries: Vec<_> = self.cache.iter()
+        let mut entries: Vec<_> = self
+            .cache
+            .iter()
             .map(|(k, v)| (k.clone(), v.access_frequency(), v.cached_at))
             .collect();
 
         entries.sort_by(|a, b| {
-            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
+            a.1.partial_cmp(&b.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
                 .then(a.2.cmp(&b.2))
         });
 
@@ -185,7 +195,9 @@ impl<'input> CacheManager<'input> {
 
     /// Remove stale entries based on max_age
     pub fn cleanup_stale(&mut self) {
-        let stale_keys: Vec<_> = self.cache.iter()
+        let stale_keys: Vec<_> = self
+            .cache
+            .iter()
             .filter(|(_, cached)| cached.is_stale(self.max_age))
             .map(|(key, _)| key.clone())
             .collect();
@@ -224,7 +236,7 @@ impl<'input> CacheManager<'input> {
     /// Resize cache capacity
     pub fn resize(&mut self, new_max_size: usize) {
         self.max_size = new_max_size;
-        
+
         // If new size is smaller, evict excess entries
         if self.cache.len() > new_max_size {
             let to_remove = self.cache.len() - new_max_size;

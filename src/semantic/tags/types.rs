@@ -171,7 +171,7 @@ impl YamlType {
     ) -> SemanticError {
         SemanticError::TagResolutionFailed {
             tag: tag.to_string(),
-            message: message.to_string(),
+            reason: message.to_string(),
             position,
         }
     }
@@ -212,7 +212,7 @@ impl YamlType {
     ) -> SemanticError {
         SemanticError::CustomTagResolutionFailed {
             tag: tag.to_string(),
-            message: message.to_string(),
+            error: message.to_string(),
             position,
         }
     }

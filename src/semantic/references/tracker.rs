@@ -51,6 +51,23 @@ impl<'input> ReferenceTracker<'input> {
         }
     }
 
+    /// Create tracker with specific configuration
+    pub fn with_config(config: &crate::semantic::SemanticConfig<'_>) -> Self {
+        let mut tracker = Self::new();
+
+        // Configure based on cycle detection setting
+        if !config.cycle_detection_enabled {
+            tracker.context.is_enabled = false;
+        }
+
+        // Configure based on strict mode
+        if config.strict_mode {
+            tracker.context.max_depth = 50; // Stricter depth limit
+        }
+
+        tracker
+    }
+
     /// Track anchor definition - blazing-fast registration
     pub fn track_anchor(
         &mut self,
@@ -416,7 +433,10 @@ impl<'input> ReferenceTracker<'input> {
                 if node.name != *name {
                     return Err(SemanticError::ValidationFailure {
                         rule: "anchor_registry_consistency".to_string(),
-                        message: format!("Anchor registry inconsistency: {} vs {}", name, node.name),
+                        message: format!(
+                            "Anchor registry inconsistency: {} vs {}",
+                            name, node.name
+                        ),
                         position: Position::default(),
                     });
                 }
@@ -463,6 +483,35 @@ impl<'input> ReferenceTracker<'input> {
     #[inline]
     pub fn is_enabled(&self) -> bool {
         self.context.is_enabled
+    }
+    /// Validate all references - ensures all aliases can be resolved
+    pub fn validate_references(&self) -> Result<(), SemanticError> {
+        // Check that all aliases have corresponding anchors
+        for (alias_name, &alias_id) in &self.alias_registry {
+            if let Some(node) = self.graph.get_node(alias_id) {
+                if let ReferenceNodeType::Alias {
+                    target,
+                    resolved_target,
+                    ..
+                } = &node.node_type
+                {
+                    if resolved_target.is_none() && !self.anchor_registry.contains_key(target) {
+                        return Err(SemanticError::UnresolvedAlias {
+                            alias_name: alias_name.to_string(),
+                            position: node.position,
+                        });
+                    }
+                }
+            }
+        }
+
+        // Validate internal consistency
+        self.validate()
+    }
+
+    /// Reset tracker for new analysis (alias for clear for semantic analyzer compatibility)
+    pub fn reset(&mut self) {
+        self.clear()
     }
 }
 

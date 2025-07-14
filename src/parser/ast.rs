@@ -29,7 +29,7 @@ impl<'input> Stream<'input> {
     }
 
     #[inline]
-    pub fn iter(&self) -> std::slice::Iter<Document<'input>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Document<'input>> {
         self.documents.iter()
     }
 }
@@ -232,7 +232,7 @@ impl<'input> SequenceNode<'input> {
     }
 
     #[inline]
-    pub fn iter(&self) -> std::slice::Iter<Node<'input>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Node<'input>> {
         self.items.iter()
     }
 
@@ -283,7 +283,7 @@ impl<'input> MappingNode<'input> {
     }
 
     #[inline]
-    pub fn iter(&self) -> std::slice::Iter<MappingPair<'input>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, MappingPair<'input>> {
         self.pairs.iter()
     }
 

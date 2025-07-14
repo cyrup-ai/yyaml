@@ -3,7 +3,8 @@
 use super::context::ValidationContext;
 use super::warnings::ValidationWarning;
 use crate::parser::ast::Node;
-use crate::semantic::{AnalysisContext, SemanticError, YamlType};
+use crate::semantic::tags::YamlType;
+use crate::semantic::{AnalysisContext, SemanticError};
 use std::collections::HashMap;
 
 /// Trait for constraint rules

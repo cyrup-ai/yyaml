@@ -148,7 +148,7 @@ fn is_valid_first_anchor_char(ch: char) -> bool {
 
 /// Check if character is in document marker context (---, ...)
 #[inline]
-fn is_document_marker_context(ch: char) -> bool {
+fn is_document_marker_context(_ch: char) -> bool {
     // This is a simplified check - in real implementation,
     // we'd need to check if we're at start of line with
     // proper sequence

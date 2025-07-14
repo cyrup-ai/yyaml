@@ -43,15 +43,15 @@ pub mod statistics;
 pub mod types;
 
 // Re-export all public types for unified access
-pub use resolver::AnchorResolver;
-pub use registry::{AnchorRegistry, AnchorDefinition, RegistryStatistics, RegistryValidationError};
-pub use cache::{CachedResolution, CacheStatistics, CacheManager, CacheConfig};
+pub use cache::{CacheConfig, CacheManager, CacheStatistics, CachedResolution};
+pub use context::ResolutionContext;
 pub use optimization::{
-    AnchorOptimizations, MemoryUsageEstimate, OptimizationSuggestion, 
-    OptimizationReport, ComplexityAnalysis, CacheTuningRecommendations,
-    MemoryBreakdown, EfficiencyMetrics, Priority, ComplexAnchor,
-    EvictionStrategy, PrefetchSuggestion, MonitoringRecommendation
+    AnchorOptimizations, CacheTuningRecommendations, ComplexAnchor, ComplexityAnalysis,
+    EfficiencyMetrics, EvictionStrategy, MemoryBreakdown, MemoryUsageEstimate,
+    MonitoringRecommendation, OptimizationReport, OptimizationSuggestion, PrefetchSuggestion,
+    Priority,
 };
+pub use registry::{AnchorDefinition, AnchorRegistry, RegistryStatistics, RegistryValidationError};
+pub use resolver::AnchorResolver;
 pub use statistics::{AnchorStatistics, AnchorValidationWarning};
-pub use context::{ResolutionContext};
 pub use types::*;

@@ -19,9 +19,9 @@ impl AnchorOptimizations {
         // Base cache size on expected alias resolution patterns
         let base_size = anchor_count.min(64); // Don't cache more than 64 by default
         let alias_factor = (estimated_alias_count as f64 / anchor_count.max(1) as f64).min(4.0);
-        
+
         let optimal_size = (base_size as f64 * alias_factor) as usize;
-        
+
         // Ensure reasonable bounds
         optimal_size.clamp(16, 512)
     }
@@ -36,8 +36,12 @@ impl AnchorOptimizations {
             // Estimate definition metadata size
             metadata_bytes += std::mem::size_of_val(definition);
             metadata_bytes += definition.name.len();
-            metadata_bytes += definition.definition_path.iter().map(|s| s.len()).sum::<usize>();
-            
+            metadata_bytes += definition
+                .definition_path
+                .iter()
+                .map(|s| s.len())
+                .sum::<usize>();
+
             // Estimate node size
             node_bytes += Self::estimate_node_memory(&definition.node);
         }
@@ -63,7 +67,8 @@ impl AnchorOptimizations {
         }
 
         // Memory usage suggestions
-        if statistics.memory_usage_bytes > 1024 * 1024 { // 1MB
+        if statistics.memory_usage_bytes > 1024 * 1024 {
+            // 1MB
             suggestions.push(OptimizationSuggestion::OptimizeMemoryUsage);
         }
 
@@ -93,37 +98,41 @@ impl AnchorOptimizations {
     /// Estimate memory usage for a single node
     fn estimate_node_memory(node: &Node) -> usize {
         match node {
-            Node::Scalar(scalar) => {
-                std::mem::size_of_val(scalar) + scalar.value.len()
-            }
-            Node::Alias(alias) => {
-                std::mem::size_of_val(alias) + alias.name.len()
-            }
+            Node::Scalar(scalar) => std::mem::size_of_val(scalar) + scalar.value.len(),
+            Node::Alias(alias) => std::mem::size_of_val(alias) + alias.name.len(),
             Node::Sequence(seq) => {
                 let base_size = std::mem::size_of_val(seq);
-                let children_size: usize = seq.items.iter()
+                let children_size: usize = seq
+                    .items
+                    .iter()
                     .map(|child| Self::estimate_node_memory(child))
                     .sum();
                 base_size + children_size
             }
             Node::Mapping(map) => {
                 let base_size = std::mem::size_of_val(map);
-                let pairs_size: usize = map.pairs.iter()
+                let pairs_size: usize = map
+                    .pairs
+                    .iter()
                     .map(|pair| {
-                        Self::estimate_node_memory(&pair.key) + Self::estimate_node_memory(&pair.value)
+                        Self::estimate_node_memory(&pair.key)
+                            + Self::estimate_node_memory(&pair.value)
                     })
                     .sum();
                 base_size + pairs_size
             }
             Node::Anchor(anchor_node) => {
-                std::mem::size_of_val(anchor_node) + anchor_node.name.len() + Self::estimate_node_memory(&anchor_node.node)
+                std::mem::size_of_val(anchor_node)
+                    + anchor_node.name.len()
+                    + Self::estimate_node_memory(&anchor_node.node)
             }
             Node::Tagged(tagged_node) => {
-                std::mem::size_of_val(tagged_node) + tagged_node.handle.len() + tagged_node.suffix.len() + Self::estimate_node_memory(&tagged_node.node)
+                std::mem::size_of_val(tagged_node)
+                    + tagged_node.handle.as_ref().map_or(0, |h| h.len())
+                    + tagged_node.suffix.len()
+                    + Self::estimate_node_memory(&tagged_node.node)
             }
-            Node::Null(null_node) => {
-                std::mem::size_of_val(null_node)
-            }
+            Node::Null(null_node) => std::mem::size_of_val(null_node),
         }
     }
 
@@ -132,7 +141,7 @@ impl AnchorOptimizations {
         // Estimate based on typical cache entry size
         let avg_entry_size = 256; // Estimated average cached node size
         let cache_overhead = 64; // HashMap overhead per entry
-        
+
         anchor_count * (avg_entry_size + cache_overhead)
     }
 
@@ -143,10 +152,8 @@ impl AnchorOptimizations {
     ) -> OptimizationReport {
         let memory_estimate = Self::estimate_memory_usage(registry);
         let suggestions = Self::suggest_optimizations(statistics);
-        let optimal_cache_size = Self::calculate_optimal_cache_size(
-            statistics.total_anchors,
-            statistics.total_aliases,
-        );
+        let optimal_cache_size =
+            Self::calculate_optimal_cache_size(statistics.total_anchors, statistics.total_aliases);
 
         OptimizationReport {
             memory_estimate,
@@ -166,12 +173,13 @@ impl AnchorOptimizations {
         for definition in registry.anchors_in_order() {
             let depth = Self::calculate_node_complexity(&definition.node);
             total_depth += depth;
-            
+
             if depth > max_depth {
                 max_depth = depth;
             }
-            
-            if depth > 10 { // Complexity threshold
+
+            if depth > 10 {
+                // Complexity threshold
                 complex_anchors.push(ComplexAnchor {
                     name: definition.name.to_string(),
                     complexity_score: depth,
@@ -200,14 +208,19 @@ impl AnchorOptimizations {
             Node::Scalar(_) => 1,
             Node::Alias(_) => 2, // Aliases add resolution overhead
             Node::Sequence(seq) => {
-                1 + seq.items.iter()
+                1 + seq
+                    .items
+                    .iter()
                     .map(|child| Self::calculate_node_complexity(child))
                     .sum::<usize>()
             }
             Node::Mapping(map) => {
-                1 + map.pairs.iter()
+                1 + map
+                    .pairs
+                    .iter()
                     .map(|pair| {
-                        Self::calculate_node_complexity(&pair.key) + Self::calculate_node_complexity(&pair.value)
+                        Self::calculate_node_complexity(&pair.key)
+                            + Self::calculate_node_complexity(&pair.value)
                     })
                     .sum::<usize>()
             }
@@ -222,7 +235,9 @@ impl AnchorOptimizations {
     }
 
     /// Generate cache tuning recommendations
-    pub fn cache_tuning_recommendations(statistics: &AnchorStatistics) -> CacheTuningRecommendations {
+    pub fn cache_tuning_recommendations(
+        statistics: &AnchorStatistics,
+    ) -> CacheTuningRecommendations {
         let hit_rate = statistics.cache_hit_rate();
         let total_lookups = statistics.cache_hits + statistics.cache_misses;
 
@@ -269,7 +284,9 @@ impl AnchorOptimizations {
     }
 
     /// Generate monitoring recommendations
-    fn generate_monitoring_recommendations(statistics: &AnchorStatistics) -> Vec<MonitoringRecommendation> {
+    fn generate_monitoring_recommendations(
+        statistics: &AnchorStatistics,
+    ) -> Vec<MonitoringRecommendation> {
         let mut recommendations = Vec::new();
 
         if statistics.avg_resolution_time_ms > 5.0 {
@@ -302,7 +319,7 @@ impl MemoryUsageEstimate {
     /// Get memory usage breakdown as percentages
     pub fn breakdown_percentages(&self) -> MemoryBreakdown {
         let total = self.total_bytes as f64;
-        
+
         MemoryBreakdown {
             nodes: (self.node_bytes as f64 / total) * 100.0,
             metadata: (self.metadata_bytes as f64 / total) * 100.0,

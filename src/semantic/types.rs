@@ -11,10 +11,10 @@ use std::time::Duration;
 pub struct SemanticResult<'input> {
     /// Documents after semantic processing
     pub documents: Vec<Document<'input>>,
-    
+
     /// Performance and processing metrics
     pub metrics: AnalysisMetrics,
-    
+
     /// Warnings encountered during processing (non-fatal issues)
     pub warnings: Vec<SemanticWarning>,
 }
@@ -24,19 +24,19 @@ pub struct SemanticResult<'input> {
 pub struct AnalysisMetrics {
     /// Total processing time for semantic analysis
     pub processing_time: Duration,
-    
+
     /// Number of documents processed
     pub documents_processed: usize,
-    
+
     /// Number of anchors successfully resolved
     pub anchors_resolved: usize,
-    
+
     /// Number of aliases successfully resolved
     pub aliases_resolved: usize,
-    
+
     /// Number of tags successfully resolved
     pub tags_resolved: usize,
-    
+
     /// Number of circular references detected
     pub cycles_detected: usize,
 }
@@ -49,21 +49,21 @@ pub enum SemanticWarning {
         anchor_name: String,
         position: crate::lexer::Position,
     },
-    
+
     /// Deprecated tag usage
     DeprecatedTag {
         tag: String,
         suggested_replacement: Option<String>,
         position: crate::lexer::Position,
     },
-    
+
     /// Potentially inefficient structure
     InefficiencyWarning {
         description: String,
         suggestion: String,
         position: crate::lexer::Position,
     },
-    
+
     /// Custom validation warning
     CustomValidationWarning {
         validator_name: String,
@@ -81,7 +81,7 @@ impl<'input> SemanticResult<'input> {
             warnings: Vec::new(),
         }
     }
-    
+
     /// Create semantic result with metrics
     pub fn with_metrics(documents: Vec<Document<'input>>, metrics: AnalysisMetrics) -> Self {
         Self {
@@ -90,22 +90,22 @@ impl<'input> SemanticResult<'input> {
             warnings: Vec::new(),
         }
     }
-    
+
     /// Add a warning to the result
     pub fn add_warning(&mut self, warning: SemanticWarning) {
         self.warnings.push(warning);
     }
-    
+
     /// Get the primary document (first document in the result)
     pub fn primary_document(&self) -> Option<&Document<'input>> {
         self.documents.first()
     }
-    
+
     /// Check if processing completed successfully (no warnings)
     pub fn is_clean(&self) -> bool {
         self.warnings.is_empty()
     }
-    
+
     /// Get processing summary
     pub fn summary(&self) -> ProcessingSummary {
         ProcessingSummary {
@@ -140,42 +140,43 @@ impl AnalysisMetrics {
             ..Default::default()
         }
     }
-    
+
     /// Record anchor resolution
     pub fn record_anchor_resolution(&mut self) {
         self.anchors_resolved += 1;
     }
-    
+
     /// Record alias resolution
     pub fn record_alias_resolution(&mut self) {
         self.aliases_resolved += 1;
     }
-    
+
     /// Record tag resolution
     pub fn record_tag_resolution(&mut self) {
         self.tags_resolved += 1;
     }
-    
+
     /// Record cycle detection
     pub fn record_cycle_detection(&mut self) {
         self.cycles_detected += 1;
     }
-    
+
     /// Update document count
     pub fn set_documents_processed(&mut self, count: usize) {
         self.documents_processed = count;
     }
-    
+
     /// Calculate processing rate (nodes per second)
     pub fn processing_rate(&self) -> f64 {
         if self.processing_time.as_secs_f64() > 0.0 {
-            let total_operations = self.anchors_resolved + self.aliases_resolved + self.tags_resolved;
+            let total_operations =
+                self.anchors_resolved + self.aliases_resolved + self.tags_resolved;
             total_operations as f64 / self.processing_time.as_secs_f64()
         } else {
             0.0
         }
     }
-    
+
     /// Check if metrics indicate efficient processing
     pub fn is_efficient(&self) -> bool {
         // Consider processing efficient if:
@@ -195,34 +196,49 @@ impl SemanticWarning {
             SemanticWarning::CustomValidationWarning { position, .. } => *position,
         }
     }
-    
+
     /// Get human-readable warning message
     pub fn message(&self) -> String {
         match self {
             SemanticWarning::UnusedAnchor { anchor_name, .. } => {
                 format!("Unused anchor definition: '{}'", anchor_name)
             }
-            SemanticWarning::DeprecatedTag { tag, suggested_replacement, .. } => {
+            SemanticWarning::DeprecatedTag {
+                tag,
+                suggested_replacement,
+                ..
+            } => {
                 if let Some(replacement) = suggested_replacement {
                     format!("Deprecated tag '{}', consider using '{}'", tag, replacement)
                 } else {
                     format!("Deprecated tag '{}'", tag)
                 }
             }
-            SemanticWarning::InefficiencyWarning { description, suggestion, .. } => {
+            SemanticWarning::InefficiencyWarning {
+                description,
+                suggestion,
+                ..
+            } => {
                 format!("{} (Suggestion: {})", description, suggestion)
             }
-            SemanticWarning::CustomValidationWarning { validator_name, message, .. } => {
+            SemanticWarning::CustomValidationWarning {
+                validator_name,
+                message,
+                ..
+            } => {
                 format!("[{}] {}", validator_name, message)
             }
         }
     }
-    
+
     /// Create an unused anchor warning
     pub fn unused_anchor(anchor_name: String, position: crate::lexer::Position) -> Self {
-        Self::UnusedAnchor { anchor_name, position }
+        Self::UnusedAnchor {
+            anchor_name,
+            position,
+        }
     }
-    
+
     /// Create a deprecated tag warning
     pub fn deprecated_tag(
         tag: String,
@@ -235,7 +251,7 @@ impl SemanticWarning {
             position,
         }
     }
-    
+
     /// Create an inefficiency warning
     pub fn inefficiency_warning(
         description: String,
@@ -248,7 +264,7 @@ impl SemanticWarning {
             position,
         }
     }
-    
+
     /// Create a custom validation warning
     pub fn custom_validation_warning(
         validator_name: String,
@@ -282,7 +298,7 @@ impl<'input> HasMetrics for SemanticResult<'input> {
     fn metrics(&self) -> &AnalysisMetrics {
         &self.metrics
     }
-    
+
     fn metrics_mut(&mut self) -> &mut AnalysisMetrics {
         &mut self.metrics
     }
@@ -299,11 +315,11 @@ impl<'input> WarningCollector for SemanticResult<'input> {
     fn add_warning(&mut self, warning: SemanticWarning) {
         self.warnings.push(warning);
     }
-    
+
     fn warnings(&self) -> &[SemanticWarning] {
         &self.warnings
     }
-    
+
     fn clear_warnings(&mut self) {
         self.warnings.clear();
     }

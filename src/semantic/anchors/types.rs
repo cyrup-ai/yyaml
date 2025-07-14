@@ -6,8 +6,6 @@
 use crate::lexer::Position;
 use crate::parser::ast::Node;
 use crate::semantic::SemanticError;
-use std::borrow::Cow;
-use std::collections::HashMap;
 
 /// Anchor resolution result with complete error context
 pub type AnchorResult<T> = Result<T, SemanticError>;

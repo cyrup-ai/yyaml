@@ -208,7 +208,7 @@ pub fn validate_document_marker_context<T: Iterator<Item = char>>(
     state: &ScannerState<T>,
     marker_type: DocumentMarker,
 ) -> Result<(), ScanError> {
-    let marker_name = match marker_type {
+    let _marker_name = match marker_type {
         DocumentMarker::Start => "document start",
         DocumentMarker::End => "document end",
     };

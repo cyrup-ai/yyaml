@@ -2,7 +2,7 @@
 
 use super::fixes::ValidationFix;
 use crate::lexer::Position;
-use crate::semantic::YamlType;
+use crate::semantic::tags::YamlType;
 
 /// Validation warning with detailed information
 #[derive(Debug, Clone)]

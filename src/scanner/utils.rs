@@ -310,12 +310,7 @@ pub fn peek_pattern<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
     pattern: &[char],
 ) -> bool {
-    state.ensure_buffer(pattern.len());
-    if state.buffer.len() < pattern.len() {
-        return false;
-    }
-
-    state.buffer.iter().take(pattern.len()).eq(pattern.iter())
+    state.check_chars(pattern)
 }
 
 /// Check if at end of input
@@ -386,7 +381,7 @@ pub fn grapheme_count(s: &str) -> usize {
 /// Efficient string builder for scanner operations
 pub struct StringBuilder {
     buffer: String,
-    capacity_hint: usize,
+    _capacity_hint: usize,
 }
 
 impl StringBuilder {
@@ -395,7 +390,7 @@ impl StringBuilder {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: String::with_capacity(capacity),
-            capacity_hint: capacity,
+            _capacity_hint: capacity,
         }
     }
 

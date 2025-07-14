@@ -22,19 +22,22 @@ pub use analyzer::SemanticAnalyzer;
 pub use context::{AnalysisContext, ProcessingPhase, SemanticConfig};
 pub use error::{SemanticError, SemanticResult};
 pub use optimization::{
-    SemanticOptimizations, BufferSizeHints, MemoryEstimate, OptimizationLevel,
-    CollectionCapacities, PerformanceConfig,
+    BufferSizeHints, CollectionCapacities, MemoryEstimate, OptimizationLevel, PerformanceConfig,
+    SemanticOptimizations,
 };
 pub use types::{
-    SemanticResult as Result, AnalysisMetrics, SemanticWarning, ProcessingSummary,
-    AnalysisResult, HasMetrics, WarningCollector,
+    AnalysisMetrics, AnalysisResult, HasMetrics, ProcessingSummary, SemanticResult as Result,
+    SemanticWarning, WarningCollector,
 };
 
-// Re-export existing semantic analysis functionality
-pub use anchors::*;
-pub use references::*;
-pub use tags::*;
-pub use validation::*;
+// Re-export existing semantic analysis functionality with specific exports to avoid conflicts
+pub use anchors::{AnchorDefinition, AnchorRegistry, AnchorResolver};
+pub use references::{ReferenceGraph, ReferenceTracker};
+pub use tags::{TagRegistry as TagRegistryType, TagResolver};
+pub use validation::{
+    DocumentValidator, ValidationRule, ValidationRuleSet,
+    WarningSeverity as ValidationWarningSeverity,
+};
 
 /// Default semantic analyzer instance with standard configuration
 pub fn default_analyzer<'input>() -> SemanticAnalyzer<'input> {
@@ -70,8 +73,8 @@ pub fn analyze_document<'input>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{Document, Node, Scalar, Stream};
     use crate::lexer::Position;
+    use crate::parser::ast::{Document, Node, Scalar, Stream};
 
     #[test]
     fn test_default_analyzer_creation() {
@@ -100,7 +103,7 @@ mod tests {
             anchor: None,
             position: Position::default(),
         });
-        
+
         let document = Document {
             root: scalar,
             position: Position::default(),
@@ -112,13 +115,11 @@ mod tests {
 
     #[test]
     fn test_analyze_empty_stream() {
-        let stream = Stream {
-            documents: vec![],
-        };
+        let stream = Stream { documents: vec![] };
 
         let result = analyze_stream(stream);
         assert!(result.is_ok());
-        
+
         let result = result.unwrap();
         assert_eq!(result.documents.len(), 0);
         assert_eq!(result.metrics.documents_processed, 0);
@@ -161,11 +162,11 @@ mod tests {
     #[test]
     fn test_analysis_metrics_recording() {
         let mut metrics = AnalysisMetrics::default();
-        
+
         metrics.record_anchor_resolution();
         metrics.record_alias_resolution();
         metrics.record_tag_resolution();
-        
+
         assert_eq!(metrics.anchors_resolved, 1);
         assert_eq!(metrics.aliases_resolved, 1);
         assert_eq!(metrics.tags_resolved, 1);

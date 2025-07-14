@@ -7,8 +7,8 @@ use super::types::{
     EdgeMetadata, EdgeType, GraphMetadata, GraphStatistics, OptimizationResult, ReferenceEdge,
     ReferenceId, ReferenceNode,
 };
-use crate::semantic::SemanticError;
 use crate::lexer::Position;
+use crate::semantic::SemanticError;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Reference graph for tracking node relationships
@@ -441,7 +441,7 @@ impl<'input> ReferenceGraph<'input> {
     /// Optimize graph for better performance
     pub fn optimize(&mut self) -> OptimizationResult {
         let initial_memory = self.estimate_memory_usage();
-        let initial_edges = self.adjacency_list.values().map(|v| v.len()).sum::<usize>();
+        let _initial_edges = self.adjacency_list.values().map(|v| v.len()).sum::<usize>();
 
         // Remove redundant edges
         let mut removed_edges = 0;

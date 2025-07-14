@@ -5,10 +5,7 @@
 
 use super::graph::ReferenceGraph;
 use super::memory::MemoryManager;
-use super::types::{
-    CycleDetectionResult, GraphStatistics, MemoryUsage, ReferenceId, ReferenceStatistics,
-};
-use std::collections::HashMap;
+use super::types::{GraphStatistics, MemoryUsage, ReferenceStatistics};
 use std::time::{Duration, Instant, SystemTime};
 
 /// Statistics collector for reference tracking system
@@ -64,6 +61,7 @@ pub enum OperationType {
 }
 
 /// Real-time monitoring data
+#[allow(dead_code)] // May be used for future monitoring extensions
 #[derive(Debug, Clone)]
 pub struct MonitoringData {
     pub current_memory_usage: MemoryUsage,
@@ -157,7 +155,7 @@ impl StatisticsCollector {
         let mut resolved_count = 0;
 
         for node_id in graph.get_all_node_ids() {
-            if let Some(node) = graph.get_node(node_id) {
+            if let Some(_node) = graph.get_node(node_id) {
                 // Check if node has outgoing edges (indicating resolution)
                 if graph.get_out_degree(node_id) > 0 {
                     resolved_count += 1;
@@ -199,7 +197,7 @@ impl StatisticsCollector {
     }
 
     /// Update general performance metrics
-    fn update_performance_metrics(&mut self, collection_duration: Duration) {
+    fn update_performance_metrics(&mut self, _collection_duration: Duration) {
         // This would be called after each statistics collection
         // Updates general metrics like cache hit rate, etc.
 

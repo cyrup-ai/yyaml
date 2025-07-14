@@ -66,9 +66,10 @@ impl ResolutionContext {
     pub fn enter(&mut self, anchor_name: String) -> Result<(), SemanticError> {
         // Check for maximum depth
         if self.at_max_depth() {
-            return Err(SemanticError::resolution_depth_exceeded(
+            return Err(SemanticError::validation_depth_exceeded(
                 self.max_depth,
-                self.resolution_path.clone(),
+                self.resolution_path.len(),
+                crate::lexer::Position::default(),
             ));
         }
 
@@ -96,7 +97,7 @@ impl ResolutionContext {
     pub fn exit(&mut self) {
         if self.current_depth > 0 {
             self.current_depth -= 1;
-            
+
             if let Some(anchor_name) = self.resolution_path.pop() {
                 self.visited_anchors.remove(&anchor_name);
             }
@@ -140,9 +141,9 @@ impl ResolutionContext {
 
     /// Check if context is in valid state
     pub fn is_valid(&self) -> bool {
-        self.current_depth <= self.max_depth &&
-        self.resolution_path.len() == self.current_depth &&
-        self.visited_anchors.len() == self.current_depth
+        self.current_depth <= self.max_depth
+            && self.resolution_path.len() == self.current_depth
+            && self.visited_anchors.len() == self.current_depth
     }
 
     /// Get context statistics
@@ -177,11 +178,15 @@ impl ResolutionContext {
     /// Estimate memory usage of current context
     pub fn estimated_memory_usage(&self) -> usize {
         // Rough estimation in bytes
-        let path_memory = self.resolution_path.iter()
+        let path_memory = self
+            .resolution_path
+            .iter()
             .map(|s| s.len() + std::mem::size_of::<String>())
             .sum::<usize>();
-        
-        let visited_memory = self.visited_anchors.iter()
+
+        let visited_memory = self
+            .visited_anchors
+            .iter()
             .map(|s| s.len() + std::mem::size_of::<String>())
             .sum::<usize>();
 
@@ -260,7 +265,11 @@ impl ContextValidationError {
             ContextValidationError::ExcessiveMaxDepth(depth) => {
                 format!("Excessive maximum depth: {} (should be <= 10000)", depth)
             }
-            ContextValidationError::InconsistentState { depth, path_length, visited_count } => {
+            ContextValidationError::InconsistentState {
+                depth,
+                path_length,
+                visited_count,
+            } => {
                 format!(
                     "Inconsistent context state: depth={}, path_length={}, visited_count={}",
                     depth, path_length, visited_count
@@ -334,7 +343,7 @@ mod tests {
     #[test]
     fn test_resolution_context_enter_exit() {
         let mut context = ResolutionContext::default();
-        
+
         // Enter first level
         assert!(context.enter("anchor1".to_string()).is_ok());
         assert_eq!(context.current_depth, 1);
@@ -344,12 +353,12 @@ mod tests {
         // Enter second level
         assert!(context.enter("anchor2".to_string()).is_ok());
         assert_eq!(context.current_depth, 2);
-        
+
         // Exit levels
         context.exit();
         assert_eq!(context.current_depth, 1);
         assert!(!context.visited_anchors.contains("anchor2"));
-        
+
         context.exit();
         assert_eq!(context.current_depth, 0);
         assert!(!context.visited_anchors.contains("anchor1"));
@@ -358,14 +367,14 @@ mod tests {
     #[test]
     fn test_circular_reference_detection() {
         let mut context = ResolutionContext::default();
-        
+
         // Enter anchor1
         assert!(context.enter("anchor1".to_string()).is_ok());
-        
+
         // Try to enter anchor1 again (circular reference)
         let result = context.enter("anchor1".to_string());
         assert!(result.is_err());
-        
+
         if let Err(SemanticError::CircularReference { .. }) = result {
             // Expected error type
         } else {
@@ -376,10 +385,10 @@ mod tests {
     #[test]
     fn test_max_depth_enforcement() {
         let mut context = ResolutionContext::with_max_depth(2);
-        
+
         assert!(context.enter("anchor1".to_string()).is_ok());
         assert!(context.enter("anchor2".to_string()).is_ok());
-        
+
         // Should fail at max depth
         let result = context.enter("anchor3".to_string());
         assert!(result.is_err());
@@ -391,7 +400,7 @@ mod tests {
             .max_depth(50)
             .initial_capacity(32)
             .build();
-        
+
         assert_eq!(context.max_depth, 50);
     }
 }

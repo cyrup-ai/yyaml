@@ -4,10 +4,10 @@
 //! and multi-document YAML processing according to YAML 1.2 specification.
 
 use super::ast::{Document, Node, Stream};
-use super::grammar::{ContextStack, ParseContext};
+use super::grammar::ParseContext;
 use super::{ParseError, ParseErrorKind, YamlParser};
-use crate::events::TokenType;
 use crate::lexer::Position;
+use crate::lexer::TokenKind;
 
 /// Document parser with multi-document stream support
 pub struct DocumentParser;
@@ -21,7 +21,7 @@ impl DocumentParser {
 
         // Parse stream start if present
         if let Some(token) = parser.peek_token()? {
-            if matches!(token.1, TokenType::StreamStart(_)) {
+            if matches!(token.kind, TokenKind::StreamStart) {
                 parser.consume_token()?;
             }
         }
@@ -32,7 +32,7 @@ impl DocumentParser {
 
             // Check for stream end
             if let Some(token) = parser.peek_token()? {
-                if matches!(token.1, TokenType::StreamEnd) {
+                if matches!(token.kind, TokenKind::StreamEnd) {
                     break;
                 }
             } else {
@@ -68,7 +68,7 @@ impl DocumentParser {
 
         // Check for explicit document start
         let has_explicit_start = if let Some(token) = parser.peek_token()? {
-            if matches!(token.1, TokenType::DocumentStart) {
+            if matches!(token.kind, TokenKind::DocumentStart) {
                 parser.consume_token()?; // consume ---
                 true
             } else {
@@ -85,8 +85,8 @@ impl DocumentParser {
         parser.skip_insignificant_tokens()?;
 
         let content = if let Some(token) = parser.peek_token()? {
-            match token.1 {
-                TokenType::DocumentEnd | TokenType::DocumentStart | TokenType::StreamEnd => {
+            match token.kind {
+                TokenKind::DocumentEnd | TokenKind::DocumentStart | TokenKind::StreamEnd => {
                     // Empty document
                     None
                 }
@@ -98,7 +98,7 @@ impl DocumentParser {
 
         // Check for explicit document end
         let has_explicit_end = if let Some(token) = parser.peek_token()? {
-            if matches!(token.1, TokenType::DocumentEnd) {
+            if matches!(token.kind, TokenKind::DocumentEnd) {
                 parser.consume_token()?; // consume ...
                 true
             } else {
@@ -116,150 +116,156 @@ impl DocumentParser {
         )))
     }
 
-    /// Parse document content (the main YAML node)
+    /// Parse document content (the main YAML node) - blazing-fast with zero-allocation
     fn parse_document_content<'input>(
         parser: &mut YamlParser<'input>,
     ) -> Result<Node<'input>, ParseError> {
-        let mut context_stack = ContextStack::new();
-        context_stack.push(ParseContext::Document);
+        // Use ParsingContext consistently to avoid borrowing conflicts
+        let mut context = super::ParsingContext::new(
+            &mut parser.lexer,
+            &mut parser.token_buffer,
+            &mut parser.recursion_depth,
+            &mut parser.parse_state,
+        );
+        
+        Self::parse_document_content_with_context(&mut context)
+    }
 
-        parser.skip_insignificant_tokens()?;
+    /// Parse YAML directives at document start
+    /// Parse document content using ParsingContext for flow collections
+    fn parse_document_content_with_context<'input>(
+        context: &mut super::ParsingContext<'_, 'input>,
+    ) -> Result<Node<'input>, ParseError> {
+        context.skip_insignificant_tokens()?;
 
-        let current_pos = parser.current_position();
-        let token = parser.peek_token()?.ok_or_else(|| {
+        let current_pos = context.current_position();
+        let token = context.peek_token()?.ok_or_else(|| {
             ParseError::new(
                 ParseErrorKind::UnexpectedEndOfInput,
                 current_pos,
-                "expected document content",
+                "expected node content",
             )
         })?;
 
         // Clone the data we need before consuming
-        let token_kind = token.1.clone();
-        let token_position = Position { line: token.0.line, column: token.0.col, byte_offset: token.0.index };
+        let token_kind = token.kind.clone();
 
         match token_kind {
-            // Block sequence
-            TokenType::BlockEntry => {
-                let entry_token = parser.consume_token()?;
-                super::blocks::BlockParser::parse_sequence(parser, entry_token, 0)
+            TokenKind::Scalar { .. } => {
+                let scalar_token = context.consume_token()?;
+                super::scalars::ScalarParser::parse_scalar(scalar_token, &ParseContext::Document)
             }
 
-            // Flow collections
-            TokenType::FlowSequenceStart => {
-                let start_token = parser.consume_token()?;
-                super::flows::FlowParser::parse_sequence(parser, start_token)
+            TokenKind::FlowSequenceStart => {
+                let start_token = context.consume_token()?;
+                super::flows::FlowParser::parse_sequence(context, start_token, |ctx| {
+                    Self::parse_document_content_with_context(ctx)
+                })
             }
 
-            TokenType::FlowMappingStart => {
-                let start_token = parser.consume_token()?;
-                super::flows::FlowParser::parse_mapping(parser, start_token)
+            TokenKind::FlowMappingStart => {
+                let start_token = context.consume_token()?;
+                super::flows::FlowParser::parse_mapping(context, start_token, |ctx| {
+                    Self::parse_document_content_with_context(ctx)
+                })
             }
 
-            // Scalars (potentially mapping keys)
-            TokenType::Scalar(..) => {
-                // Check if this could be a block mapping
-                if Self::is_document_level_mapping_key(parser)? {
-                    let key_token = parser.consume_token()?;
-                    super::blocks::BlockParser::parse_mapping(parser, key_token, 0)
-                } else {
-                    let scalar_token = parser.consume_token()?;
-                    super::scalars::ScalarParser::parse_scalar(
-                        scalar_token,
-                        context_stack.current(),
-                    )
-                }
-            }
-
-            // Explicit key indicator
-            TokenType::Key => {
-                let key_token = parser.consume_token()?;
-                super::blocks::BlockParser::parse_mapping(parser, key_token, 0)
-            }
-
-            // Anchors
-            TokenType::Anchor(name) => {
-                let anchor_token = parser.consume_token()?;
-                let anchored_node = Self::parse_document_content(parser)?;
+            TokenKind::Anchor(name) => {
+                let anchor_token = context.consume_token()?;
+                let anchored_node = Self::parse_document_content_with_context(context)?;
                 Ok(Node::Anchor(super::ast::AnchorNode::new(
                     name,
                     Box::new(anchored_node),
-                    Position { line: anchor_token.0.line, column: anchor_token.0.col, byte_offset: anchor_token.0.index },
+                    anchor_token.position,
                 )))
             }
 
-            // Aliases
-            TokenType::Alias(name) => {
-                let alias_token = parser.consume_token()?;
+            TokenKind::Alias(name) => {
+                let alias_token = context.consume_token()?;
                 Ok(Node::Alias(super::ast::AliasNode::new(
                     name,
-                    Position { line: alias_token.0.line, column: alias_token.0.col, byte_offset: alias_token.0.index },
+                    alias_token.position,
                 )))
             }
 
-            // Tags
-            TokenType::Tag(handle, suffix) => {
-                let tag_token = parser.consume_token()?;
-                let tagged_node = Self::parse_document_content(parser)?;
+            TokenKind::Tag { handle, suffix } => {
+                let tag_token = context.consume_token()?;
+                let tagged_node = Self::parse_document_content_with_context(context)?;
                 Ok(Node::Tagged(super::ast::TaggedNode::new(
                     handle,
                     suffix,
                     Box::new(tagged_node),
-                    Position { line: tag_token.0.line, column: tag_token.0.col, byte_offset: tag_token.0.index },
+                    tag_token.position,
                 )))
             }
 
             _ => Err(ParseError::new(
                 ParseErrorKind::UnexpectedToken,
-                token_position,
+                token.position,
                 format!("unexpected token at document level: {:?}", token_kind),
             )),
         }
     }
 
-    /// Parse YAML directives at document start
     fn parse_directives<'input>(
         parser: &mut YamlParser<'input>,
+    ) -> Result<Vec<DirectiveInfo<'input>>, ParseError> {
+        let mut context = super::ParsingContext::new(
+            &mut parser.lexer,
+            &mut parser.token_buffer,
+            &mut parser.recursion_depth,
+            &mut parser.parse_state,
+        );
+        Self::parse_directives_with_context(&mut context)
+    }
+
+    /// Parse directives using ParsingContext (zero-allocation bridge)
+    fn parse_directives_with_context<'input>(
+        context: &mut super::ParsingContext<'_, 'input>,
     ) -> Result<Vec<DirectiveInfo<'input>>, ParseError> {
         let mut directives = Vec::new();
 
         loop {
-            if let Some(token) = parser.peek_token()? {
-                // Clone the data we need
-                let token_kind = token.1.clone();
+            if let Some(token) = context.peek_token()? {
+                match token.kind {
+                    TokenKind::YamlDirective { .. }
+                    | TokenKind::TagDirective { .. }
+                    | TokenKind::ReservedDirective { .. } => {
+                        // This is a directive, consume it
+                        let directive_token = context.consume_token()?;
 
-                match token_kind {
-                    TokenType::VersionDirective(major, minor) => {
-                        let directive_token = parser.consume_token()?;
-                        directives.push(DirectiveInfo::Yaml {
-                            major,
-                            minor,
-                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
-                        });
+                        match directive_token.kind {
+                            TokenKind::YamlDirective { major, minor } => {
+                                directives.push(DirectiveInfo::Yaml {
+                                    major,
+                                    minor,
+                                    position: directive_token.position,
+                                });
+                            }
+
+                            TokenKind::TagDirective { handle, prefix } => {
+                                directives.push(DirectiveInfo::Tag {
+                                    handle,
+                                    prefix,
+                                    position: directive_token.position,
+                                });
+                            }
+
+                            TokenKind::ReservedDirective { name, value } => {
+                                directives.push(DirectiveInfo::Reserved {
+                                    name,
+                                    value,
+                                    position: directive_token.position,
+                                });
+                            }
+
+                            _ => unreachable!("We already checked this is a directive token"),
+                        }
+
+                        context.skip_insignificant_tokens()?;
                     }
-
-                    TokenType::TagDirective(handle, prefix) => {
-                        let directive_token = parser.consume_token()?;
-                        directives.push(DirectiveInfo::Tag {
-                            handle,
-                            prefix,
-                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
-                        });
-                    }
-
-                    TokenType::Reserved(name) => {
-                        let directive_token = parser.consume_token()?;
-                        directives.push(DirectiveInfo::Reserved {
-                            name,
-                            value: String::new(), // Reserved directives don't have values in TokenType::Reserved
-                            position: Position { line: directive_token.0.line, column: directive_token.0.col, byte_offset: directive_token.0.index },
-                        });
-                    }
-
                     _ => break, // Not a directive
                 }
-
-                parser.skip_insignificant_tokens()?;
             } else {
                 break;
             }
@@ -269,29 +275,44 @@ impl DocumentParser {
     }
 
     /// Check if scalar token could be a document-level mapping key
+    #[allow(dead_code)] // May be used for future document parsing extensions
     fn is_document_level_mapping_key<'input>(
         parser: &mut YamlParser<'input>,
     ) -> Result<bool, ParseError> {
-        // Save parser state for lookahead
-        let saved_buffer = parser.token_buffer.clone();
+        let mut context = super::ParsingContext::new(
+            &mut parser.lexer,
+            &mut parser.token_buffer,
+            &mut parser.recursion_depth,
+            &mut parser.parse_state,
+        );
+        Self::is_document_level_mapping_key_with_context(&mut context)
+    }
+
+    /// Check if scalar token could be a document-level mapping key using ParsingContext
+    #[allow(dead_code)] // May be used for future document parsing extensions
+    fn is_document_level_mapping_key_with_context<'input>(
+        context: &mut super::ParsingContext<'_, 'input>,
+    ) -> Result<bool, ParseError> {
+        // Save token buffer state for lookahead
+        let saved_buffer = context.token_buffer.clone();
 
         // Skip potential key token
-        if parser.peek_token()?.is_some() {
-            parser.consume_token()?;
+        if context.peek_token()?.is_some() {
+            context.consume_token()?;
         }
 
         // Skip whitespace
-        parser.skip_insignificant_tokens()?;
+        context.skip_insignificant_tokens()?;
 
         // Look for value indicator
-        let is_key = if let Some(token) = parser.peek_token()? {
-            matches!(token.1, TokenType::Value)
+        let is_key = if let Some(token) = context.peek_token()? {
+            matches!(token.kind, TokenKind::Value)
         } else {
             false
         };
 
-        // Restore parser state
-        parser.token_buffer = saved_buffer;
+        // Restore token buffer state
+        *context.token_buffer = saved_buffer;
 
         Ok(is_key)
     }
@@ -300,12 +321,25 @@ impl DocumentParser {
     fn skip_inter_document_content<'input>(
         parser: &mut YamlParser<'input>,
     ) -> Result<(), ParseError> {
-        while let Some(token) = parser.peek_token()? {
-            match token.1 {
-                TokenType::StreamStart(_) | TokenType::StreamEnd => {
-                    parser.consume_token()?;
+        let mut context = super::ParsingContext::new(
+            &mut parser.lexer,
+            &mut parser.token_buffer,
+            &mut parser.recursion_depth,
+            &mut parser.parse_state,
+        );
+        Self::skip_inter_document_content_with_context(&mut context)
+    }
+
+    /// Skip content between documents using ParsingContext (zero-allocation bridge)
+    fn skip_inter_document_content_with_context<'input>(
+        context: &mut super::ParsingContext<'_, 'input>,
+    ) -> Result<(), ParseError> {
+        while let Some(token) = context.peek_token()? {
+            match token.kind {
+                TokenKind::StreamStart | TokenKind::StreamEnd => {
+                    context.consume_token()?;
                 }
-                TokenType::DocumentStart | TokenType::DocumentEnd => {
+                TokenKind::DocumentStart | TokenKind::DocumentEnd => {
                     // Don't consume document markers
                     break;
                 }

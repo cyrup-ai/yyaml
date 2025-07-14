@@ -59,6 +59,21 @@ impl<'input> TagResolver<'input> {
         }
     }
 
+    /// Create resolver with specific configuration
+    pub fn with_config(config: &crate::semantic::SemanticConfig<'input>) -> Self {
+        let mut resolver = Self::new();
+        if let Some((major, minor)) = config.yaml_version {
+            resolver.set_yaml_version(major, minor);
+        }
+        // Add custom tag prefixes from config
+        for (handle, prefix) in &config.custom_tag_prefixes {
+            resolver
+                .tag_registry
+                .add_tag_prefix(handle.clone(), prefix.clone());
+        }
+        resolver
+    }
+
     /// Resolve tag with complete YAML 1.2 compliance
     pub fn resolve_tag(
         &mut self,
@@ -196,7 +211,8 @@ impl<'input> TagResolver<'input> {
             }
             Node::Tagged(tagged_node) => {
                 // Use the explicit tag, resolve it to YamlType
-                match self.resolve_type(&tagged_node.tag, &tagged_node.node) {
+                let tag_name = tagged_node.tag_name();
+                match self.resolve_tag_type(&tag_name, &crate::semantic::AnalysisContext::new()) {
                     Ok(yaml_type) => yaml_type,
                     Err(_) => YamlType::Unknown, // Fallback for unresolvable tags
                 }
@@ -226,6 +242,11 @@ impl<'input> TagResolver<'input> {
 
     /// Get resolution count
     pub fn resolution_count(&self) -> usize {
+        self.resolution_count
+    }
+
+    /// Get resolved tag count (alias for resolution_count for semantic analyzer compatibility)
+    pub fn resolved_count(&self) -> usize {
         self.resolution_count
     }
 
@@ -301,6 +322,18 @@ impl<'input> TagResolver<'input> {
         &self.validation_warnings
     }
 
+    /// Set YAML version and determine appropriate schema
+    pub fn set_yaml_version(&mut self, major: u32, minor: u32) {
+        // YAML 1.2 uses Core schema by default
+        // YAML 1.1 had some differences but we target 1.2 compliance
+        let schema_type = match (major, minor) {
+            (1, 2) => SchemaType::Core,
+            (1, 1) => SchemaType::Core, // We handle 1.1 with 1.2 compliance
+            _ => SchemaType::Core,      // Default to Core for unknown versions
+        };
+        self.set_schema_type(schema_type);
+    }
+
     /// Set schema type for resolution
     pub fn set_schema_type(&mut self, schema_type: SchemaType) {
         self.tag_registry.set_schema_type(schema_type);
@@ -336,6 +369,7 @@ impl<'input> TagResolver<'input> {
 
     // Helper methods
 
+    #[allow(dead_code)] // May be used for future tag resolution extensions
     fn get_available_handles(&self) -> Vec<String> {
         // Implementation would collect all available tag handles
         vec!["!!".to_string(), "!".to_string()]

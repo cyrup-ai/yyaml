@@ -8,8 +8,8 @@ pub use super::types::CycleDetectionResult;
 use super::types::{
     Cycle, CycleDetectionAlgorithm, CycleSeverity, CycleType, DetectionMetrics, ReferenceId,
 };
-use crate::semantic::SemanticError;
 use crate::lexer::Position;
+use crate::semantic::SemanticError;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
@@ -72,7 +72,7 @@ impl CycleDetector {
     ) -> Result<CycleDetectionResult, SemanticError> {
         let mut cycles = Vec::new();
 
-        for &node_id in graph.get_all_node_ids() {
+        for node_id in graph.get_all_node_ids() {
             if !self.visited_nodes.contains(&node_id) {
                 if let Some(cycle) = self.dfs_visit(node_id, graph)? {
                     cycles.push(cycle);

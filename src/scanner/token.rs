@@ -215,6 +215,22 @@ impl TokenProducer {
     pub fn reserved_directive_token(&self, marker: Marker, name: String) -> Token {
         Token::new(marker, TokenType::Reserved(name))
     }
+
+    #[inline]
+    pub fn directive_token(
+        &self,
+        marker: Marker,
+        directive: crate::scanner::directives::Directive,
+    ) -> Token {
+        use crate::scanner::directives::Directive;
+        match directive {
+            Directive::Version { major, minor } => {
+                self.version_directive_token(marker, major, minor)
+            }
+            Directive::Tag { handle, prefix } => self.tag_directive_token(marker, handle, prefix),
+            Directive::Reserved { name, .. } => self.reserved_directive_token(marker, name),
+        }
+    }
 }
 
 impl Default for TokenProducer {

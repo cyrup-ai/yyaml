@@ -1,155 +1,311 @@
-# TODO: File Decomposition for Logical Separation of Concerns
+# TODO.md: Complete ParsingContext Pattern Implementation
 
-## PHASE 1: Complete Anchors Module Decomposition (747 lines)
+## 🎯 OBJECTIVE: Eliminate ALL Borrow Checker Errors with Zero-Allocation, Blazing-Fast ParsingContext Pattern
 
-### 1. Move core anchor types from anchors.rs to types.rs
-Update `src/semantic/anchors/types.rs` to include AnchorResolver, AnchorRegistry, AnchorDefinition, CachedResolution, ResolutionContext, MemoryUsageEstimate, and OptimizationSuggestion types from the main anchors.rs file. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### SUCCESS CRITERIA ⚡
+- ✅ 0 (Zero) compilation errors (E0499, E0596, E0621 eliminated)
+- ✅ Complete ParsingContext pattern across all parser modules
+- 🚀 Zero allocation, blazing-fast, production-ready code
+- 🎯 Artisan-quality, ergonomic code with no future improvements needed
 
-### 2. Act as an Objective QA Rust developer and verify anchor types migration
-Rate the work performed on moving anchor types to types.rs against requirements: (1) All types successfully moved without compilation errors, (2) Zero-allocation design maintained, (3) No unwrap/expect in src/ code, (4) API compatibility preserved, (5) Surgical changes only with no unnecessary rewrites.
+---
 
-### 3. Move AnchorResolver implementation to resolver.rs
-Move all AnchorResolver impl blocks from anchors.rs to `src/semantic/anchors/resolver.rs`, ensuring proper imports and maintaining all method signatures exactly. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+## Phase 1: Core Architecture - documents.rs Complete Conversion
 
-### 4. Act as an Objective QA Rust developer and verify resolver implementation migration
-Rate the work performed on moving AnchorResolver implementation against requirements: (1) All impl blocks successfully moved, (2) Compilation succeeds without errors, (3) Method signatures preserved exactly, (4) Performance characteristics maintained, (5) Error handling follows Result<T, E> patterns without unwrap/expect.
+### 1. Convert parse_document_content function signature from `&mut YamlParser` to `&mut ParsingContext` parameter
+- Remove all `ParsingContext::new()` calls within this function  
+- Update all internal operations to use context parameter directly
+- Maintain zero-allocation, blazing-fast performance
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 5. Move AnchorRegistry implementation to registry.rs
-Move all AnchorRegistry impl blocks from anchors.rs to `src/semantic/anchors/registry.rs`, maintaining efficient HashMap operations and zero-allocation patterns. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 2. Act as an Objective QA Rust developer
+Rate the parse_document_content conversion work. Verify: (1) No ParsingContext::new() calls within function, (2) All operations use context parameter, (3) Zero-allocation maintained, (4) No E0499 errors, (5) Function signature correctly uses ParsingContext.
 
-### 6. Act as an Objective QA Rust developer and verify registry implementation migration
-Rate the work performed on moving AnchorRegistry implementation against requirements: (1) Registry logic successfully moved without functional changes, (2) HashMap operations maintain efficiency, (3) Zero-allocation patterns preserved, (4) API compatibility maintained, (5) No performance regressions.
+### 3. Eliminate dual context creation in parse_document_content_with_context
+- Refactor to use single ParsingContext instance passed from caller
+- Remove redundant context creation that causes E0499 errors
+- Ensure all call sites pass context correctly
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 7. Create cache.rs module for caching logic
-Create `src/semantic/anchors/cache.rs` and move all CachedResolution and caching-related logic from anchors.rs. Implement proper cache invalidation and memory management without using unwrap/expect. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 4. Act as an Objective QA Rust developer
+Rate the dual context elimination work. Verify: (1) Single ParsingContext usage, (2) No redundant context creation, (3) All call sites updated, (4) E0499 errors eliminated, (5) Context passing architecture correct.
 
-### 8. Act as an Objective QA Rust developer and verify cache module creation
-Rate the work performed on creating cache.rs module against requirements: (1) Cache logic successfully extracted, (2) Memory management follows zero-allocation principles, (3) Cache invalidation works correctly, (4) No unwrap/expect in implementation, (5) Performance optimizations maintained.
+### 5. Convert all lookahead functions (is_document_level_mapping_key_with_context) to use context-only patterns
+- Eliminate all direct parser field access within context-using functions
+- Update state management to use context methods exclusively
+- Maintain lookahead functionality with zero-allocation performance
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 9. Move optimization logic to optimization.rs
-Move all optimization-related code including OptimizationSuggestion implementation and performance analysis from anchors.rs to `src/semantic/anchors/optimization.rs`. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 6. Act as an Objective QA Rust developer
+Rate the lookahead function conversion work. Verify: (1) No direct parser field access, (2) Context methods used exclusively, (3) Lookahead functionality preserved, (4) Zero-allocation maintained, (5) No borrow checker errors.
 
-### 10. Act as an Objective QA Rust developer and verify optimization module migration
-Rate the work performed on moving optimization logic against requirements: (1) Optimization algorithms successfully moved, (2) Performance analysis functions work correctly, (3) Suggestion generation maintains accuracy, (4) Zero-allocation patterns preserved, (5) No functional regressions.
+### 7. Update all documents.rs call sites to pass ParsingContext instead of creating new instances
+- Identify all locations where `ParsingContext::new()` is called within borrowed scopes
+- Refactor call chains to pass context from top level down
+- Eliminate all E0499 multiple mutable borrow errors
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 11. Convert anchors.rs to facade module with re-exports
-Transform `src/semantic/anchors.rs` into a facade module that re-exports all public types and functions from the decomposed modules. Maintain exact API compatibility. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 8. Act as an Objective QA Rust developer
+Rate the call site update work. Verify: (1) No ParsingContext::new() in borrowed scopes, (2) Context passed from top level, (3) All E0499 errors eliminated, (4) Call chain architecture correct, (5) Zero-allocation maintained.
 
-### 12. Act as an Objective QA Rust developer and verify facade module conversion
-Rate the work performed on converting anchors.rs to facade against requirements: (1) All public APIs remain accessible, (2) Re-exports work correctly, (3) Module compiles without errors, (4) External code using anchors module continues to work, (5) No breaking changes introduced.
+---
 
-## PHASE 2: Decompose Parser Scalars Module (722 lines)
+## Phase 2: Core Architecture - scalars.rs Complete Conversion
 
-### 13. Create scalars module directory structure
-Create `src/parser/scalars/` directory and establish mod.rs with proper module organization for scalar parsing components. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 9. Create comprehensive ParsingContext-based scalar parsing methods
+- Implement ScalarParser::parse_with_context methods for all scalar types
+- Convert all scalar parsing to use ParsingContext exclusively
+- Maintain all existing scalar parsing functionality and performance
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 14. Act as an Objective QA Rust developer and verify scalars module structure
-Rate the work performed on creating scalars module structure against requirements: (1) Directory structure created correctly, (2) Module organization follows Rust conventions, (3) mod.rs properly configured, (4) No compilation errors, (5) Follows project's module patterns.
+### 10. Act as an Objective QA Rust developer
+Rate the scalar parsing ParsingContext conversion. Verify: (1) All scalar types supported, (2) ParsingContext used exclusively, (3) Existing functionality maintained, (4) Performance preserved, (5) No YamlParser dependencies.
 
-### 15. Move scalar types to scalars/types.rs
-Extract all scalar-related types, enums, and structs from parser/scalars.rs to `src/parser/scalars/types.rs`. Include ScalarParser, ScalarStyle, and related type definitions. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 11. Eliminate all YamlParser dependencies in scalar parsing
+- Convert ScalarParser to use context-only operations
+- Remove all direct parser references from scalar parsing logic
+- Integrate with ParsingContext call chain architecture
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 16. Act as an Objective QA Rust developer and verify scalar types extraction
-Rate the work performed on extracting scalar types against requirements: (1) All scalar types successfully moved, (2) Type definitions maintain compatibility, (3) No compilation errors, (4) Zero-allocation patterns preserved, (5) API remains unchanged.
+### 12. Act as an Objective QA Rust developer
+Rate the YamlParser dependency elimination work. Verify: (1) No YamlParser dependencies, (2) Context-only operations, (3) Integration with call chain correct, (4) Scalar parsing fully functional, (5) Architecture consistency maintained.
 
-### 17. Move plain scalar parsing to scalars/plain.rs
-Extract plain scalar parsing logic from parser/scalars.rs to `src/parser/scalars/plain.rs`. Include type inference, validation, and conversion logic for plain scalars. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+---
 
-### 18. Act as an Objective QA Rust developer and verify plain scalar parsing extraction
-Rate the work performed on extracting plain scalar parsing against requirements: (1) Plain scalar logic successfully moved, (2) Type inference works correctly, (3) Validation logic preserved, (4) Performance characteristics maintained, (5) No functional regressions.
+## Phase 3: Integration & Cross-Module Validation
 
-### 19. Move quoted scalar parsing to scalars/quoted.rs
-Extract single-quoted and double-quoted scalar parsing logic from parser/scalars.rs to `src/parser/scalars/quoted.rs`. Include escape sequence handling and quote processing. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 13. Update all cross-module calls to use context-passing patterns
+- Fix documents.rs → blocks.rs, mod.rs → documents.rs, blocks.rs → scalars.rs call patterns
+- Ensure consistent ParsingContext usage across module boundaries
+- Verify all modules integrate correctly with context-passing architecture
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 20. Act as an Objective QA Rust developer and verify quoted scalar parsing extraction
-Rate the work performed on extracting quoted scalar parsing against requirements: (1) Quoted scalar logic successfully moved, (2) Escape sequence handling works correctly, (3) Quote processing maintains accuracy, (4) Zero-allocation patterns preserved, (5) No parsing regressions.
+### 14. Act as an Objective QA Rust developer
+Rate the cross-module integration work. Verify: (1) Consistent context-passing patterns, (2) Module boundaries work correctly, (3) Architecture consistency across modules, (4) No integration errors, (5) Call patterns follow design.
 
-### 21. Move block scalar parsing to scalars/blocks.rs
-Extract literal and folded block scalar parsing logic from parser/scalars.rs to `src/parser/scalars/blocks.rs`. Include indentation handling and block scalar formatting. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 15. Verify semantic analyzer integration works with ParsingContext pattern
+- Test semantic analysis with ParsingContext-based parsing
+- Ensure error propagation works correctly through context-based call chains
+- Validate that semantic processing maintains correct operation with new architecture
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 22. Act as an Objective QA Rust developer and verify block scalar parsing extraction
-Rate the work performed on extracting block scalar parsing against requirements: (1) Block scalar logic successfully moved, (2) Indentation handling works correctly, (3) Block formatting preserved, (4) Performance optimizations maintained, (5) No functional changes.
+### 16. Act as an Objective QA Rust developer
+Rate the semantic analyzer integration verification. Verify: (1) Semantic analysis functions correctly, (2) Error propagation works, (3) Context-based call chains compatible, (4) Semantic processing correct, (5) Integration architecture sound.
 
-### 23. Convert parser/scalars.rs to facade module
-Transform `src/parser/scalars.rs` into a facade module that re-exports all public types and functions from the decomposed scalar modules. Maintain exact API compatibility. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+---
 
-### 24. Act as an Objective QA Rust developer and verify scalars facade conversion
-Rate the work performed on converting scalars.rs to facade against requirements: (1) All public APIs remain accessible, (2) Re-exports work correctly, (3) Module compiles without errors, (4) External code continues to work, (5) No breaking changes introduced.
+## Phase 4: Production Quality Assurance & Validation
 
-## PHASE 3: Decompose Deserializer Module (713 lines)
+### 17. Complete compilation error resolution - achieve zero errors
+- Address all remaining E0499, E0596, E0621 borrow checker errors
+- Verify zero compilation errors across entire codebase
+- Ensure all parser modules compile cleanly with ParsingContext pattern
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 25. Create deserializer module directory structure
-Create `src/de/` directory and establish mod.rs with proper module organization for deserializer components. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 18. Act as an Objective QA Rust developer
+Rate the compilation error resolution work. Verify: (1) Zero compilation errors, (2) All borrow checker errors eliminated, (3) Clean compilation across codebase, (4) ParsingContext pattern complete, (5) No remaining build issues.
 
-### 26. Act as an Objective QA Rust developer and verify deserializer module structure
-Rate the work performed on creating deserializer module structure against requirements: (1) Directory structure created correctly, (2) Module organization follows Rust conventions, (3) mod.rs properly configured, (4) No compilation errors, (5) Follows project's module patterns.
+### 19. Validate zero-allocation, blazing-fast performance maintained
+- Run performance benchmarks on ParsingContext-based parsing
+- Verify no performance regression from architectural changes
+- Confirm zero-allocation guarantees are preserved
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 27. Move deserializer types to de/types.rs
-Extract YamlDeserializer and related type definitions from de.rs to `src/de/types.rs`. Include core deserializer structs and associated types. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 20. Act as an Objective QA Rust developer
+Rate the performance validation work. Verify: (1) No performance regression, (2) Zero-allocation guarantees preserved, (3) Blazing-fast performance maintained, (4) Benchmarks pass requirements, (5) Architecture performance-optimal.
 
-### 28. Act as an Objective QA Rust developer and verify deserializer types extraction
-Rate the work performed on extracting deserializer types against requirements: (1) All deserializer types successfully moved, (2) Type definitions maintain compatibility, (3) No compilation errors, (4) Serde integration preserved, (5) API remains unchanged.
+### 21. Verify production-grade code quality standards
+- Confirm zero unsafe code, no unwrap() in src/, no expect() in src/
+- Validate artisan-quality, ergonomic code with no future improvements needed
+- Ensure complete borrow-checker safety across all parsing operations
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 29. Move visitor implementations to de/visitor.rs
-Extract all visitor pattern implementations and visit_* methods from de.rs to `src/de/visitor.rs`. Include integer, float, string, and collection visitor logic. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 22. Act as an Objective QA Rust developer
+Rate the code quality verification work. Verify: (1) Zero unsafe code, (2) No unwrap/expect in src/, (3) Artisan-quality code, (4) Complete borrow-checker safety, (5) Production-grade standards met.
 
-### 30. Act as an Objective QA Rust developer and verify visitor implementations extraction
-Rate the work performed on extracting visitor implementations against requirements: (1) Visitor pattern logic successfully moved, (2) Visit methods work correctly, (3) Type conversions maintain accuracy, (4) Performance characteristics preserved, (5) No functional regressions.
+### 23. Test recursive parsing scenarios with ParsingContext pattern
+- Validate nested mappings, sequences, and complex YAML structures
+- Ensure ParsingContext handles deep recursion correctly
+- Verify all parsing scenarios work with context-passing architecture
+- DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required.
 
-### 31. Move value conversions to de/conversions.rs
-Extract all value conversion logic from de.rs to `src/de/conversions.rs`. Include YAML value to Rust type mappings and conversion utilities. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 24. Act as an Objective QA Rust developer
+Rate the recursive parsing testing work. Verify: (1) Nested structures parse correctly, (2) Deep recursion handled properly, (3) Context-passing works for complex scenarios, (4) All parsing scenarios functional, (5) Architecture robust under load.
 
-### 32. Act as an Objective QA Rust developer and verify value conversions extraction
-Rate the work performed on extracting value conversions against requirements: (1) Conversion logic successfully moved, (2) Type mappings work correctly, (3) Conversion utilities maintain accuracy, (4) Zero-allocation patterns preserved, (5) No conversion regressions.
+---
 
-### 33. Move deserializer implementation to de/deserializer.rs
-Extract the main Deserializer trait implementation from de.rs to `src/de/deserializer.rs`. Include all deserialize_* methods and error handling. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+## COMPLETION CRITERIA
 
-### 34. Act as an Objective QA Rust developer and verify deserializer implementation extraction
-Rate the work performed on extracting deserializer implementation against requirements: (1) Deserializer trait implementation successfully moved, (2) All deserialize methods work correctly, (3) Error handling follows Result patterns, (4) Serde compatibility maintained, (5) No functional changes.
+### SUCCESS VALIDATION ✅
+- [ ] Zero compilation errors (E0499, E0596, E0621 eliminated)
+- [ ] All parser modules use ParsingContext pattern exclusively
+- [ ] Zero-allocation, blazing-fast performance maintained
+- [ ] Production-grade code quality with no future improvements needed
+- [ ] Complete borrow-checker safety across all parsing operations
+- [ ] Artisan-quality, ergonomic code architecture
 
-### 35. Convert de.rs to facade module
-Transform `src/de.rs` into a facade module that re-exports all public types and functions from the decomposed deserializer modules. Maintain exact API compatibility. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### REMEMBER: PRODUCTION QUALITY CONSTRAINTS
+- 🚨 NEVER use unwrap()/expect() in src/*
+- 🏭 Zero unsafe code, no unchecked operations
+- ⚡ Zero allocation, blazing-fast performance
+- 🎯 Artisan quality with no future improvements needed
 
-### 36. Act as an Objective QA Rust developer and verify de facade conversion
-Rate the work performed on converting de.rs to facade against requirements: (1) All public APIs remain accessible, (2) Re-exports work correctly, (3) Module compiles without errors, (4) Serde integration continues to work, (5) No breaking changes introduced.
+**REMEMBER**: No task is complete until `cargo check` shows **ZERO errors**! 🎯
+**Task**: Act as an Objective Rust Expert and rate the quality of the RAII methods fix on a scale of 1-10. Verify complete implementation or clean removal.
 
-## PHASE 4: Address Additional Large Files
+### 11. Fix unused document parser methods
+**File**: `/Volumes/samsung_t9/yyaml/src/parser/documents.rs:278,291`
+**Warning**: `associated functions is_document_level_mapping_key and is_document_level_mapping_key_with_context are never used`
+**Fix Strategy**: Implement document-level parsing optimization or remove
 
-### 37. Decompose semantic/references/graph.rs (663 lines)
-Create `src/semantic/references/graph/` directory and decompose graph.rs into focused modules: types.rs (graph types), builder.rs (graph construction), traversal.rs (graph traversal), and analysis.rs (graph analysis). DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 12. QA Task for document parser methods fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the document parser cleanup on a scale of 1-10. Verify document parsing functionality preserved.
 
-### 38. Act as an Objective QA Rust developer and verify graph module decomposition
-Rate the work performed on decomposing graph.rs against requirements: (1) Graph modules successfully separated, (2) Graph operations maintain efficiency, (3) Traversal algorithms work correctly, (4) Analysis functions preserve accuracy, (5) No performance regressions.
+### 13. Fix unused flow parser methods
+**File**: `/Volumes/samsung_t9/yyaml/src/parser/flows.rs:229,246,297`
+**Warning**: `associated functions parse_flow_item, parse_flow_pair, and parse_flow_node are never used`
+**Fix Strategy**: Implement blazing-fast flow parsing or remove redundant methods
 
-### 39. Decompose parser/blocks.rs (641 lines)
-Create `src/parser/blocks/` directory and decompose blocks.rs into focused modules: types.rs (block types), mapping.rs (block mapping parsing), sequence.rs (block sequence parsing), and indentation.rs (indentation handling). DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 14. QA Task for flow parser methods fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the flow parser cleanup on a scale of 1-10. Verify flow collection parsing works correctly.
 
-### 40. Act as an Objective QA Rust developer and verify blocks module decomposition
-Rate the work performed on decomposing blocks.rs against requirements: (1) Block parsing modules successfully separated, (2) Mapping parsing works correctly, (3) Sequence parsing maintains functionality, (4) Indentation handling preserved, (5) No parsing regressions.
+### 15. Fix unused semantic analyzer methods
+**File**: `/Volumes/samsung_t9/yyaml/src/semantic/analyzer.rs:148,233`
+**Warning**: `methods collect_anchors_from_node_cloned and resolve_tags_in_node are never used`
+**Fix Strategy**: Integrate with semantic analysis pipeline or remove
 
-## PHASE 5: Integration and Validation
+### 16. QA Task for semantic analyzer methods fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the semantic analyzer cleanup on a scale of 1-10. Verify semantic analysis completeness.
 
-### 41. Verify all decomposed modules compile successfully
-Run cargo build to ensure all decomposed modules compile without errors or warnings. Fix any compilation issues that arise from the decomposition process. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 17. Fix unused MonitoringData struct
+**File**: `/Volumes/samsung_t9/yyaml/src/semantic/references/statistics.rs:65`
+**Warning**: `struct MonitoringData is never constructed`
+**Fix Strategy**: Implement monitoring system or remove unused struct
 
-### 42. Act as an Objective QA Rust developer and verify successful compilation
-Rate the work performed on ensuring compilation success against requirements: (1) All modules compile without errors, (2) No warnings introduced, (3) Dependencies resolved correctly, (4) Module visibility properly configured, (5) No compilation regressions.
+### 18. QA Task for MonitoringData fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the monitoring system fix on a scale of 1-10. Verify statistics collection works or clean removal.
 
-### 43. Run comprehensive test suite to verify functionality preservation
-Execute cargo test to ensure all existing functionality is preserved after decomposition. Investigate and fix any test failures. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 19. Fix unused tag resolver method
+**File**: `/Volumes/samsung_t9/yyaml/src/semantic/tags/resolver.rs:372`
+**Warning**: `method get_available_handles is never used`
+**Fix Strategy**: Implement tag handle enumeration or remove
 
-### 44. Act as an Objective QA Rust developer and verify test suite success
-Rate the work performed on running the test suite against requirements: (1) All tests pass successfully, (2) No functionality regressions, (3) Performance characteristics maintained, (4) API compatibility preserved, (5) No test failures introduced.
+### 20. QA Task for tag resolver method fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the tag resolver cleanup on a scale of 1-10. Verify tag resolution functionality complete.
 
-### 45. Verify zero-allocation and performance requirements
-Analyze the decomposed modules to ensure zero-allocation patterns are maintained and performance characteristics are preserved. Use appropriate profiling tools if needed. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+### 21. Fix unused ValueDeserializer
+**File**: `/Volumes/samsung_t9/yyaml/src/value/mod.rs:430,435`
+**Warning**: `struct ValueDeserializer and associated function new are never used`
+**Fix Strategy**: Implement value deserialization or remove unused code
 
-### 46. Act as an Objective QA Rust developer and verify performance requirements
-Rate the work performed on verifying performance requirements against requirements: (1) Zero-allocation patterns maintained, (2) Performance characteristics preserved, (3) Memory usage optimized, (4) No performance regressions, (5) Blazing-fast performance achieved.
+### 22. QA Task for ValueDeserializer fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the value deserialization fix on a scale of 1-10. Verify value processing completeness.
 
-### 47. Update module documentation and re-exports
-Ensure all decomposed modules have proper documentation and that facade modules correctly re-export all public APIs. Verify documentation builds successfully. DO NOT MOCK, FABRICATE, FAKE or SIMULATE ANY OPERATION or DATA. Make ONLY THE MINIMAL, SURGICAL CHANGES required. Do not modify or rewrite any portion of the app outside scope. Never use unwrap() or expect() in src/. Follow zero-allocation design patterns.
+---
 
-### 48. Act as an Objective QA Rust developer and verify documentation completeness
-Rate the work performed on updating documentation against requirements: (1) All modules properly documented, (2) Re-exports work correctly, (3) Documentation builds successfully, (4) API documentation complete, (5) No documentation regressions.
+## LIFETIME SYNTAX WARNINGS (Priority: MEDIUM - Clarity Improvements)
+
+### 23. Fix lifetime syntax in unicode.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/lexer/unicode.rs:13,345`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 24. QA Task for unicode lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+### 25. Fix lifetime syntax in parser mod.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/parser/mod.rs:717,733`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 26. QA Task for parser lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the parser lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+### 27. Fix lifetime syntax in ast.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/parser/ast.rs:32,235,286`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 28. QA Task for AST lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the AST lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+### 29. Fix lifetime syntax in deserializer.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/value/deserializer.rs:26`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 30. QA Task for deserializer lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the deserializer lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+### 31. Fix lifetime syntax in mapping.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/value/mapping.rs:57,62,67,72,77,82`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 32. QA Task for mapping lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the mapping lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+### 33. Fix lifetime syntax in sequence.rs
+**File**: `/Volumes/samsung_t9/yyaml/src/value/sequence.rs:61,66`
+**Warning**: `lifetime flowing from input to output with different syntax can be confusing`
+**Fix Strategy**: Add explicit `'_` lifetimes for clarity
+
+### 34. QA Task for sequence lifetime syntax fix
+**Task**: Act as an Objective Rust Expert and rate the quality of the sequence lifetime syntax fix on a scale of 1-10. Verify improved code clarity.
+
+---
+
+## EXECUTION STRATEGY ⚡
+
+### Phase 1: Dead Code Elimination (Items 1-22) 🔥
+**Priority**: HIGH - Remove performance overhead
+1. Analyze each unused struct/method for integration potential
+2. Remove truly unused code to eliminate binary bloat
+3. Implement missing functionality with zero-allocation design
+4. **Goal**: Clean, focused codebase with no dead weight
+
+### Phase 2: Lifetime Syntax Cleanup (Items 23-34) ✨
+**Priority**: MEDIUM - Code clarity improvement
+1. Add explicit `'_` lifetimes where suggested
+2. Improve code readability and lifetime clarity
+3. **Goal**: Crystal-clear lifetime management
+
+---
+
+## VERIFICATION COMMANDS 🧪
+
+After each fix:
+```bash
+# Check remaining warning count (must decrease!)
+cargo check -p yyaml 2>&1 | grep -c "warning:"
+
+# Verify clean compilation 
+cargo check -p yyaml
+```
+
+---
+
+## SUCCESS VALIDATION 🎯
+
+Final validation:
+```bash
+# Must show 0 errors, 0 warnings
+cargo check -p yyaml
+
+# Verify blazing-fast release build
+cargo build -p yyaml --release
+
+# Confirm integration works
+cd ../fluent-ai && cargo check
+```
+
+**🔥 ULTRATHINK CONSTRAINTS**:
+- ⚡ Zero allocation design
+- 🚀 Blazing-fast performance  
+- 🔒 No unsafe/unchecked code
+- 🚫 No locking mechanisms
+- 💎 Elegant ergonomic code
+- 🚨 NEVER use unwrap()/expect() in src/*
+- 🏭 Production-ready quality
+
+**REMEMBER**: No task is complete until `cargo check` shows **ZERO errors and ZERO warnings**! 🎯

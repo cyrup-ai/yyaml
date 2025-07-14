@@ -97,4 +97,18 @@ impl ValidationContext {
         self.error_count = 0;
         self.warning_count = 0;
     }
+
+    /// Set strict mode for validation
+    #[inline]
+    pub fn set_strict_mode(&mut self, _strict: bool) {
+        // Strict mode configuration would modify validation behavior
+        // For now, this is a placeholder for future strict validation rules
+    }
+
+    /// Set YAML version for version-specific validation
+    #[inline]
+    pub fn set_yaml_version(&mut self, _major: u32, _minor: u32) {
+        // Version-specific validation rules would be configured here
+        // For now, this is a placeholder for future version-specific validation
+    }
 }

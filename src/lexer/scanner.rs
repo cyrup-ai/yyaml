@@ -21,7 +21,7 @@ pub struct Scanner<'input> {
     peeked_token: Option<Token<'input>>,
     indent_stack: Vec<usize>,
     flow_level: usize,
-    simple_key_allowed: bool,
+    _simple_key_allowed: bool,
     document_start: bool,
 }
 
@@ -37,7 +37,7 @@ impl<'input> Scanner<'input> {
             peeked_token: None,
             indent_stack: vec![0],
             flow_level: 0,
-            simple_key_allowed: true,
+            _simple_key_allowed: true,
             document_start: true,
         }
     }
@@ -671,10 +671,7 @@ impl<'input> Scanner<'input> {
             }
         }
 
-        Err(LexError::new(
-            LexErrorKind::UnterminatedString,
-            start_pos,
-        ))
+        Err(LexError::new(LexErrorKind::UnterminatedString, start_pos))
     }
 
     /// Scan double-quoted string
@@ -729,10 +726,7 @@ impl<'input> Scanner<'input> {
             }
         }
 
-        Err(LexError::new(
-            LexErrorKind::UnterminatedString,
-            start_pos,
-        ))
+        Err(LexError::new(LexErrorKind::UnterminatedString, start_pos))
     }
 
     /// Scan literal block scalar

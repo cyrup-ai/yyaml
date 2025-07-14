@@ -6,7 +6,7 @@
 use crate::lexer::Position;
 use crate::parser::ast::Node;
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 /// Reference ID for efficient lookup - zero-allocation identifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

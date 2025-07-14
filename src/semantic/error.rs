@@ -106,7 +106,9 @@ impl SemanticError {
         match self {
             SemanticError::UnresolvedAlias { position, .. } => *position,
             SemanticError::CircularReference { position, .. } => *position,
-            SemanticError::DuplicateAnchor { duplicate_position, .. } => *duplicate_position,
+            SemanticError::DuplicateAnchor {
+                duplicate_position, ..
+            } => *duplicate_position,
             SemanticError::InvalidTagHandle { position, .. } => *position,
             SemanticError::UnknownTag { position, .. } => *position,
             SemanticError::TagResolutionFailed { position, .. } => *position,
@@ -133,10 +135,19 @@ impl SemanticError {
             SemanticError::UnresolvedAlias { alias_name, .. } => {
                 format!("Unresolved alias reference: '{}'", alias_name)
             }
-            SemanticError::CircularReference { alias_name, path, .. } => {
-                format!("Circular reference detected for alias '{}' at path '{}'", alias_name, path)
+            SemanticError::CircularReference {
+                alias_name, path, ..
+            } => {
+                format!(
+                    "Circular reference detected for alias '{}' at path '{}'",
+                    alias_name, path
+                )
             }
-            SemanticError::DuplicateAnchor { anchor_name, first_position, .. } => {
+            SemanticError::DuplicateAnchor {
+                anchor_name,
+                first_position,
+                ..
+            } => {
                 format!(
                     "Duplicate anchor '{}' (first defined at line {}, column {})",
                     anchor_name, first_position.line, first_position.column
@@ -151,7 +162,11 @@ impl SemanticError {
             SemanticError::TagResolutionFailed { tag, reason, .. } => {
                 format!("Failed to resolve tag '{}': {}", tag, reason)
             }
-            SemanticError::ValidationDepthExceeded { max_depth, current_depth, .. } => {
+            SemanticError::ValidationDepthExceeded {
+                max_depth,
+                current_depth,
+                ..
+            } => {
                 format!(
                     "Validation depth exceeded: {} > {} (maximum)",
                     current_depth, max_depth
@@ -169,16 +184,24 @@ impl SemanticError {
             SemanticError::InvalidDocumentStructure { reason, .. } => {
                 format!("Invalid document structure: {}", reason)
             }
-            SemanticError::TypeMismatch { expected, actual, .. } => {
+            SemanticError::TypeMismatch {
+                expected, actual, ..
+            } => {
                 format!("Type mismatch: expected '{}', found '{}'", expected, actual)
             }
-            SemanticError::ValueValidationFailed { value, constraint, .. } => {
+            SemanticError::ValueValidationFailed {
+                value, constraint, ..
+            } => {
                 format!("Value '{}' failed validation: {}", value, constraint)
             }
             SemanticError::ReferenceTrackingError { reason, .. } => {
                 format!("Reference tracking error: {}", reason)
             }
-            SemanticError::AnchorRegistrationFailed { anchor_name, reason, .. } => {
+            SemanticError::AnchorRegistrationFailed {
+                anchor_name,
+                reason,
+                ..
+            } => {
                 format!("Failed to register anchor '{}': {}", anchor_name, reason)
             }
             SemanticError::ValidationError { message, .. } => {
@@ -193,8 +216,14 @@ impl SemanticError {
             SemanticError::ValidationFailure { message, rule, .. } => {
                 format!("Validation rule '{}' failed: {}", rule, message)
             }
-            SemanticError::MaxDepthExceeded { max_depth, current_path } => {
-                format!("Maximum depth {} exceeded at path: {:?}", max_depth, current_path)
+            SemanticError::MaxDepthExceeded {
+                max_depth,
+                current_path,
+            } => {
+                format!(
+                    "Maximum depth {} exceeded at path: {:?}",
+                    max_depth, current_path
+                )
             }
         }
     }
@@ -202,13 +231,20 @@ impl SemanticError {
     /// Create an unresolved alias error
     #[inline]
     pub fn unresolved_alias(alias_name: String, position: Position) -> Self {
-        Self::UnresolvedAlias { alias_name, position }
+        Self::UnresolvedAlias {
+            alias_name,
+            position,
+        }
     }
 
     /// Create a circular reference error
     #[inline]
     pub fn circular_reference(alias_name: String, path: String, position: Position) -> Self {
-        Self::CircularReference { alias_name, path, position }
+        Self::CircularReference {
+            alias_name,
+            path,
+            position,
+        }
     }
 
     /// Create a duplicate anchor error
@@ -240,7 +276,11 @@ impl SemanticError {
     /// Create a tag resolution failed error
     #[inline]
     pub fn tag_resolution_failed(tag: String, reason: String, position: Position) -> Self {
-        Self::TagResolutionFailed { tag, reason, position }
+        Self::TagResolutionFailed {
+            tag,
+            reason,
+            position,
+        }
     }
 
     /// Create a validation depth exceeded error
@@ -266,7 +306,11 @@ impl SemanticError {
     /// Create a custom tag resolution failed error
     #[inline]
     pub fn custom_tag_resolution_failed(tag: String, error: String, position: Position) -> Self {
-        Self::CustomTagResolutionFailed { tag, error, position }
+        Self::CustomTagResolutionFailed {
+            tag,
+            error,
+            position,
+        }
     }
 
     /// Create an unknown custom tag error
@@ -284,13 +328,21 @@ impl SemanticError {
     /// Create a type mismatch error
     #[inline]
     pub fn type_mismatch(expected: String, actual: String, position: Position) -> Self {
-        Self::TypeMismatch { expected, actual, position }
+        Self::TypeMismatch {
+            expected,
+            actual,
+            position,
+        }
     }
 
     /// Create a value validation failed error
     #[inline]
     pub fn value_validation_failed(value: String, constraint: String, position: Position) -> Self {
-        Self::ValueValidationFailed { value, constraint, position }
+        Self::ValueValidationFailed {
+            value,
+            constraint,
+            position,
+        }
     }
 
     /// Create a reference tracking error
@@ -339,17 +391,13 @@ macro_rules! semantic_error {
     };
     (circular_reference, $name:expr, $path:expr, $pos:expr) => {
         $crate::semantic::error::SemanticError::circular_reference(
-            $name.to_string(), 
-            $path.to_string(), 
-            $pos
+            $name.to_string(),
+            $path.to_string(),
+            $pos,
         )
     };
     (duplicate_anchor, $name:expr, $first:expr, $dup:expr) => {
-        $crate::semantic::error::SemanticError::duplicate_anchor(
-            $name.to_string(), 
-            $first, 
-            $dup
-        )
+        $crate::semantic::error::SemanticError::duplicate_anchor($name.to_string(), $first, $dup)
     };
     (validation_error, $msg:expr, $pos:expr) => {
         $crate::semantic::error::SemanticError::validation_error($msg.to_string(), $pos)

@@ -11,7 +11,8 @@ pub struct SemanticOptimizations;
 impl SemanticOptimizations {
     /// Estimate optimal buffer sizes for semantic analysis
     pub fn estimate_buffer_sizes(stream: &Stream) -> BufferSizeHints {
-        let total_nodes = stream.documents
+        let total_nodes = stream
+            .documents
             .iter()
             .map(|doc| Self::estimate_node_count(doc))
             .sum();
@@ -30,7 +31,10 @@ impl SemanticOptimizations {
 
     /// Estimate node count in document
     pub fn estimate_node_count(document: &Document) -> usize {
-        Self::count_nodes_recursive(&document.root)
+        document
+            .content
+            .as_ref()
+            .map_or(0, |root| Self::count_nodes_recursive(root))
     }
 
     /// Recursively count nodes in AST
@@ -39,18 +43,24 @@ impl SemanticOptimizations {
 
         match node {
             Node::Sequence(seq) => {
-                for child in &seq.values {
+                for child in &seq.items {
                     count += Self::count_nodes_recursive(child);
                 }
             }
             Node::Mapping(map) => {
-                for (key, value) in &map.pairs {
-                    count += Self::count_nodes_recursive(key);
-                    count += Self::count_nodes_recursive(value);
+                for pair in &map.pairs {
+                    count += Self::count_nodes_recursive(&pair.key);
+                    count += Self::count_nodes_recursive(&pair.value);
                 }
             }
-            Node::Scalar(_) | Node::Alias(_) => {
-                // Scalars and aliases are leaf nodes
+            Node::Anchor(_anchor) => {
+                count += Self::count_nodes_recursive(&_anchor.node);
+            }
+            Node::Tagged(_tagged) => {
+                count += Self::count_nodes_recursive(&_tagged.node);
+            }
+            Node::Scalar(_) | Node::Alias(_) | Node::Null(_) => {
+                // Scalars, aliases, and null are leaf nodes
             }
         }
 
@@ -59,7 +69,10 @@ impl SemanticOptimizations {
 
     /// Check if document requires complex analysis
     pub fn requires_complex_analysis(document: &Document) -> bool {
-        Self::has_complex_constructs(&document.root)
+        document
+            .content
+            .as_ref()
+            .map_or(false, |root| Self::has_complex_constructs(root))
     }
 
     /// Check for complex YAML constructs requiring careful analysis
@@ -68,20 +81,30 @@ impl SemanticOptimizations {
             Node::Alias(_) => true, // Aliases always require complex tracking
             Node::Sequence(seq) => {
                 // Check if any sequence element has complex constructs
-                seq.values.iter().any(|child| Self::has_complex_constructs(child))
+                seq.items
+                    .iter()
+                    .any(|child| Self::has_complex_constructs(child))
             }
             Node::Mapping(map) => {
                 // Check if any mapping pair has complex constructs
-                map.pairs.iter().any(|(key, value)| {
-                    Self::has_complex_constructs(key) || Self::has_complex_constructs(value)
+                map.pairs.iter().any(|pair| {
+                    Self::has_complex_constructs(&pair.key)
+                        || Self::has_complex_constructs(&pair.value)
                 })
             }
-            Node::Scalar(scalar) => {
-                // Complex scalars: those with anchors, tags, or special content
-                scalar.anchor.is_some() || 
-                scalar.tag.is_some() ||
-                Self::is_complex_scalar_content(&scalar.value)
+            Node::Anchor(_anchor) => {
+                // Anchors always require complex tracking
+                true
             }
+            Node::Tagged(_tagged) => {
+                // Tagged nodes always require complex tracking
+                true
+            }
+            Node::Scalar(_scalar) => {
+                // Complex scalars: those with tags or special content
+                _scalar.tag.is_some() || Self::is_complex_scalar_content(&_scalar.value)
+            }
+            Node::Null(_) => false, // Null nodes are simple
         }
     }
 
@@ -91,22 +114,22 @@ impl SemanticOptimizations {
         // - Multiple lines (potential for folding/literal blocks)
         // - Special characters that might need escaping
         // - References to anchors/aliases within the content
-        content.contains('\n') ||
-        content.contains('&') ||
-        content.contains('*') ||
-        content.len() > 100 // Arbitrarily consider long strings as complex
+        content.contains('\n')
+            || content.contains('&')
+            || content.contains('*')
+            || content.len() > 100 // Arbitrarily consider long strings as complex
     }
 
     /// Estimate memory requirements for semantic analysis
     pub fn estimate_memory_requirements(stream: &Stream) -> MemoryEstimate {
         let hints = Self::estimate_buffer_sizes(stream);
-        
+
         // Rough memory estimates based on typical sizes
         let anchor_memory = hints.estimated_anchors * 64; // ~64 bytes per anchor entry
-        let alias_memory = hints.estimated_aliases * 48;  // ~48 bytes per alias entry
-        let tag_memory = hints.estimated_tags * 32;       // ~32 bytes per tag entry
+        let alias_memory = hints.estimated_aliases * 48; // ~48 bytes per alias entry
+        let tag_memory = hints.estimated_tags * 32; // ~32 bytes per tag entry
         let tracking_memory = hints.estimated_nodes * 16; // ~16 bytes per node tracking
-        
+
         MemoryEstimate {
             anchor_storage: anchor_memory,
             alias_storage: alias_memory,
@@ -118,7 +141,8 @@ impl SemanticOptimizations {
 
     /// Determine if parallel processing would be beneficial
     pub fn should_use_parallel_processing(stream: &Stream) -> bool {
-        let total_nodes = stream.documents
+        let total_nodes = stream
+            .documents
             .iter()
             .map(|doc| Self::estimate_node_count(doc))
             .sum::<usize>();
@@ -146,7 +170,7 @@ impl SemanticOptimizations {
     pub fn pre_allocate_collections(hints: &BufferSizeHints) -> CollectionCapacities {
         // Add 25% buffer to avoid frequent reallocations
         let buffer_factor = 1.25;
-        
+
         CollectionCapacities {
             anchor_map: ((hints.estimated_anchors as f64 * buffer_factor) as usize).max(8),
             alias_map: ((hints.estimated_aliases as f64 * buffer_factor) as usize).max(4),
@@ -189,10 +213,10 @@ pub struct MemoryEstimate {
 /// Optimization levels for different document complexities
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptimizationLevel {
-    Basic,    // Simple documents, minimal optimization
-    Medium,   // Moderate complexity, standard optimizations
-    High,     // Complex documents, aggressive optimization
-    Maximum,  // Very large/complex documents, all optimizations
+    Basic,   // Simple documents, minimal optimization
+    Medium,  // Moderate complexity, standard optimizations
+    High,    // Complex documents, aggressive optimization
+    Maximum, // Very large/complex documents, all optimizations
 }
 
 /// Pre-calculated collection capacities for optimal allocation

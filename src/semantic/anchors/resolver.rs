@@ -3,12 +3,10 @@
 //! Provides the core AnchorResolver implementation with comprehensive
 //! cycle detection, caching, and performance optimization.
 
-use super::context::ResolutionContext;
-use super::registry::{AnchorRegistry, AnchorDefinition};
-use super::cache::{CachedResolution, CacheStatistics, CacheManager};
-use crate::semantic::SemanticError;
-use crate::lexer::Position;
+use super::cache::{CacheStatistics, CachedResolution};
+use super::registry::{AnchorDefinition, AnchorRegistry};
 use crate::parser::ast::Node;
+use crate::semantic::SemanticError;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -35,13 +33,21 @@ impl<'input> AnchorResolver<'input> {
 
     /// Create anchor resolver with custom configuration
     pub fn with_config(config: &crate::semantic::SemanticConfig<'input>) -> Self {
-        let initial_capacity = if config.cycle_detection_enabled { 64 } else { 32 };
-        
+        let initial_capacity = if config.cycle_detection_enabled {
+            64
+        } else {
+            32
+        };
+
         Self {
             anchor_registry: AnchorRegistry::new(),
             resolution_cache: HashMap::with_capacity(initial_capacity),
             alias_resolution_count: 0,
-            cycle_detection_stack: Vec::with_capacity(if config.cycle_detection_enabled { 32 } else { 8 }),
+            cycle_detection_stack: Vec::with_capacity(if config.cycle_detection_enabled {
+                32
+            } else {
+                8
+            }),
         }
     }
 
@@ -50,7 +56,7 @@ impl<'input> AnchorResolver<'input> {
         &mut self,
         name: Cow<'input, str>,
         node: &Node<'input>,
-        anchor_id: usize,
+        _anchor_id: usize,
         definition_path: Vec<String>,
     ) -> Result<(), SemanticError> {
         let position = node.position();
@@ -65,15 +71,12 @@ impl<'input> AnchorResolver<'input> {
         }
 
         // Create anchor definition
-        let definition = AnchorDefinition::new(
-            name.clone(),
-            node.clone(),
-            position,
-            definition_path,
-        );
+        let definition =
+            AnchorDefinition::new(name.clone(), node.clone(), position, definition_path);
 
         // Register in the anchor registry
-        self.anchor_registry.register(name.to_string(), definition)?;
+        self.anchor_registry
+            .register(name.to_string(), definition)?;
 
         Ok(())
     }
@@ -89,9 +92,9 @@ impl<'input> AnchorResolver<'input> {
             return Ok(Some(cached.resolved_node.clone()));
         }
 
-        // Get anchor definition
-        let anchor_def = match self.anchor_registry.get_anchor(alias_name) {
-            Some(def) => def,
+        // Get anchor definition and clone needed data to avoid borrowing conflicts
+        let (anchor_node, anchor_position) = match self.anchor_registry.get_anchor(alias_name) {
+            Some(def) => (def.node.clone(), def.position),
             None => return Ok(None), // Alias not found, will be handled as error by caller
         };
 
@@ -101,7 +104,7 @@ impl<'input> AnchorResolver<'input> {
             return Err(SemanticError::circular_reference(
                 alias_name.to_string(),
                 format!("{} -> {}", path, alias_name),
-                anchor_def.position,
+                anchor_position,
             ));
         }
 
@@ -110,7 +113,7 @@ impl<'input> AnchorResolver<'input> {
         self.alias_resolution_count += 1;
 
         // Recursively resolve the anchor node
-        let resolved_node = self.resolve_node_recursive(&anchor_def.node)?;
+        let resolved_node = self.resolve_node_recursive(&anchor_node)?;
 
         // Exit resolution context
         self.cycle_detection_stack.pop();
@@ -156,7 +159,10 @@ impl<'input> AnchorResolver<'input> {
                 for pair in &map.pairs {
                     let resolved_key = self.resolve_node_recursive(&pair.key)?;
                     let resolved_value = self.resolve_node_recursive(&pair.value)?;
-                    resolved_pairs.push(crate::parser::ast::MappingPair::new(resolved_key, resolved_value));
+                    resolved_pairs.push(crate::parser::ast::MappingPair::new(
+                        resolved_key,
+                        resolved_value,
+                    ));
                 }
 
                 Ok(Node::Mapping(crate::parser::ast::MappingNode::new(
@@ -202,7 +208,7 @@ impl<'input> AnchorResolver<'input> {
             cached_at: std::time::Instant::now(),
             access_count: 1,
         };
-        
+
         self.resolution_cache.insert(alias_name, cached);
     }
 
@@ -245,14 +251,14 @@ impl<'input> AnchorResolver<'input> {
         }
 
         // Collect keys to remove to avoid borrowing conflicts
-        let mut cache_entries: Vec<_> = self.resolution_cache.iter()
+        let mut cache_entries: Vec<_> = self
+            .resolution_cache
+            .iter()
             .map(|(k, v)| (k.clone(), v.access_count, v.cached_at))
             .collect();
-        
+
         // Sort by access count (ascending) then by cache time (ascending)
-        cache_entries.sort_by(|a, b| {
-            a.1.cmp(&b.1).then(a.2.cmp(&b.2))
-        });
+        cache_entries.sort_by(|a, b| a.1.cmp(&b.1).then(a.2.cmp(&b.2)));
 
         // Remove least recently used entries
         let to_remove = cache_entries.len() - max_cache_size;
@@ -265,12 +271,17 @@ impl<'input> AnchorResolver<'input> {
     pub fn resolve_all_aliases(&mut self) -> Result<Vec<(String, Node<'input>)>, SemanticError> {
         let mut resolved_aliases = Vec::with_capacity(self.anchor_registry.len());
 
-        // Get all anchor names in dependency order
-        let anchor_names = self.anchor_registry.anchor_names();
-        
+        // Get all anchor names in dependency order (clone to avoid borrowing conflicts)
+        let anchor_names: Vec<String> = self
+            .anchor_registry
+            .anchor_names()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+
         for anchor_name in anchor_names {
-            if let Some(resolved_node) = self.resolve_alias(anchor_name)? {
-                resolved_aliases.push((anchor_name.to_string(), resolved_node));
+            if let Some(resolved_node) = self.resolve_alias(&anchor_name)? {
+                resolved_aliases.push((anchor_name, resolved_node));
             }
         }
 
@@ -285,23 +296,22 @@ impl<'input> AnchorResolver<'input> {
                 if alias_node.name == anchor_name {
                     return true;
                 }
-                
+
                 // Check for indirect cycles through the alias chain
                 if let Some(target_def) = self.anchor_registry.get_anchor(&alias_node.name) {
                     return self.contains_potential_cycles(&target_def.node, anchor_name);
                 }
-                
+
                 false
             }
-            Node::Sequence(seq) => {
-                seq.items.iter().any(|child| self.contains_potential_cycles(child, anchor_name))
-            }
-            Node::Mapping(map) => {
-                map.pairs.iter().any(|pair| {
-                    self.contains_potential_cycles(&pair.key, anchor_name) ||
-                    self.contains_potential_cycles(&pair.value, anchor_name)
-                })
-            }
+            Node::Sequence(seq) => seq
+                .items
+                .iter()
+                .any(|child| self.contains_potential_cycles(child, anchor_name)),
+            Node::Mapping(map) => map.pairs.iter().any(|pair| {
+                self.contains_potential_cycles(&pair.key, anchor_name)
+                    || self.contains_potential_cycles(&pair.value, anchor_name)
+            }),
             Node::Scalar(_) => false,
             Node::Anchor(anchor_node) => {
                 // Check if the anchored content contains cycles
@@ -317,7 +327,9 @@ impl<'input> AnchorResolver<'input> {
 
     /// Get cache statistics
     pub fn cache_statistics(&self) -> CacheStatistics {
-        let total_accesses: usize = self.resolution_cache.values()
+        let total_accesses: usize = self
+            .resolution_cache
+            .values()
             .map(|cached| cached.access_count)
             .sum();
 
@@ -336,6 +348,8 @@ impl<'input> AnchorResolver<'input> {
             } else {
                 0.0
             },
+            memory_usage_estimate: self.resolution_cache.len()
+                * std::mem::size_of::<(String, super::cache::CachedResolution)>(),
         }
     }
 }

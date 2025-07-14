@@ -225,7 +225,7 @@ impl CoreSchema {
         if let Some(resolver) = self.resolvers.get(tag) {
             resolver("").ok_or_else(|| SemanticError::TagResolutionFailed {
                 tag: tag.to_string(),
-                message: "Core schema resolution failed".to_string(),
+                reason: "Core schema resolution failed".to_string(),
                 position: Position::default(),
             })
         } else {
@@ -282,14 +282,14 @@ impl JsonSchema {
     pub fn new() -> Self {
         let mut resolvers = HashMap::new();
 
-        // JSON-compatible types only
-        resolvers.insert("tag:yaml.org,2002:null", Self::resolve_null);
-        resolvers.insert("tag:yaml.org,2002:bool", Self::resolve_bool);
-        resolvers.insert("tag:yaml.org,2002:int", Self::resolve_int);
-        resolvers.insert("tag:yaml.org,2002:float", Self::resolve_float);
-        resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str);
-        resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq);
-        resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map);
+        // JSON-compatible types only - cast function items to TypeResolverFn for zero-allocation HashMap
+        resolvers.insert("tag:yaml.org,2002:null", Self::resolve_null as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:bool", Self::resolve_bool as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:int", Self::resolve_int as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:float", Self::resolve_float as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map as TypeResolverFn);
 
         Self { resolvers }
     }
@@ -342,10 +342,10 @@ impl FailsafeSchema {
     pub fn new() -> Self {
         let mut resolvers = HashMap::new();
 
-        // Minimal types only
-        resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str);
-        resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq);
-        resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map);
+        // Minimal types only - cast function items to TypeResolverFn for zero-allocation HashMap
+        resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq as TypeResolverFn);
+        resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map as TypeResolverFn);
 
         Self { resolvers }
     }

@@ -17,7 +17,6 @@ pub use state::{ScannerConfig, ScannerState};
 pub use token::{Token, TokenProducer, TokenStream};
 
 use crate::error::{Marker, ScanError};
-use crate::events::TokenType;
 
 /// High-performance YAML scanner with zero-allocation tokenization
 ///
@@ -300,13 +299,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     #[inline]
-    fn scan_comment_and_retry(&mut self, start_mark: Marker) -> Result<Token, ScanError> {
+    fn scan_comment_and_retry(&mut self, _start_mark: Marker) -> Result<Token, ScanError> {
         utils::skip_comment_line(&mut self.state)?;
         self.fetch_next_token()
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

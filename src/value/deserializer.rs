@@ -23,7 +23,7 @@ impl Deserializer {
 
     /// Get the next document from the YAML stream
     #[inline]
-    pub fn next(&mut self) -> Option<DocumentDeserializer> {
+    pub fn next(&mut self) -> Option<DocumentDeserializer<'_>> {
         if self.current >= self.documents.len() {
             return None;
         }

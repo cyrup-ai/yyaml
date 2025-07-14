@@ -54,32 +54,32 @@ impl Mapping {
     }
 
     #[inline(always)]
-    pub fn keys(&self) -> std::collections::btree_map::Keys<Value, Value> {
+    pub fn keys(&self) -> std::collections::btree_map::Keys<'_, Value, Value> {
         self.0.keys()
     }
 
     #[inline(always)]
-    pub fn values(&self) -> std::collections::btree_map::Values<Value, Value> {
+    pub fn values(&self) -> std::collections::btree_map::Values<'_, Value, Value> {
         self.0.values()
     }
 
     #[inline(always)]
-    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<Value, Value> {
+    pub fn values_mut(&mut self) -> std::collections::btree_map::ValuesMut<'_, Value, Value> {
         self.0.values_mut()
     }
 
     #[inline(always)]
-    pub fn iter(&self) -> std::collections::btree_map::Iter<Value, Value> {
+    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, Value, Value> {
         self.0.iter()
     }
 
     #[inline(always)]
-    pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<Value, Value> {
+    pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<'_, Value, Value> {
         self.0.iter_mut()
     }
 
     #[inline(always)]
-    pub fn entry(&mut self, key: Value) -> std::collections::btree_map::Entry<Value, Value> {
+    pub fn entry(&mut self, key: Value) -> std::collections::btree_map::Entry<'_, Value, Value> {
         self.0.entry(key)
     }
 
