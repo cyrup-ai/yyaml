@@ -56,8 +56,8 @@ impl<'input> MemoryManager<'input> {
             self.memory_usage.deallocation_count += 1;
             self.update_memory_stats();
 
-            // Auto-compact if fragmentation is too high
-            if self.should_compact() {
+            // Auto-compact only if compaction threshold is very low (aggressive mode)
+            if self.compact_threshold < 0.1 && self.should_compact() {
                 self.compact();
             }
         }
@@ -145,7 +145,7 @@ impl<'input> MemoryManager<'input> {
 
     /// Check if compaction should be triggered
     #[inline]
-    fn should_compact(&self) -> bool {
+    pub fn should_compact(&self) -> bool {
         self.memory_usage.fragmentation_ratio > self.compact_threshold
     }
 

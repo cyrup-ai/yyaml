@@ -21,6 +21,11 @@ impl Deserializer {
         }
     }
 
+    /// Alias for `from_str` for compatibility with tests
+    pub fn parse_str(input: &str) -> Self {
+        Self::from_str(input)
+    }
+
     /// Get the next document from the YAML stream
     #[inline]
     pub fn next(&mut self) -> Option<DocumentDeserializer<'_>> {

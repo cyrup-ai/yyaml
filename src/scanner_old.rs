@@ -43,11 +43,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         if self.token.is_none() {
             self.token = Some(self.fetch_next_token()?);
         }
-        Ok(self.token.as_ref().unwrap())
+        self.token.as_ref().ok_or_else(|| ScanError::new(self.mark, "token not available"))
     }
 
-    pub fn fetch_token(&mut self) -> Token {
-        self.token.take().unwrap()
+    pub fn fetch_token(&mut self) -> Result<Token, ScanError> {
+        self.token.take().ok_or_else(|| ScanError::new(self.mark, "no token available"))
     }
 
     pub fn skip(&mut self) {
@@ -312,7 +312,11 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
             // we check indentation or next docstart
             // minimal approach: read line by line until empty
-            let c = self.buffer.front().copied().unwrap();
+            let c = if let Some(&ch) = self.buffer.front() {
+                ch
+            } else {
+                break;
+            };
             if c == '-' || c == '.' {
                 // might be doc start or doc end
                 // let's see if next is doc start

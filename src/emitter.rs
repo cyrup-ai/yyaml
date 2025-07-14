@@ -26,7 +26,7 @@ impl From<fmt::Error> for EmitError {
 impl fmt::Display for EmitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EmitError::FmtError(e) => write!(f, "format error: {}", e),
+            EmitError::FmtError(e) => write!(f, "format error: {e}"),
             EmitError::BadHashmapKey => write!(f, "bad hashmap key"),
         }
     }
@@ -67,7 +67,7 @@ impl<'a> YamlEmitter<'a> {
                 if need_quotes(s) {
                     escape_str(self.writer, s)?;
                 } else {
-                    write!(self.writer, "{}", s)?;
+                    write!(self.writer, "{s}")?;
                 }
                 Ok(())
             }
@@ -76,11 +76,11 @@ impl<'a> YamlEmitter<'a> {
                 Ok(())
             }
             Yaml::Integer(i) => {
-                write!(self.writer, "{}", i)?;
+                write!(self.writer, "{i}")?;
                 Ok(())
             }
             Yaml::Real(s) => {
-                write!(self.writer, "{}", s)?;
+                write!(self.writer, "{s}")?;
                 Ok(())
             }
             Yaml::Null | Yaml::BadValue => {
@@ -128,13 +128,13 @@ impl<'a> YamlEmitter<'a> {
                 if matches!(k, Yaml::Array(_) | Yaml::Hash(_)) {
                     // complex key
                     write!(self.writer, "? ")?;
-                    self.emit_node(&k)?;
+                    self.emit_node(k)?;
                     writeln!(self.writer)?;
                     self.write_indent()?;
                     write!(self.writer, ": ")?;
                     self.emit_val(true, v)?;
                 } else {
-                    self.emit_node(&k)?;
+                    self.emit_node(k)?;
                     write!(self.writer, ": ")?;
                     self.emit_val(false, v)?;
                 }
@@ -244,7 +244,7 @@ fn escape_str(wr: &mut dyn fmt::Write, s: &str) -> Result<(), fmt::Error> {
                 // escape in \u form
                 write!(wr, "\\u{:04x}", c as u32)?
             }
-            _ => write!(wr, "{}", c)?,
+            _ => write!(wr, "{c}")?,
         }
     }
     write!(wr, "\"")?;

@@ -153,7 +153,7 @@ impl DocumentParser {
         match token_kind {
             TokenKind::Scalar { .. } => {
                 let scalar_token = context.consume_token()?;
-                super::scalars::ScalarParser::parse_scalar(scalar_token, &ParseContext::Document)
+                super::scalars::ScalarParser::parse_scalar_with_context(scalar_token, context, &ParseContext::Document)
             }
 
             TokenKind::FlowSequenceStart => {

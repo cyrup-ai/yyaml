@@ -43,6 +43,19 @@ impl<'input> AnalysisContext<'input> {
         }
     }
 
+    /// Create analysis context from semantic configuration
+    pub fn from_config(config: &SemanticConfig<'input>) -> Self {
+        Self {
+            current_document_index: 0,
+            processing_phase: ProcessingPhase::AnchorCollection,
+            tag_prefixes: Self::default_tag_prefixes(),
+            yaml_version: config.yaml_version,
+            strict_mode: config.strict_mode,
+            cycle_detection_enabled: config.cycle_detection_enabled,
+            current_position: Position::default(),
+        }
+    }
+
     /// Get default YAML 1.2 tag prefixes
     fn default_tag_prefixes() -> HashMap<Cow<'input, str>, Cow<'input, str>> {
         let mut prefixes = HashMap::with_capacity(2);

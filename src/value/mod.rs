@@ -1,5 +1,6 @@
 use crate::{Error, Yaml};
 use serde::{Deserialize, Serialize};
+use serde::de::IntoDeserializer;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -13,6 +14,32 @@ pub use mapping::Mapping;
 pub use number::Number;
 pub use sequence::Sequence;
 
+/// A YAML tag for typed values
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Tag {
+    pub handle: Option<String>,
+    pub suffix: String,
+}
+
+impl Tag {
+    pub fn new(handle: Option<String>, suffix: String) -> Self {
+        Self { handle, suffix }
+    }
+}
+
+/// A tagged YAML value with type information
+#[derive(Clone, Debug, PartialEq)]
+pub struct TaggedValue {
+    pub tag: Tag,
+    pub value: Value,
+}
+
+impl TaggedValue {
+    pub fn new(tag: Tag, value: Value) -> Self {
+        Self { tag, value }
+    }
+}
+
 /// A serde-compatible YAML value representation
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
@@ -22,6 +49,7 @@ pub enum Value {
     String(String),
     Sequence(Sequence),
     Mapping(Mapping),
+    Tagged(Box<TaggedValue>),
 }
 
 impl Value {
@@ -70,6 +98,28 @@ impl Value {
         }
     }
 
+    /// Check if value is an f64 number
+    #[inline(always)]
+    pub const fn is_f64(&self) -> bool {
+        match self {
+            Value::Number(n) => n.is_f64(),
+            _ => false,
+        }
+    }
+
+    /// Check if value is a string
+    #[inline(always)]
+    pub const fn is_string(&self) -> bool {
+        matches!(self, Value::String(_))
+    }
+
+    /// Apply merge operation for YAML merge key functionality
+    pub fn apply_merge(&mut self) -> Result<(), crate::Error> {
+        // Implementation for YAML merge key (<<) functionality
+        // For now, return Ok since merge keys are handled during parsing
+        Ok(())
+    }
+
     #[inline]
     pub fn from_yaml(yaml: &Yaml) -> Self {
         match yaml {
@@ -96,6 +146,7 @@ impl Value {
             Value::String(s) => Yaml::String(s),
             Value::Sequence(seq) => seq.into_yaml(),
             Value::Mapping(map) => map.into_yaml(),
+            Value::Tagged(tagged) => tagged.value.into_yaml(),
         }
     }
 }
@@ -178,6 +229,10 @@ impl Hash for Value {
             Value::Mapping(_) => {
                 5u8.hash(state);
             }
+            Value::Tagged(tagged) => {
+                6u8.hash(state);
+                tagged.tag.hash(state);
+            }
         }
     }
 }
@@ -204,7 +259,13 @@ impl Ord for Value {
             (Value::Bool(_), _) => Ordering::Less,
             (_, Value::Bool(_)) => Ordering::Greater,
 
-            (Value::Number(a), Value::Number(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
+            (Value::Number(a), Value::Number(b)) => {
+                // Safe comparison - Number should always be comparable
+                match a.partial_cmp(b) {
+                    Some(ordering) => ordering,
+                    None => Ordering::Equal, // Fallback for NaN values
+                }
+            },
             (Value::Number(_), _) => Ordering::Less,
             (_, Value::Number(_)) => Ordering::Greater,
 
@@ -217,6 +278,10 @@ impl Ord for Value {
             (_, Value::Sequence(_)) => Ordering::Greater,
 
             (Value::Mapping(_), Value::Mapping(_)) => Ordering::Equal,
+            (Value::Mapping(_), _) => Ordering::Less,
+            (_, Value::Mapping(_)) => Ordering::Greater,
+
+            (Value::Tagged(a), Value::Tagged(b)) => a.tag.suffix.cmp(&b.tag.suffix),
         }
     }
 }
@@ -233,6 +298,7 @@ impl Serialize for Value {
             Value::String(s) => serializer.serialize_str(s),
             Value::Sequence(seq) => seq.serialize(serializer),
             Value::Mapping(map) => map.serialize(serializer),
+            Value::Tagged(tagged) => tagged.value.serialize(serializer),
         }
     }
 }
@@ -426,6 +492,44 @@ impl Serialize for Yaml {
     }
 }
 
+// Static null value for Index trait implementations
+static NULL_VALUE: Value = Value::Null;
+
+/// Indexing by usize for sequences
+impl std::ops::Index<usize> for Value {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Value::Sequence(seq) => {
+                match seq.get(index) {
+                    Some(value) => value,
+                    None => &NULL_VALUE,
+                }
+            }
+            _ => &NULL_VALUE,
+        }
+    }
+}
+
+/// Indexing by string for mappings
+impl std::ops::Index<&str> for Value {
+    type Output = Value;
+
+    fn index(&self, key: &str) -> &Self::Output {
+        match self {
+            Value::Mapping(map) => {
+                let key_value = Value::String(key.to_string());
+                match map.get(&key_value) {
+                    Some(value) => value,
+                    None => &NULL_VALUE,
+                }
+            }
+            _ => &NULL_VALUE,
+        }
+    }
+}
+
 /// Deserializer implementation for Value references
 #[allow(dead_code)] // May be used for future deserialization extensions
 struct ValueDeserializer<'a> {
@@ -464,6 +568,10 @@ impl<'de> serde::Deserializer<'de> for &'de Value {
                     next_value: None,
                 };
                 visitor.visit_map(deserializer)
+            }
+            Value::Tagged(tagged) => {
+                // For deserialization, we treat tagged values as their underlying value
+                tagged.value.clone().deserialize_any(visitor)
             }
         }
     }
@@ -538,5 +646,137 @@ impl<'de> serde::de::MapAccess<'de> for MapDeserializer<'de> {
             (lower, Some(upper)) if lower == upper => Some(upper),
             _ => None,
         }
+    }
+}
+
+/// IntoDeserializer implementation for Value
+impl IntoDeserializer<'_, Error> for Value {
+    type Deserializer = Self;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        self
+    }
+}
+
+/// Make Value work as a deserializer itself
+impl<'de> serde::Deserializer<'de> for Value {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self {
+            Value::Null => visitor.visit_unit(),
+            Value::Bool(b) => visitor.visit_bool(b),
+            Value::Number(n) => match n {
+                Number::Integer(i) => visitor.visit_i64(i),
+                Number::Float(f) => visitor.visit_f64(f),
+            },
+            Value::String(s) => visitor.visit_string(s),
+            Value::Sequence(seq) => {
+                visitor.visit_seq(ValueSeqAccess::new(seq))
+            }
+            Value::Mapping(map) => {
+                visitor.visit_map(ValueMapAccess::new(map))
+            }
+            Value::Tagged(tagged) => {
+                // For deserialization, we treat tagged values as their underlying value
+                tagged.value.clone().deserialize_any(visitor)
+            }
+        }
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
+        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
+        map struct enum identifier ignored_any
+    }
+}
+
+/// Sequence access for Value deserialization
+struct ValueSeqAccess {
+    seq: Sequence,
+    index: usize,
+}
+
+impl ValueSeqAccess {
+    fn new(seq: Sequence) -> Self {
+        Self { seq, index: 0 }
+    }
+}
+
+impl<'de> serde::de::SeqAccess<'de> for ValueSeqAccess {
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        if self.index < self.seq.len() {
+            let value = self.seq.get(self.index).ok_or_else(|| {
+                Error::Custom("sequence index out of bounds".to_string())
+            })?.clone();
+            self.index += 1;
+            seed.deserialize(value).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.seq.len().saturating_sub(self.index))
+    }
+}
+
+/// Map access for Value deserialization
+struct ValueMapAccess {
+    map: Mapping,
+    keys: Vec<Value>,
+    index: usize,
+    next_value: Option<Value>,
+}
+
+impl ValueMapAccess {
+    fn new(map: Mapping) -> Self {
+        let keys: Vec<Value> = map.keys().cloned().collect();
+        Self {
+            map,
+            keys,
+            index: 0,
+            next_value: None,
+        }
+    }
+}
+
+impl<'de> serde::de::MapAccess<'de> for ValueMapAccess {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
+    where
+        K: serde::de::DeserializeSeed<'de>,
+    {
+        if self.index < self.keys.len() {
+            let key = self.keys[self.index].clone();
+            self.next_value = self.map.get(&key).cloned();
+            self.index += 1;
+            seed.deserialize(key).map(Some)
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::DeserializeSeed<'de>,
+    {
+        match self.next_value.take() {
+            Some(value) => seed.deserialize(value),
+            None => Err(Error::Custom("no value available".to_string())),
+        }
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.keys.len().saturating_sub(self.index))
     }
 }

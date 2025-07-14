@@ -405,7 +405,7 @@ impl ContextStack {
     /// Get current context
     #[inline]
     pub fn current(&self) -> &ParseContext {
-        self.stack.last().unwrap()
+        self.stack.last().unwrap_or(&ParseContext::Document)
     }
 
     /// Push new context

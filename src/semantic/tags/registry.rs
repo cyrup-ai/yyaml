@@ -368,10 +368,11 @@ mod tests {
         );
 
         assert!(registry.get_tag_prefix("!custom!").is_some());
-        assert_eq!(
-            registry.get_tag_prefix("!custom!").unwrap(),
-            &Cow::Borrowed("tag:example.com,2023:")
-        );
+        if let Some(prefix) = registry.get_tag_prefix("!custom!") {
+            assert_eq!(prefix, &Cow::Borrowed("tag:example.com,2023:"));
+        } else {
+            panic!("Expected tag prefix to be present");
+        }
     }
 
     #[test]
@@ -394,7 +395,11 @@ mod tests {
 
         let retrieved = registry.get_tag("tag:yaml.org,2002:str");
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().resolved_type, YamlType::Str);
+        if let Some(tag) = retrieved {
+            assert_eq!(tag.resolved_type, YamlType::Str);
+        } else {
+            panic!("Expected tag to be present");
+        }
     }
 
     #[test]

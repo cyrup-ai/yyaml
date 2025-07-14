@@ -48,6 +48,25 @@ impl<'input> Scanner<'input> {
         self.chars.peek().is_none()
     }
 
+    /// Check if an indentation level is valid in YAML context
+    /// YAML allows any consistent indentation that's a multiple of the base unit
+    #[inline]
+    fn is_valid_indentation_level(&self, indent: usize) -> bool {
+        // Zero indentation is always valid (root level)
+        if indent == 0 {
+            return true;
+        }
+        
+        // If we have established indentation levels, check consistency
+        if let Some(&min_indent) = self.indent_stack.iter().filter(|&&x| x > 0).min() {
+            // YAML allows any multiple of the smallest established indentation
+            indent % min_indent == 0
+        } else {
+            // No established indentation pattern yet, any positive value is valid
+            true
+        }
+    }
+
     /// Scan the next token
     pub fn scan_token(
         &mut self,
@@ -109,9 +128,27 @@ impl<'input> Scanner<'input> {
             }
         };
 
-        // Handle indentation at start of line
-        if start_pos.column == 1 && !chars::is_break(ch) {
-            return self.scan_indentation(position);
+        // Handle indentation at start of line when we're at column 1
+        if start_pos.column == 1 {
+            // If we're at column 1 and encounter spaces, scan indentation
+            if ch == ' ' {
+                return self.scan_indentation(position);
+            }
+            // If we're at column 1 with non-space content, this is zero indentation
+            // Check if we need to emit dedent tokens for returning to column 0
+            let current_indent = *self.indent_stack.last().unwrap_or(&0);
+            if current_indent > 0 {
+                // We're back to zero indentation, emit dedents
+                let mut dedent_count = 0;
+                while let Some(&stack_indent) = self.indent_stack.last() {
+                    if stack_indent == 0 {
+                        break;
+                    }
+                    self.indent_stack.pop();
+                    dedent_count += 1;
+                }
+                return Ok(Token::new(TokenKind::Dedent(dedent_count), start_pos, 0));
+            }
         }
 
         match ch {
@@ -185,6 +222,7 @@ impl<'input> Scanner<'input> {
         let start_pos = position.current();
         let mut indent = 0;
 
+        // Count leading spaces
         while let Some(&ch) = self.chars.peek() {
             if ch == ' ' {
                 indent += 1;
@@ -194,20 +232,23 @@ impl<'input> Scanner<'input> {
             }
         }
 
-        let current_indent = match self.indent_stack.last() {
-            Some(&indent) => indent,
-            None => {
-                // This should never happen as indent_stack is initialized with [0]
-                // but handle gracefully by treating as zero indentation
-                0
-            }
-        };
+        // Get current indentation from stack (default to 0 if empty)
+        let current_indent = *self.indent_stack.last().unwrap_or(&0);
 
         if indent > current_indent {
+            // Increasing indentation - validate and push new level
+            if !self.is_valid_indentation_level(indent) {
+                return Err(LexError::new(
+                    LexErrorKind::InvalidIndentation(format!(
+                        "indentation level {indent} is inconsistent with established pattern"
+                    )),
+                    start_pos,
+                ));
+            }
             self.indent_stack.push(indent);
             Ok(Token::new(TokenKind::Indent(indent), start_pos, indent))
         } else if indent < current_indent {
-            // Pop indentation levels until we match or go below
+            // Decreasing indentation - pop levels and count dedents
             let mut dedent_count = 0;
             while let Some(&stack_indent) = self.indent_stack.last() {
                 if stack_indent <= indent {
@@ -217,16 +258,21 @@ impl<'input> Scanner<'input> {
                 dedent_count += 1;
             }
 
-            if self.indent_stack.last() != Some(&indent) {
+            // Verify we found a matching indentation level
+            let final_indent = *self.indent_stack.last().unwrap_or(&0);
+            if final_indent != indent {
+                // This indentation level was never established
                 return Err(LexError::new(
-                    LexErrorKind::UnexpectedCharacter("invalid indentation level".to_string()),
+                    LexErrorKind::InvalidIndentation(format!(
+                        "indentation level {indent} does not match any previous level (found {final_indent})"
+                    )),
                     start_pos,
                 ));
             }
 
             Ok(Token::new(TokenKind::Dedent(dedent_count), start_pos, 0))
         } else {
-            // Same indentation, continue scanning
+            // Same indentation level - continue with regular token scanning
             self.scan_token_impl(position)
         }
     }
@@ -352,7 +398,7 @@ impl<'input> Scanner<'input> {
         if !self
             .chars
             .peek()
-            .map_or(false, |&ch| chars::is_anchor_char(ch))
+            .is_some_and(|&ch| chars::is_anchor_char(ch))
         {
             return Err(LexError::new(
                 LexErrorKind::InvalidAnchor("anchor name cannot be empty".to_string()),
@@ -721,7 +767,7 @@ impl<'input> Scanner<'input> {
                         Ok(processed) => processed,
                         Err(e) => {
                             return Err(LexError::new(
-                                LexErrorKind::InvalidEscape(format!("escape error: {}", e)),
+                                LexErrorKind::InvalidEscape(format!("escape error: {e}")),
                                 position.current(),
                             ));
                         }
@@ -824,14 +870,13 @@ impl<'input> Scanner<'input> {
         let start_offset = self.current_offset;
 
         // Check if first character can start a plain scalar
-        if let Some(&ch) = self.chars.peek() {
-            if !chars::can_start_plain_scalar(ch) {
+        if let Some(&ch) = self.chars.peek()
+            && !chars::can_start_plain_scalar(ch) {
                 return Err(LexError::new(
-                    LexErrorKind::UnexpectedCharacter(format!("unexpected character '{}'", ch)),
+                    LexErrorKind::UnexpectedCharacter(format!("unexpected character '{ch}'")),
                     start_pos,
                 ));
             }
-        }
 
         // Scan plain scalar content
         while let Some(&ch) = self.chars.peek() {

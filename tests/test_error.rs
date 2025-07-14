@@ -13,19 +13,17 @@ use std::fmt::Debug;
 use yyaml::value::{Tag, TaggedValue};
 use yyaml::{Deserializer, Value};
 
-fn test_error<'de, T>(yaml: &'de str, expected: &str)
+fn test_error<T>(yaml: &str, expected: &str)
 where
-    T: Deserialize<'de> + Debug,
+    T: serde::de::DeserializeOwned + Debug,
 {
-    let result = yyaml::from_str::<T>(yaml);
+    let result = yyaml::parse_str::<T>(yaml);
     assert_eq!(expected, result.unwrap_err().to_string());
 
-    let mut deserializer = Deserializer::from_str(yaml);
+    let mut deserializer = Deserializer::parse_str(yaml);
     if let Some(first_document) = deserializer.next() {
-        if deserializer.next().is_none() {
-            let result = T::deserialize(first_document);
-            assert_eq!(expected, result.unwrap_err().to_string());
-        }
+        let result = T::deserialize(first_document);
+        assert_eq!(expected, result.unwrap_err().to_string());
     }
 }
 
@@ -122,7 +120,7 @@ fn test_ignored_unknown_anchor() {
 #[test]
 fn test_bytes() {
     let expected = "serialization and deserialization of bytes in YAML is not implemented";
-    test_error::<&[u8]>("...", expected);
+    test_error::<Vec<u8>>("...", expected);
 }
 
 #[test]
@@ -146,7 +144,7 @@ fn test_second_document_syntax_error() {
         ]
     "};
 
-    let mut de = Deserializer::from_str(yaml);
+    let mut de = Deserializer::parse_str(yaml);
     let first_doc = de.next().unwrap();
     let result = <usize as serde::Deserialize>::deserialize(first_doc);
     assert_eq!(0, result.unwrap());
@@ -200,9 +198,9 @@ fn test_serialize_nested_enum() {
     assert_eq!(error.to_string(), expected);
 
     let e = Value::Tagged(Box::new(TaggedValue {
-        tag: Tag::new("Outer"),
+        tag: Tag::new(None, "Outer".to_string()),
         value: Value::Tagged(Box::new(TaggedValue {
-            tag: Tag::new("Inner"),
+            tag: Tag::new(None, "Inner".to_string()),
             value: Value::Null,
         })),
     }));

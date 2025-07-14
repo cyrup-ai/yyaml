@@ -74,7 +74,8 @@ pub fn analyze_document<'input>(
 mod tests {
     use super::*;
     use crate::lexer::Position;
-    use crate::parser::ast::{Document, Node, Scalar, Stream};
+    use crate::parser::ast::{Document, Node, ScalarNode, Stream};
+    use crate::lexer::ScalarStyle;
 
     #[test]
     fn test_default_analyzer_creation() {
@@ -97,15 +98,17 @@ mod tests {
 
     #[test]
     fn test_analyze_simple_document() {
-        let scalar = Node::Scalar(Scalar {
+        let scalar = Node::Scalar(ScalarNode {
             value: "test".into(),
+            style: ScalarStyle::Plain,
             tag: None,
-            anchor: None,
             position: Position::default(),
         });
 
         let document = Document {
-            root: scalar,
+            content: Some(scalar),
+            has_explicit_start: false,
+            has_explicit_end: false,
             position: Position::default(),
         };
 
@@ -139,15 +142,17 @@ mod tests {
 
     #[test]
     fn test_buffer_size_estimation() {
-        let scalar = Node::Scalar(Scalar {
+        let scalar = Node::Scalar(ScalarNode {
             value: "test".into(),
+            style: ScalarStyle::Plain,
             tag: None,
-            anchor: None,
             position: Position::default(),
         });
 
         let document = Document {
-            root: scalar,
+            content: Some(scalar),
+            has_explicit_start: false,
+            has_explicit_end: false,
             position: Position::default(),
         };
 

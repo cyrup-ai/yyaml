@@ -525,16 +525,16 @@ impl<'input> Default for ReferenceTracker<'input> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{Node, NodeValue, Scalar, ScalarValue};
+    use crate::parser::ast::{Node, ScalarNode};
+    use crate::lexer::ScalarStyle;
 
     fn create_test_node() -> Node<'static> {
-        Node {
-            value: NodeValue::Scalar(Scalar {
-                value: ScalarValue::String("test"),
-                position: Position::default(),
-            }),
+        Node::Scalar(ScalarNode {
+            value: "test".into(),
+            style: ScalarStyle::Plain,
+            tag: None,
             position: Position::default(),
-        }
+        })
     }
 
     #[test]

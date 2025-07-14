@@ -251,11 +251,10 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
         match self.value {
             Yaml::String(s) => {
                 let mut chars = s.chars();
-                if let Some(ch) = chars.next() {
-                    if chars.next().is_none() {
+                if let Some(ch) = chars.next()
+                    && chars.next().is_none() {
                         return visitor.visit_char(ch);
                     }
-                }
                 Err(Error::Custom("string is not a single character".into()))
             }
             _ => Err(Error::Custom("expected string".into())),

@@ -17,6 +17,12 @@ impl Sequence {
         Sequence(Vec::with_capacity(cap))
     }
 
+    /// Create sequence from a vector of values
+    #[inline(always)]
+    pub fn from_vec(vec: Vec<Value>) -> Self {
+        Sequence(vec)
+    }
+
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.0.len()

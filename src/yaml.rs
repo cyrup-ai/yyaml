@@ -121,27 +121,30 @@ impl Yaml {
     }
 
     /// Parse a string into a Yaml value with automatic type detection
-    pub fn from_str(v: &str) -> Yaml {
-        if v.starts_with("0x") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 16) {
+    pub fn parse_str(v: &str) -> Yaml {
+        if let Some(stripped) = v.strip_prefix("0x")
+            && let Ok(i) = i64::from_str_radix(stripped, 16) {
                 return Yaml::Integer(i);
             }
-        }
-        if v.starts_with("0o") {
-            if let Ok(i) = i64::from_str_radix(&v[2..], 8) {
+        if let Some(stripped) = v.strip_prefix("0o")
+            && let Ok(i) = i64::from_str_radix(stripped, 8) {
                 return Yaml::Integer(i);
             }
-        }
-        if v.starts_with('+') {
-            if let Ok(i) = v[1..].parse::<i64>() {
+        if let Some(stripped) = v.strip_prefix('+')
+            && let Ok(i) = stripped.parse::<i64>() {
                 return Yaml::Integer(i);
             }
-        }
         match v {
             "~" | "null" => Yaml::Null,
             "true" => Yaml::Boolean(true),
             "false" => Yaml::Boolean(false),
-            _ if v.parse::<i64>().is_ok() => Yaml::Integer(v.parse::<i64>().unwrap()),
+            _ if v.parse::<i64>().is_ok() => {
+                if let Ok(i) = v.parse::<i64>() {
+                    Yaml::Integer(i)
+                } else {
+                    Yaml::String(v.into())
+                }
+            },
             _ if parse_f64(v).is_some() => Yaml::Real(v.into()),
             _ => Yaml::String(v.into()),
         }

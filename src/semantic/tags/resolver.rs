@@ -437,7 +437,6 @@ impl<'input> CustomTagResolver<'input> for SimpleCustomResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::Position;
 
     #[test]
     fn test_resolver_creation() {

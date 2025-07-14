@@ -565,7 +565,7 @@ mod tests {
     fn create_test_node(id: usize, name: &str) -> ReferenceNode<'static> {
         ReferenceNode {
             id: ReferenceId(id),
-            name: Cow::Borrowed(name),
+            name: Cow::Owned(name.to_string()),
             node_type: ReferenceNodeType::Scalar {
                 value: Cow::Borrowed("test"),
                 scalar_type: ScalarType::String,

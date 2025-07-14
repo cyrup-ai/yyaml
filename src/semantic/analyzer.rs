@@ -34,7 +34,7 @@ impl<'input> SemanticAnalyzer<'input> {
 
     /// Create semantic analyzer with custom configuration
     pub fn with_config(config: SemanticConfig<'input>) -> Self {
-        let context = AnalysisContext::new();
+        let context = AnalysisContext::from_config(&config);
 
         Self {
             anchor_resolver: AnchorResolver::with_config(&config),

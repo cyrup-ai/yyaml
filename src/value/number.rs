@@ -75,7 +75,7 @@ impl Number {
 impl Display for Number {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Number::Integer(i) => write!(f, "{}", i),
+            Number::Integer(i) => write!(f, "{i}"),
             Number::Float(fl) => {
                 if fl.is_nan() {
                     write!(f, ".nan")
@@ -86,7 +86,7 @@ impl Display for Number {
                         write!(f, "-.inf")
                     }
                 } else {
-                    write!(f, "{}", fl)
+                    write!(f, "{fl}")
                 }
             }
         }

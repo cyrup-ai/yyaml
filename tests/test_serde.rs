@@ -24,17 +24,17 @@ where
     let serialized = yyaml::to_string(&value).unwrap();
     assert_eq!(yaml, serialized);
 
-    let deserialized: T = yyaml::from_str(yaml).unwrap();
+    let deserialized: T = yyaml::parse_str(yaml).unwrap();
     assert_eq!(*thing, deserialized);
 
-    let value: Value = yyaml::from_str(yaml).unwrap();
+    let value: Value = yyaml::parse_str(yaml).unwrap();
     let deserialized = T::deserialize(&value).unwrap();
     assert_eq!(*thing, deserialized);
 
     let deserialized: T = yyaml::from_value(value).unwrap();
     assert_eq!(*thing, deserialized);
 
-    yyaml::from_str::<serde::de::IgnoredAny>(yaml).unwrap();
+    yyaml::parse_str::<serde::de::IgnoredAny>(yaml).unwrap();
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn test_float() {
     "};
     test_serde(&thing, yaml);
 
-    let float: f64 = yyaml::from_str(indoc! {"
+    let float: f64 = yyaml::parse_str(indoc! {"
         .nan
     "})
     .unwrap();
@@ -149,7 +149,7 @@ fn test_float32() {
     "};
     test_serde(&thing, yaml);
 
-    let single_float: f32 = yyaml::from_str(indoc! {"
+    let single_float: f32 = yyaml::parse_str(indoc! {"
         .nan
     "})
     .unwrap();
@@ -509,7 +509,7 @@ fn test_value() {
     }
     let thing = GenericInstructions {
         typ: "primary".to_string(),
-        config: Value::Sequence(Sequence(vec![
+        config: Value::Sequence(Sequence::from_vec(vec![
             Value::Null,
             Value::Bool(true),
             Value::Number(Number::from(65535)),

@@ -122,8 +122,11 @@ impl IndentationTracker {
                 break;
             }
 
-            let popped = self.levels.pop().unwrap();
-            popped_types.push(popped.block_type);
+            // Safe to unwrap here since we verified levels.last() exists above,
+            // but using explicit pattern match for artisan-quality production code
+            if let Some(popped) = self.levels.pop() {
+                popped_types.push(popped.block_type);
+            }
         }
 
         self.current_base = self.levels.last().map(|level| level.column).unwrap_or(-1);

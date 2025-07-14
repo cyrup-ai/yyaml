@@ -141,9 +141,25 @@ impl<'input> SchemaProcessor<'input> {
 
     /// Check if string matches binary pattern
     pub fn is_binary_pattern(&self, value: &str) -> bool {
+        // Must be at least 4 characters and have proper base64 structure
+        if value.len() < 4 || value.len() % 4 != 0 {
+            return false;
+        }
+        
+        // Must contain mix of alphanumeric and base64 chars, not just letters
+        let has_digits = value.chars().any(|c| c.is_ascii_digit());
+        let has_base64_chars = value.chars().any(|c| matches!(c, '+' | '/' | '='));
+        
+        // If it's all letters, it's probably text, not base64
+        if value.chars().all(|c| c.is_ascii_alphabetic()) {
+            return false;
+        }
+        
+        // All characters must be valid base64
         value
             .chars()
             .all(|c| matches!(c, 'A'..='Z' | 'a'..='z' | '0'..='9' | '+' | '/' | '='))
+            && (has_digits || has_base64_chars)
     }
 
     /// Register custom type definition

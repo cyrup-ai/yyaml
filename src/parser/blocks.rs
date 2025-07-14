@@ -113,7 +113,7 @@ impl BlockParser {
         // Parse key
         let key = match key_token.kind {
             TokenKind::Scalar { .. } => {
-                super::scalars::ScalarParser::parse_scalar(key_token, &ParseContext::BlockKey)?
+                super::scalars::ScalarParser::parse_scalar_with_context(key_token, context, &ParseContext::BlockKey)?
             }
             _ => {
                 return Err(ParseError::new(
@@ -346,8 +346,9 @@ impl BlockParser {
             // Scalars
             TokenKind::Scalar { .. } => {
                 let scalar_token = context.consume_token()?;
-                super::scalars::ScalarParser::parse_scalar(
+                super::scalars::ScalarParser::parse_scalar_with_context(
                     scalar_token,
+                    context,
                     &ParseContext::BlockIn(min_indent),
                 )
             }

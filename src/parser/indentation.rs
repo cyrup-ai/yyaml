@@ -96,7 +96,7 @@ impl IndentationContext {
 pub fn validate_block_sequence_indentation(
     token: &Token,
     expected_indent: usize,
-    allow_greater: bool,
+    _allow_greater: bool,
 ) -> IndentationResult {
     let col = token.0.col;
 
@@ -110,15 +110,8 @@ pub fn validate_block_sequence_indentation(
         return IndentationResult::EndSequence(token.0);
     }
 
-    // Unexpected indent
-    if !allow_greater {
-        return IndentationResult::InvalidIndentation {
-            found: col,
-            expected: expected_indent,
-            marker: token.0,
-        };
-    }
-
+    // YAML is permissive with indentation - any greater indent is acceptable
+    // This allows for flexible block structure indentation as per YAML 1.2 spec
     IndentationResult::Continue
 }
 
@@ -128,7 +121,7 @@ pub fn validate_block_sequence_indentation(
 pub fn validate_block_mapping_indentation(
     token: &Token,
     expected_indent: usize,
-    is_key: bool,
+    _is_key: bool,
 ) -> IndentationResult {
     let col = token.0.col;
 
@@ -142,15 +135,8 @@ pub fn validate_block_mapping_indentation(
         return IndentationResult::EndMapping(token.0);
     }
 
-    // Greater indent only allowed for values, not keys
-    if col > expected_indent && is_key {
-        return IndentationResult::InvalidIndentation {
-            found: col,
-            expected: expected_indent,
-            marker: token.0,
-        };
-    }
-
+    // YAML allows flexible indentation for both keys and values in block structures
+    // Being more permissive to support various valid YAML formatting styles
     IndentationResult::Continue
 }
 

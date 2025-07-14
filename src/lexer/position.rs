@@ -283,7 +283,7 @@ pub mod utils {
     }
 
     /// Extract text for a span
-    pub fn text_for_span<'a>(input: &'a str, span: Span) -> Option<&'a str> {
+    pub fn text_for_span(input: &str, span: Span) -> Option<&str> {
         let start_offset = span.start.byte_offset;
         let end_offset = span.end.byte_offset;
 

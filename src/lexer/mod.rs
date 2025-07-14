@@ -137,6 +137,7 @@ pub enum LexErrorKind {
     InvalidAnchor(String),
     InvalidAlias(String),
     InvalidDirective(String),
+    InvalidIndentation(String),
     UnexpectedEndOfInput,
     EmptyScalar,
 }
@@ -154,6 +155,7 @@ impl std::fmt::Display for LexErrorKind {
             LexErrorKind::InvalidAnchor(msg) => write!(f, "invalid anchor: {}", msg),
             LexErrorKind::InvalidAlias(msg) => write!(f, "invalid alias: {}", msg),
             LexErrorKind::InvalidDirective(msg) => write!(f, "invalid directive: {}", msg),
+            LexErrorKind::InvalidIndentation(msg) => write!(f, "invalid indentation: {}", msg),
             LexErrorKind::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
             LexErrorKind::EmptyScalar => write!(f, "empty scalar"),
         }
