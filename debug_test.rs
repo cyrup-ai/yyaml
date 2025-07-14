@@ -1,23 +1,26 @@
-// Temporary debug test to verify fast-path parsing
-use yyaml::YamlLoader;
+use yyaml::*;
 
 fn main() {
-    let test_yaml = "hello: world
+    let s = "hello: world
 int: 42
 bool: true
 nulltest: ~";
     
-    println!("Testing YAML parsing...");
+    println\!("Input YAML:");
+    println\!("{}", s);
+    println\!("\nParsing...");
     
-    match YamlLoader::load_from_str(test_yaml) {
+    let result = YamlLoader::load_from_str(s);
+    match result {
         Ok(docs) => {
-            println!("SUCCESS! Parsed {} documents", docs.len());
-            if let Some(doc) = docs.first() {
-                println!("Document content: {:?}", doc);
+            println\!("Number of documents: {}", docs.len());
+            for (i, doc) in docs.iter().enumerate() {
+                println\!("Document {}: {:?}", i, doc);
             }
         }
         Err(e) => {
-            println!("FAILED: {}", e);
+            println\!("Error: {:?}", e);
         }
     }
 }
+EOF < /dev/null

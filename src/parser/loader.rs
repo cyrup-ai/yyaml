@@ -129,12 +129,7 @@ impl YamlLoader {
                 let value_part = line[colon_pos + 1..].trim();
                 
                 // Simple key-value pair - allow simple values including ~
-                if !key_part.is_empty() && 
-                   !key_part.contains('[') && !key_part.contains('{') &&
-                   !value_part.contains('[') && !value_part.contains('{') &&
-                   !value_part.contains(':') &&
-                   !key_part.contains('&') && !key_part.contains('*') &&
-                   !value_part.contains('&') && !value_part.contains('*') {
+                if !key_part.is_empty() {
                     
                     let key = Yaml::String(key_part.to_string());
                     let value = if value_part.is_empty() {
