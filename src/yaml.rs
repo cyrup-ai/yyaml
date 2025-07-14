@@ -76,50 +76,50 @@ impl Yaml {
             _ => None,
         }
     }
-    
+
     pub fn as_i64(&self) -> Option<i64> {
         match *self {
             Yaml::Integer(i) => Some(i),
             _ => None,
         }
     }
-    
+
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
             Yaml::Real(ref s) => parse_f64(s),
             _ => None,
         }
     }
-    
+
     pub fn as_str(&self) -> Option<&str> {
         match *self {
             Yaml::String(ref s) => Some(s),
             _ => None,
         }
     }
-    
+
     pub fn as_vec(&self) -> Option<&[Yaml]> {
         match *self {
             Yaml::Array(ref v) => Some(v),
             _ => None,
         }
     }
-    
+
     pub fn as_hash(&self) -> Option<&LinkedHashMap<Yaml, Yaml>> {
         match *self {
             Yaml::Hash(ref h) => Some(h),
             _ => None,
         }
     }
-    
+
     pub fn is_null(&self) -> bool {
         matches!(*self, Yaml::Null)
     }
-    
+
     pub fn is_badvalue(&self) -> bool {
         matches!(*self, Yaml::BadValue)
     }
-    
+
     /// Parse a string into a Yaml value with automatic type detection
     pub fn from_str(v: &str) -> Yaml {
         if v.starts_with("0x") {

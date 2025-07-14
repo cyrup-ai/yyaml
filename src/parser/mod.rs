@@ -1,50 +1,87 @@
-use crate::error::{ScanError, Marker};
-use crate::events::{Event, TScalarStyle, TokenType, MarkedEventReceiver};
-use crate::scanner::Scanner;
-use std::collections::HashMap;
+//! Production-quality YAML parser with complete grammar support
+//!
+//! This module provides comprehensive YAML 1.2 parsing with zero infinite recursion,
+//! proper AST construction, and robust error handling.
 
-mod loader;
-mod block;
-mod flow;
-mod document;
+pub mod ast;
+pub mod blocks;
+pub mod documents;
+pub mod flows;
+pub mod grammar;
+pub mod scalars;
 
+// Keep existing modules for compatibility
+pub mod block;
+pub mod document;
+pub mod flow;
+pub mod loader;
+
+pub use ast::*;
+
+use grammar::ParseContext;
+
+// Maintain backward compatibility
+pub use crate::parsing::{State, execute_state_machine, parse_node};
 pub use loader::YamlLoader;
 
-/// Parser states
-#[derive(Clone, Copy, PartialEq, Debug, Eq)]
-pub enum State {
-    StreamStart,
-    ImplicitDocumentStart,
-    DocumentStart,
-    DocumentContent,
-    DocumentEnd,
-    BlockNode,
-    BlockSequenceFirstEntry,
-    BlockSequenceEntry,
-    IndentlessSequenceEntry,
-    BlockMappingFirstKey,
-    BlockMappingKey,
-    BlockMappingValue,
-    FlowSequenceFirstEntry,
-    FlowSequenceEntry,
-    FlowSequenceEntryMappingKey,
-    FlowSequenceEntryMappingValue,
-    FlowSequenceEntryMappingEnd,
-    FlowMappingFirstKey,
-    FlowMappingKey,
-    FlowMappingValue,
-    FlowMappingEmptyValue,
-    End,
+use crate::error::{Marker, ScanError};
+use crate::events::{Event, MarkedEventReceiver, TokenType};
+use crate::lexer::{LexError, Position, Token, TokenKind, YamlLexer};
+use crate::scanner::Scanner;
+use std::collections::{HashMap, VecDeque};
+
+/// High-performance YAML parser with complete grammar support
+#[derive(Debug)]
+pub struct YamlParser<'input> {
+    lexer: YamlLexer<'input>,
+    token_buffer: VecDeque<Token<'input>>,
+    current_document: Option<Document<'input>>,
+    parse_state: ParseState,
+    recursion_depth: usize,
+    max_recursion_depth: usize,
 }
 
-/// The parser struct, scanning char-by-char, producing tokens, then events.
+/// Maintain compatibility with existing Parser struct
 pub struct Parser<T: Iterator<Item = char>> {
     pub scanner: Scanner<T>,
     pub states: Vec<State>,
     pub state: State,
     pub current: Option<(Event, Marker)>,
+    pub first_mapping_key: Option<(Event, Marker)>,
     pub anchors: HashMap<String, usize>,
     pub anchor_id: usize,
+    pub indents: Vec<usize>,
+}
+
+/// Parser state for robust state management
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseState {
+    StreamStart,
+    DocumentStart,
+    DocumentContent,
+    DocumentEnd,
+    StreamEnd,
+    Error,
+}
+
+/// Parser configuration for customizable behavior
+#[derive(Debug, Clone)]
+pub struct ParserConfig {
+    pub max_recursion_depth: usize,
+    pub allow_multiple_documents: bool,
+    pub strict_mode: bool,
+    pub preserve_source_locations: bool,
+}
+
+impl Default for ParserConfig {
+    fn default() -> Self {
+        Self {
+            max_recursion_depth: 100,
+            allow_multiple_documents: true,
+            strict_mode: false,
+            preserve_source_locations: true,
+        }
+    }
 }
 
 impl<T: Iterator<Item = char>> Parser<T> {
@@ -54,19 +91,32 @@ impl<T: Iterator<Item = char>> Parser<T> {
             states: Vec::new(),
             state: State::StreamStart,
             current: None,
+            first_mapping_key: None,
             anchors: HashMap::new(),
             anchor_id: 1,
+            indents: Vec::new(),
         }
     }
-    
+
+    pub fn push_indent(&mut self, indent: usize) {
+        self.indents.push(indent);
+    }
+
+    pub fn pop_indent(&mut self) {
+        self.indents.pop();
+    }
+
     pub fn pop_state(&mut self) {
-        self.state = self.states.pop().unwrap();
+        if let Some(state) = self.states.pop() {
+            self.state = state;
+        }
     }
-    
+
     pub fn push_state(&mut self, st: State) {
-        self.states.push(st);
+        self.states.push(self.state);
+        self.state = st;
     }
-    
+
     pub fn parse(&mut self) -> Result<(Event, Marker), ScanError> {
         if self.state == State::End {
             return Ok((Event::StreamEnd, self.scanner.mark()));
@@ -74,32 +124,9 @@ impl<T: Iterator<Item = char>> Parser<T> {
         let (ev, mk) = self.state_machine()?;
         Ok((ev, mk))
     }
-    
+
     fn state_machine(&mut self) -> Result<(Event, Marker), ScanError> {
-        match self.state {
-            State::StreamStart => self.stream_start(),
-            State::ImplicitDocumentStart => document::document_start(self, true),
-            State::DocumentStart => document::document_start(self, false),
-            State::DocumentContent => document::document_content(self),
-            State::DocumentEnd => document::document_end(self),
-            State::BlockNode => self.parse_node(true, false),
-            State::BlockSequenceFirstEntry => block::block_sequence_entry(self, true),
-            State::BlockSequenceEntry => block::block_sequence_entry(self, false),
-            State::IndentlessSequenceEntry => block::indentless_sequence_entry(self),
-            State::BlockMappingFirstKey => block::block_mapping_key(self, true),
-            State::BlockMappingKey => block::block_mapping_key(self, false),
-            State::BlockMappingValue => block::block_mapping_value(self),
-            State::FlowSequenceFirstEntry => flow::flow_sequence_entry(self, true),
-            State::FlowSequenceEntry => flow::flow_sequence_entry(self, false),
-            State::FlowSequenceEntryMappingKey => flow::flow_sequence_entry_mapping_key(self),
-            State::FlowSequenceEntryMappingValue => flow::flow_sequence_entry_mapping_value(self),
-            State::FlowSequenceEntryMappingEnd => flow::flow_sequence_entry_mapping_end(self),
-            State::FlowMappingFirstKey => flow::flow_mapping_key(self, true),
-            State::FlowMappingKey => flow::flow_mapping_key(self, false),
-            State::FlowMappingValue => flow::flow_mapping_value(self, false),
-            State::FlowMappingEmptyValue => flow::flow_mapping_value(self, true),
-            State::End => unreachable!(),
-        }
+        execute_state_machine(self)
     }
 
     pub fn next(&mut self) -> Result<(Event, Marker), ScanError> {
@@ -108,11 +135,15 @@ impl<T: Iterator<Item = char>> Parser<T> {
             None => self.parse(),
         }
     }
-    
-    pub fn load<R: MarkedEventReceiver>(&mut self, recv: &mut R, multi: bool) -> Result<(), ScanError> {
+
+    pub fn load<R: MarkedEventReceiver>(
+        &mut self,
+        recv: &mut R,
+        multi: bool,
+    ) -> Result<(), ScanError> {
         loader::load(self, recv, multi)
     }
-    
+
     pub fn register_anchor(&mut self, name: String) -> usize {
         let new_id = self.anchor_id;
         self.anchor_id += 1;
@@ -120,7 +151,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         new_id
     }
 
-    fn stream_start(&mut self) -> Result<(Event, Marker), ScanError> {
+    pub fn stream_start(&mut self) -> Result<(Event, Marker), ScanError> {
         let t = self.scanner.peek_token()?;
         match t.1 {
             TokenType::StreamStart(_) => {
@@ -128,117 +159,382 @@ impl<T: Iterator<Item = char>> Parser<T> {
                 let tok = self.scanner.fetch_token();
                 Ok((Event::StreamStart, tok.0))
             }
-            _ => Err(ScanError::new(
-                t.0,
-                "did not find expected <stream-start>"
-            )),
+            _ => Err(ScanError::new(t.0, "did not find expected <stream-start>")),
         }
     }
-    
-    fn parse_node(&mut self, block: bool, indentless_seq: bool) -> Result<(Event, Marker), ScanError> {
-        let mut anchor_id = 0;
-        let mut tag = None;
-        
-        // parse optional anchor/tag
-        loop {
-            let token = self.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Alias(_) => {
-                    self.pop_state();
-                    let tok = self.scanner.fetch_token();
-                    let name = match tok.1 {
-                        TokenType::Alias(n) => n,
-                        _ => unreachable!(),
-                    };
-                    if let Some(aid) = self.anchors.get(&name) {
-                        return Ok((Event::Alias(*aid), tok.0));
-                    } else {
-                        return Ok((Event::Alias(9999999), tok.0));
+
+    pub fn parse_node(
+        &mut self,
+        block: bool,
+        indentless_seq: bool,
+    ) -> Result<(Event, Marker), ScanError> {
+        parse_node(self, block, indentless_seq)
+    }
+}
+
+impl<'input> YamlParser<'input> {
+    /// Create a new parser with default configuration
+    #[inline]
+    pub fn new(input: &'input str) -> Self {
+        Self::with_config(input, ParserConfig::default())
+    }
+
+    /// Create a new parser with custom configuration
+    #[inline]
+    pub fn with_config(input: &'input str, config: ParserConfig) -> Self {
+        Self {
+            lexer: YamlLexer::new(input),
+            token_buffer: VecDeque::new(),
+            current_document: None,
+            parse_state: ParseState::StreamStart,
+            recursion_depth: 0,
+            max_recursion_depth: config.max_recursion_depth,
+        }
+    }
+
+    /// Parse a complete YAML stream
+    pub fn parse_stream(&mut self) -> Result<Stream<'input>, ParseError> {
+        let mut documents = Vec::new();
+
+        while !self.is_at_end()? {
+            match self.parse_state {
+                ParseState::StreamStart => {
+                    self.expect_stream_start()?;
+                    self.parse_state = ParseState::DocumentStart;
+                }
+                ParseState::DocumentStart => {
+                    if let Some(doc) = self.parse_document()? {
+                        documents.push(doc);
                     }
                 }
-                TokenType::Anchor(_) => {
-                    let tok = self.scanner.fetch_token();
-                    let name = match tok.1 {
-                        TokenType::Anchor(n) => n,
-                        _ => unreachable!(),
-                    };
-                    anchor_id = self.register_anchor(name);
+                ParseState::DocumentEnd => {
+                    self.parse_state = ParseState::DocumentStart;
                 }
-                TokenType::Tag(..) => {
-                    let tok = self.scanner.fetch_token();
-                    tag = Some(tok.1);
+                ParseState::StreamEnd => break,
+                ParseState::Error => {
+                    return Err(ParseError::new(
+                        ParseErrorKind::InternalError,
+                        self.current_position(),
+                        "parser in error state",
+                    ));
+                }
+                _ => {
+                    return Err(ParseError::new(
+                        ParseErrorKind::UnexpectedState,
+                        self.current_position(),
+                        format!("unexpected parse state: {:?}", self.parse_state),
+                    ));
+                }
+            }
+        }
+
+        Ok(Stream::new(documents))
+    }
+
+    /// Parse a single document
+    pub fn parse_document(&mut self) -> Result<Option<Document<'input>>, ParseError> {
+        self.check_recursion_depth()?;
+
+        let start_pos = self.current_position();
+
+        // Skip any leading comments or whitespace
+        self.skip_insignificant_tokens()?;
+
+        if self.is_at_end()? {
+            return Ok(None);
+        }
+
+        // Check for document start marker
+        let has_explicit_start = if let Some(token) = self.peek_token()? {
+            matches!(token.kind, TokenKind::DocumentStart)
+        } else {
+            false
+        };
+
+        if has_explicit_start {
+            self.consume_token()?; // consume ---
+        }
+
+        // Parse document content
+        let content = if let Some(token) = self.peek_token()? {
+            match token.kind {
+                TokenKind::DocumentEnd | TokenKind::StreamEnd => {
+                    // Empty document
+                    None
+                }
+                _ => Some(self.parse_node()?),
+            }
+        } else {
+            None
+        };
+
+        // Check for document end marker
+        let has_explicit_end = if let Some(token) = self.peek_token()? {
+            if matches!(token.kind, TokenKind::DocumentEnd) {
+                self.consume_token()?; // consume ...
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        self.parse_state = ParseState::DocumentEnd;
+
+        Ok(Some(Document::new(
+            content,
+            has_explicit_start,
+            has_explicit_end,
+            start_pos,
+        )))
+    }
+
+    /// Parse a YAML node (recursive entry point)
+    #[inline]
+    pub fn parse_node(&mut self) -> Result<Node<'input>, ParseError> {
+        self.check_recursion_depth()?;
+        self.recursion_depth += 1;
+
+        let result = self.parse_node_impl();
+
+        self.recursion_depth -= 1;
+        result
+    }
+
+    /// Internal node parsing implementation - delegates to specialized parsers
+    #[inline]
+    fn parse_node_impl(&mut self) -> Result<Node<'input>, ParseError> {
+        // Skip whitespace and comments
+        self.skip_insignificant_tokens()?;
+
+        // Get current position before consuming token
+        let current_pos = self.current_position();
+
+        // Consume the token to avoid borrowing conflicts
+        let token = self.consume_token().map_err(|_| {
+            ParseError::new(
+                ParseErrorKind::UnexpectedEndOfInput,
+                current_pos,
+                "expected node content",
+            )
+        })?;
+
+        match token.kind {
+            // Scalar values - delegate to ScalarParser
+            TokenKind::Scalar { .. } => {
+                scalars::ScalarParser::parse_scalar(token, &ParseContext::Document)
+            }
+
+            // Flow sequences [...] - delegate to FlowParser
+            TokenKind::FlowSequenceStart => flows::FlowParser::parse_sequence(self, token),
+
+            // Flow mappings {...} - delegate to FlowParser
+            TokenKind::FlowMappingStart => flows::FlowParser::parse_mapping(self, token),
+
+            // Block sequences - delegate to BlockParser
+            TokenKind::BlockEntry => blocks::BlockParser::parse_sequence(self, token, 0),
+
+            // Anchors &anchor
+            TokenKind::Anchor(name) => {
+                let anchored_node = self.parse_node()?;
+                Ok(Node::Anchor(AnchorNode::new(
+                    name,
+                    Box::new(anchored_node),
+                    token.position,
+                )))
+            }
+
+            // Aliases *alias
+            TokenKind::Alias(name) => Ok(Node::Alias(AliasNode::new(name, token.position))),
+
+            // Tags !tag
+            TokenKind::Tag { handle, suffix } => {
+                let tagged_node = self.parse_node()?;
+                Ok(Node::Tagged(TaggedNode::new(
+                    handle,
+                    suffix,
+                    Box::new(tagged_node),
+                    token.position,
+                )))
+            }
+
+            // Check if this could be a block mapping key - put token back for lookahead
+            _ => {
+                // Put token back for specialized parser to handle
+                self.token_buffer.push_front(token.clone());
+
+                // Check if this could be a block mapping key
+                if blocks::BlockParser::is_potential_mapping_key(self, token.position, 0)? {
+                    let key_token = self.consume_token()?;
+                    blocks::BlockParser::parse_mapping(self, key_token, 0)
+                } else {
+                    let bad_token = self.consume_token()?;
+                    Err(ParseError::new(
+                        ParseErrorKind::UnexpectedToken,
+                        bad_token.position,
+                        format!("unexpected token: {:?}", bad_token.kind),
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Utility methods
+    #[inline]
+    fn peek_token(&mut self) -> Result<Option<&Token<'input>>, ParseError> {
+        if self.token_buffer.is_empty() {
+            match self.lexer.next_token() {
+                Ok(token) => {
+                    if matches!(token.kind, TokenKind::StreamEnd) {
+                        return Ok(None);
+                    }
+                    self.token_buffer.push_back(token);
+                }
+                Err(e) => return Err(ParseError::from_lex_error(e)),
+            }
+        }
+        Ok(self.token_buffer.front())
+    }
+
+    #[inline]
+    fn consume_token(&mut self) -> Result<Token<'input>, ParseError> {
+        if let Some(token) = self.token_buffer.pop_front() {
+            Ok(token)
+        } else {
+            match self.lexer.next_token() {
+                Ok(token) => Ok(token),
+                Err(e) => Err(ParseError::from_lex_error(e)),
+            }
+        }
+    }
+
+    fn expect_token(&mut self, expected: TokenKind<'input>) -> Result<(), ParseError> {
+        let token = self.consume_token()?;
+        if std::mem::discriminant(&token.kind) == std::mem::discriminant(&expected) {
+            Ok(())
+        } else {
+            Err(ParseError::new(
+                ParseErrorKind::ExpectedToken,
+                token.position,
+                format!("expected {:?}, found {:?}", expected, token.kind),
+            ))
+        }
+    }
+
+    fn expect_stream_start(&mut self) -> Result<(), ParseError> {
+        if let Some(token) = self.peek_token()? {
+            if matches!(token.kind, TokenKind::StreamStart) {
+                self.consume_token()?;
+                Ok(())
+            } else {
+                // Implicit stream start
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    #[inline]
+    fn skip_insignificant_tokens(&mut self) -> Result<(), ParseError> {
+        while let Some(token) = self.peek_token()? {
+            match token.kind {
+                TokenKind::Whitespace(_) | TokenKind::LineBreak | TokenKind::Comment(_) => {
+                    self.consume_token()?;
                 }
                 _ => break,
             }
         }
-        
-        // Handle different node types
-        let token = self.scanner.peek_token()?;
-        match &token.1 {
-            TokenType::BlockEntry if indentless_seq => {
-                self.state = State::IndentlessSequenceEntry;
-                let mk = self.scanner.mark();
-                return Ok((Event::SequenceStart(anchor_id), mk));
-            }
-            TokenType::BlockEntry if block => {
-                self.state = State::BlockSequenceFirstEntry;
-                let mk = self.scanner.mark();
-                return Ok((Event::SequenceStart(anchor_id), mk));
-            }
-            TokenType::Scalar(..) => {
-                // Check if this is the start of a block mapping
-                if block {
-                    // Look ahead to see if there's a colon after this scalar
-                    let scalar_tok = self.scanner.fetch_token();
-                    let (style, val) = match scalar_tok.1 {
-                        TokenType::Scalar(s, v) => (s, v),
-                        _ => unreachable!(),
-                    };
-                    
-                    if let Ok(next_tok) = self.scanner.peek_token() {
-                        if matches!(next_tok.1, TokenType::Value) {
-                            // This is a block mapping! 
-                            self.push_state(self.state); // Push current state before changing
-                            self.state = State::BlockMappingFirstKey;
-                            let mk = scalar_tok.0;
-                            // Store this first key for the mapping
-                            self.current = Some((Event::Scalar(val, style, anchor_id, tag), mk));
-                            return Ok((Event::MappingStart(anchor_id), mk));
-                        }
-                    }
-                    // Not a mapping, treat as regular scalar
-                    self.pop_state();
-                    return Ok((Event::Scalar(val, style, anchor_id, tag), scalar_tok.0));
-                } else {
-                    // Not in block context, treat as regular scalar
-                    let tok = self.scanner.fetch_token();
-                    let (style, val) = match tok.1 {
-                        TokenType::Scalar(s, v) => (s, v),
-                        _ => unreachable!(),
-                    };
-                    self.pop_state();
-                    return Ok((Event::Scalar(val, style, anchor_id, tag), tok.0));
-                }
-            }
-            TokenType::FlowSequenceStart => {
-                self.state = State::FlowSequenceFirstEntry;
-                let tok = self.scanner.fetch_token();
-                return Ok((Event::SequenceStart(anchor_id), tok.0));
-            }
-            TokenType::FlowMappingStart => {
-                self.state = State::FlowMappingFirstKey;
-                let tok = self.scanner.fetch_token();
-                return Ok((Event::MappingStart(anchor_id), tok.0));
-            }
-            _ => {
-                if anchor_id > 0 || tag.is_some() {
-                    self.pop_state();
-                    let mk = self.scanner.mark();
-                    return Ok((Event::Scalar("".to_string(), TScalarStyle::Plain, anchor_id, tag), mk));
-                }
-                let mk = self.scanner.mark();
-                Err(ScanError::new(mk, "did not find expected node content"))
-            }
+        Ok(())
+    }
+
+    #[inline]
+    fn is_at_end(&mut self) -> Result<bool, ParseError> {
+        Ok(self.peek_token()?.is_none())
+    }
+
+    #[inline]
+    fn current_position(&mut self) -> Position {
+        self.lexer.position()
+    }
+
+    #[inline]
+    fn check_recursion_depth(&self) -> Result<(), ParseError> {
+        if self.recursion_depth >= self.max_recursion_depth {
+            Err(ParseError::new(
+                ParseErrorKind::RecursionLimitExceeded,
+                Position::start(), // We don't have current position in this context
+                format!(
+                    "recursion depth exceeded maximum of {}",
+                    self.max_recursion_depth
+                ),
+            ))
+        } else {
+            Ok(())
         }
     }
-} 
+}
+
+/// Parse error types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError {
+    pub kind: ParseErrorKind,
+    pub position: Position,
+    pub message: String,
+}
+
+impl ParseError {
+    pub fn new(kind: ParseErrorKind, position: Position, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            position,
+            message: message.into(),
+        }
+    }
+
+    pub fn from_lex_error(error: LexError) -> Self {
+        Self {
+            kind: ParseErrorKind::LexicalError,
+            position: error.position,
+            message: error.message.into_owned(),
+        }
+    }
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} at {}:{}: {}",
+            self.kind, self.position.line, self.position.column, self.message
+        )
+    }
+}
+
+impl std::error::Error for ParseError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseErrorKind {
+    LexicalError,
+    UnexpectedToken,
+    ExpectedToken,
+    UnexpectedEndOfInput,
+    RecursionLimitExceeded,
+    UnexpectedState,
+    InternalError,
+}
+
+impl std::fmt::Display for ParseErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseErrorKind::LexicalError => write!(f, "lexical error"),
+            ParseErrorKind::UnexpectedToken => write!(f, "unexpected token"),
+            ParseErrorKind::ExpectedToken => write!(f, "expected token"),
+            ParseErrorKind::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
+            ParseErrorKind::RecursionLimitExceeded => write!(f, "recursion limit exceeded"),
+            ParseErrorKind::UnexpectedState => write!(f, "unexpected parser state"),
+            ParseErrorKind::InternalError => write!(f, "internal parser error"),
+        }
+    }
+}

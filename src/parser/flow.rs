@@ -1,10 +1,10 @@
+use super::{Parser, State};
 use crate::error::ScanError;
 use crate::events::{Event, TScalarStyle, TokenType};
-use super::{Parser, State};
 
 pub fn flow_sequence_entry<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>, 
-    first: bool
+    parser: &mut Parser<T>,
+    first: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if first {
         match parser.scanner.peek_token()?.1 {
@@ -31,7 +31,7 @@ pub fn flow_sequence_entry<T: Iterator<Item = char>>(
             }
         }
     }
-    
+
     match parser.scanner.peek_token()?.1 {
         TokenType::FlowSequenceEnd => {
             parser.pop_state();
@@ -51,12 +51,10 @@ pub fn flow_sequence_entry<T: Iterator<Item = char>>(
 }
 
 pub fn flow_sequence_entry_mapping_key<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     match parser.scanner.peek_token()?.1 {
-        TokenType::Value
-        | TokenType::FlowEntry
-        | TokenType::FlowSequenceEnd => {
+        TokenType::Value | TokenType::FlowEntry | TokenType::FlowSequenceEnd => {
             parser.state = State::FlowSequenceEntryMappingValue;
             let mk = parser.scanner.mark();
             Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
@@ -69,7 +67,7 @@ pub fn flow_sequence_entry_mapping_key<T: Iterator<Item = char>>(
 }
 
 pub fn flow_sequence_entry_mapping_value<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     match parser.scanner.peek_token()?.1 {
         TokenType::Value => {
@@ -95,7 +93,7 @@ pub fn flow_sequence_entry_mapping_value<T: Iterator<Item = char>>(
 }
 
 pub fn flow_sequence_entry_mapping_end<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     parser.state = State::FlowSequenceEntry;
     let mk = parser.scanner.mark();
@@ -103,8 +101,8 @@ pub fn flow_sequence_entry_mapping_end<T: Iterator<Item = char>>(
 }
 
 pub fn flow_mapping_key<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>, 
-    first: bool
+    parser: &mut Parser<T>,
+    first: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if first {
         match parser.scanner.peek_token()?.1 {
@@ -131,7 +129,7 @@ pub fn flow_mapping_key<T: Iterator<Item = char>>(
             }
         }
     }
-    
+
     match parser.scanner.peek_token()?.1 {
         TokenType::FlowMappingEnd => {
             parser.pop_state();
@@ -141,9 +139,7 @@ pub fn flow_mapping_key<T: Iterator<Item = char>>(
         TokenType::Key => {
             parser.scanner.skip();
             match parser.scanner.peek_token()?.1 {
-                TokenType::Value
-                | TokenType::FlowEntry
-                | TokenType::FlowMappingEnd => {
+                TokenType::Value | TokenType::FlowEntry | TokenType::FlowMappingEnd => {
                     parser.state = State::FlowMappingValue;
                     let mk = parser.scanner.mark();
                     Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
@@ -167,21 +163,20 @@ pub fn flow_mapping_key<T: Iterator<Item = char>>(
 }
 
 pub fn flow_mapping_value<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>, 
-    empty: bool
+    parser: &mut Parser<T>,
+    empty: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if empty {
         parser.state = State::FlowMappingKey;
         let mk = parser.scanner.mark();
         return Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk));
     }
-    
+
     match parser.scanner.peek_token()?.1 {
         TokenType::Value => {
             parser.scanner.skip();
             match parser.scanner.peek_token()?.1 {
-                TokenType::FlowEntry
-                | TokenType::FlowMappingEnd => {
+                TokenType::FlowEntry | TokenType::FlowMappingEnd => {
                     parser.state = State::FlowMappingKey;
                     let mk = parser.scanner.mark();
                     Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
@@ -198,4 +193,4 @@ pub fn flow_mapping_value<T: Iterator<Item = char>>(
             Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
         }
     }
-} 
+}

@@ -1,9 +1,9 @@
-use crate::error::ScanError;
-use crate::events::{Event, TScalarStyle, TokenType, MarkedEventReceiver, EventReceiver};
-use crate::yaml::Yaml;
-use crate::linked_hash_map::LinkedHashMap;
-use std::collections::HashMap;
 use super::Parser;
+use crate::error::ScanError;
+use crate::events::{Event, EventReceiver, MarkedEventReceiver, TScalarStyle, TokenType};
+use crate::linked_hash_map::LinkedHashMap;
+use crate::yaml::Yaml;
+use std::collections::HashMap;
 
 /// Our main "public" API: load from a string → produce Vec<Yaml>.
 pub struct YamlLoader;
@@ -34,7 +34,7 @@ impl YamlReceiver {
             anchors: HashMap::new(),
         }
     }
-    
+
     fn insert_new_node(&mut self, (node, aid): (Yaml, usize)) {
         // store anchor if needed
         if aid > 0 {
@@ -66,13 +66,11 @@ impl EventReceiver for YamlReceiver {
     fn on_event(&mut self, ev: Event) {
         match ev {
             Event::DocumentStart => {}
-            Event::DocumentEnd => {
-                match self.doc_stack.len() {
-                    0 => self.docs.push(Yaml::BadValue),
-                    1 => self.docs.push(self.doc_stack.pop().unwrap().0),
-                    _ => {}
-                }
-            }
+            Event::DocumentEnd => match self.doc_stack.len() {
+                0 => self.docs.push(Yaml::BadValue),
+                1 => self.docs.push(self.doc_stack.pop().unwrap().0),
+                _ => {}
+            },
             Event::StreamStart => {}
             Event::StreamEnd => {}
             Event::Alias(id) => {
@@ -139,9 +137,9 @@ impl EventReceiver for YamlReceiver {
 }
 
 pub fn load<T: Iterator<Item = char>, R: MarkedEventReceiver>(
-    parser: &mut Parser<T>, 
-    recv: &mut R, 
-    multi: bool
+    parser: &mut Parser<T>,
+    recv: &mut R,
+    multi: bool,
 ) -> Result<(), ScanError> {
     if !parser.scanner.stream_started() {
         let (ev, mark) = parser.next()?;
@@ -171,7 +169,7 @@ fn load_document<T: Iterator<Item = char>, R: MarkedEventReceiver>(
     parser: &mut Parser<T>,
     first_ev: Event,
     mark: crate::error::Marker,
-    recv: &mut R
+    recv: &mut R,
 ) -> Result<(), ScanError> {
     assert_eq!(first_ev, Event::DocumentStart);
     recv.on_event(first_ev, mark);
@@ -187,7 +185,7 @@ fn load_node<T: Iterator<Item = char>, R: MarkedEventReceiver>(
     parser: &mut Parser<T>,
     ev: Event,
     mark: crate::error::Marker,
-    recv: &mut R
+    recv: &mut R,
 ) -> Result<(), ScanError> {
     match ev {
         Event::Alias(..) | Event::Scalar(..) => {
@@ -208,7 +206,7 @@ fn load_node<T: Iterator<Item = char>, R: MarkedEventReceiver>(
 
 fn load_sequence<T: Iterator<Item = char>, R: MarkedEventReceiver>(
     parser: &mut Parser<T>,
-    recv: &mut R
+    recv: &mut R,
 ) -> Result<(), ScanError> {
     loop {
         let (ev, mark) = parser.next()?;
@@ -223,7 +221,7 @@ fn load_sequence<T: Iterator<Item = char>, R: MarkedEventReceiver>(
 
 fn load_mapping<T: Iterator<Item = char>, R: MarkedEventReceiver>(
     parser: &mut Parser<T>,
-    recv: &mut R
+    recv: &mut R,
 ) -> Result<(), ScanError> {
     loop {
         let (evk, markk) = parser.next()?;
@@ -236,4 +234,4 @@ fn load_mapping<T: Iterator<Item = char>, R: MarkedEventReceiver>(
         load_node(parser, evv, markv, recv)?;
     }
     Ok(())
-} 
+}

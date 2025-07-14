@@ -13,7 +13,10 @@
 *.dll
 *.exe
 .idea
-**rio/**/docs/*
+.claude/
+.claude/*
+.cargo-lsp/
+.cargo-lsp/*
 
 # ==============================
 # Rust Specific

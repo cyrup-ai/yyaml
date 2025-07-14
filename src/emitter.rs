@@ -45,14 +45,20 @@ impl<'a> YamlEmitter<'a> {
             level: -1,
         }
     }
-    
+
     pub fn dump(&mut self, doc: &Yaml) -> EmitResult {
         writeln!(self.writer, "---")?;
         self.level = -1;
         self.emit_node(doc)?;
         Ok(())
     }
-    
+
+    pub fn emit(&mut self, doc: &Yaml) -> EmitResult {
+        self.level = -1;
+        self.emit_node(doc)?;
+        Ok(())
+    }
+
     fn emit_node(&mut self, node: &Yaml) -> EmitResult {
         match node {
             Yaml::Array(v) => self.emit_array(v),
@@ -87,7 +93,7 @@ impl<'a> YamlEmitter<'a> {
             }
         }
     }
-    
+
     fn emit_array(&mut self, arr: &[Yaml]) -> EmitResult {
         if arr.is_empty() {
             write!(self.writer, "[]")?;
@@ -105,7 +111,7 @@ impl<'a> YamlEmitter<'a> {
         }
         Ok(())
     }
-    
+
     fn emit_hash(&mut self, h: &LinkedHashMap<Yaml, Yaml>) -> EmitResult {
         if h.is_empty() {
             write!(self.writer, "{{}}")?;
@@ -122,13 +128,13 @@ impl<'a> YamlEmitter<'a> {
                 if matches!(k, Yaml::Array(_) | Yaml::Hash(_)) {
                     // complex key
                     write!(self.writer, "? ")?;
-                    self.emit_node(k)?;
+                    self.emit_node(&k)?;
                     writeln!(self.writer)?;
                     self.write_indent()?;
                     write!(self.writer, ": ")?;
                     self.emit_val(true, v)?;
                 } else {
-                    self.emit_node(k)?;
+                    self.emit_node(&k)?;
                     write!(self.writer, ": ")?;
                     self.emit_val(false, v)?;
                 }
@@ -137,7 +143,7 @@ impl<'a> YamlEmitter<'a> {
         }
         Ok(())
     }
-    
+
     fn emit_val(&mut self, inline: bool, val: &Yaml) -> EmitResult {
         match val {
             Yaml::Array(a) => {
@@ -162,12 +168,10 @@ impl<'a> YamlEmitter<'a> {
                 }
                 self.emit_hash(h)
             }
-            _ => {
-                self.emit_node(val)
-            }
+            _ => self.emit_node(val),
         }
     }
-    
+
     fn write_indent(&mut self) -> EmitResult {
         if self.level <= 0 {
             return Ok(());
@@ -204,20 +208,23 @@ fn need_quotes(s: &str) -> bool {
         _ => {}
     }
     // check special chars
-    if s.starts_with(|c: char| matches!(c, ':' | '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@'))
-        || s.contains(|c: char| {
-            matches!(
-                c,
-                '{' | '}' | '[' | ']' | ',' | '#' | '`' | '\"' | '\''
-                    | '\\'
-                    | '\0'..='\x06'
-                    | '\t'
-                    | '\n'
-                    | '\r'
-                    | '\x0e'..='\x1f'
-            )
-        })
-    {
+    if s.starts_with(|c: char| {
+        matches!(
+            c,
+            ':' | '&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@'
+        )
+    }) || s.contains(|c: char| {
+        matches!(
+            c,
+            '{' | '}' | '[' | ']' | ',' | '#' | '`' | '\"' | '\''
+                | '\\'
+                | '\0'..='\x06'
+                | '\t'
+                | '\n'
+                | '\r'
+                | '\x0e'..='\x1f'
+        )
+    }) {
         return true;
     }
     false
@@ -242,4 +249,4 @@ fn escape_str(wr: &mut dyn fmt::Write, s: &str) -> Result<(), fmt::Error> {
     }
     write!(wr, "\"")?;
     Ok(())
-} 
+}

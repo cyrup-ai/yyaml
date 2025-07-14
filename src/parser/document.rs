@@ -1,10 +1,10 @@
+use super::{Parser, State};
 use crate::error::ScanError;
 use crate::events::{Event, TScalarStyle, TokenType};
-use super::{Parser, State};
 
 pub fn document_start<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>, 
-    implicit: bool
+    parser: &mut Parser<T>,
+    implicit: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if !implicit {
         while let TokenType::DocumentEnd = parser.scanner.peek_token()?.1 {
@@ -32,7 +32,7 @@ pub fn document_start<T: Iterator<Item = char>>(
 }
 
 fn explicit_document_start<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     process_directives(parser)?;
     match parser.scanner.peek_token()?.1 {
@@ -49,9 +49,7 @@ fn explicit_document_start<T: Iterator<Item = char>>(
     }
 }
 
-fn process_directives<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
-) -> Result<(), ScanError> {
+fn process_directives<T: Iterator<Item = char>>(parser: &mut Parser<T>) -> Result<(), ScanError> {
     loop {
         match parser.scanner.peek_token()?.1 {
             TokenType::VersionDirective(..) => {
@@ -68,7 +66,7 @@ fn process_directives<T: Iterator<Item = char>>(
 }
 
 pub fn document_content<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     match parser.scanner.peek_token()?.1 {
         TokenType::VersionDirective(..)
@@ -85,13 +83,13 @@ pub fn document_content<T: Iterator<Item = char>>(
 }
 
 pub fn document_end<T: Iterator<Item = char>>(
-    parser: &mut Parser<T>
+    parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     let mk = parser.scanner.mark();
     while let TokenType::DocumentEnd = parser.scanner.peek_token()?.1 {
         parser.scanner.skip();
     }
-    
+
     // Check if there's more content - if so, we need to continue with implicit documents
     match parser.scanner.peek_token()?.1 {
         TokenType::StreamEnd => {
@@ -105,6 +103,6 @@ pub fn document_end<T: Iterator<Item = char>>(
             parser.state = State::ImplicitDocumentStart;
         }
     }
-    
+
     Ok((Event::DocumentEnd, mk))
-} 
+}

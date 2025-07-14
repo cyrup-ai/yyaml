@@ -73,4 +73,4 @@ impl<R: EventReceiver> MarkedEventReceiver for R {
     fn on_event(&mut self, ev: Event, _mark: Marker) {
         self.on_event(ev);
     }
-} 
+}

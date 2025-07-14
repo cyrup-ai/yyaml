@@ -30,9 +30,11 @@ impl fmt::Display for ScanError {
         write!(
             f,
             "{} at line {} col {}",
-            self.info, self.mark.line, self.mark.col + 1
+            self.info,
+            self.mark.line,
+            self.mark.col + 1
         )
     }
 }
 
-impl Error for ScanError {} 
+impl Error for ScanError {}

@@ -3,25 +3,80 @@
 //!
 //! # Example
 //! ```rust
-//! let docs = yaml_sugar::YamlLoader::load_from_str("foo: 123").unwrap();
+//! let docs = yyaml::YamlLoader::load_from_str("foo: 123").unwrap();
 //! let doc = &docs[0];
 //! assert_eq!(doc["foo"].as_i64().unwrap(), 123);
 //! ```
 
+mod de;
 mod emitter;
 mod error;
 mod events;
+pub mod lexer;
 mod linked_hash_map;
-mod parser;
-mod scanner;
+pub mod parser;
+mod parsing;
+pub mod scanner;
+pub mod semantic;
+mod ser;
+mod value;
 mod yaml;
 
+pub use de::*;
 pub use emitter::{EmitError, EmitResult, YamlEmitter};
 pub use error::{Marker, ScanError};
 pub use events::{Event, EventReceiver, MarkedEventReceiver, TEncoding, TScalarStyle, TokenType};
 pub use linked_hash_map::LinkedHashMap;
 pub use parser::YamlLoader;
+pub use ser::*;
+pub use value::{Deserializer, Mapping, Number, Sequence, Value, from_value};
 pub use yaml::Yaml;
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("scan error: {0}")]
+    Scan(#[from] ScanError),
+    #[error("emit error: {0}")]
+    Emit(#[from] EmitError),
+    #[error("custom: {0}")]
+    Custom(String),
+}
+
+impl serde::de::Error for Error {
+    fn custom<T: std::fmt::Display>(msg: T) -> Self {
+        Error::Custom(msg.to_string())
+    }
+}
+
+impl serde::ser::Error for Error {
+    fn custom<T: std::fmt::Display>(msg: T) -> Self {
+        Error::Custom(msg.to_string())
+    }
+}
+
+pub fn to_string<T: serde::Serialize>(value: &T) -> Result<String, Error> {
+    let yaml = value.serialize(ser::YamlSerializer::new())?;
+    let mut writer = String::new();
+    let mut emitter = YamlEmitter::new(&mut writer);
+    emitter.dump(&yaml)?;
+    Ok(writer)
+}
+
+pub fn from_str<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, Error> {
+    let mut docs = YamlLoader::load_from_str(s)?;
+    if docs.is_empty() {
+        return Err(Error::Custom("no documents".to_string()));
+    }
+    let yaml = docs.remove(0);
+    T::deserialize(de::YamlDeserializer::new(&yaml))
+}
+
+pub fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, Error> {
+    let yaml = value.serialize(ser::YamlSerializer::new())?;
+    Ok(Value::from_yaml(&yaml))
+}
 
 #[cfg(test)]
 mod tests {
@@ -29,7 +84,6 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
-        // Start with the simplest possible test - just see if we can create a Yaml value
         let yaml_val = Yaml::String("test".to_string());
         assert_eq!(yaml_val.as_str().unwrap(), "test");
     }
@@ -72,37 +126,28 @@ mod tests {
         assert_eq!(map.get("second"), Some(&2));
         assert_eq!(map.get("third"), Some(&3));
 
-        // Test iteration order
         let keys: Vec<_> = map.iter().map(|(k, _)| k.clone()).collect();
         assert_eq!(keys, vec!["first", "second", "third"]);
     }
 
     #[test]
     fn test_simple_key_value() {
-        // Test a very simple key: value document
         let s = "key: value";
         let result = YamlLoader::load_from_str(s);
         match result {
             Ok(docs) => {
                 assert_eq!(docs.len(), 1);
                 let doc = &docs[0];
-                if let Some(val) = doc["key"].as_str() {
-                    assert_eq!(val, "value");
-                } else {
-                    panic!("Expected string value for 'key', got: {:?}", doc["key"]);
-                }
+                assert_eq!(doc["key"].as_str().unwrap(), "value");
             }
             Err(e) => {
-                // If parsing fails, that's okay for now - we'll improve the parser
-                println!("Parsing failed (expected for now): {}", e);
-                assert!(true, "Parsing not implemented yet");
+                panic!("Parsing failed: {}", e);
             }
         }
     }
 
     #[test]
     fn test_simple_doc() {
-        // Test a simple document with multiple key-value pairs
         let s = "hello: world
 int: 42
 bool: true
@@ -118,8 +163,7 @@ nulltest: ~";
                 assert!(doc["nulltest"].is_null());
             }
             Err(e) => {
-                println!("Parsing failed: {}", e);
-                panic!("Simple document parsing should work");
+                panic!("Parsing failed: {}", e);
             }
         }
     }
@@ -137,150 +181,25 @@ nulltest: ~";
                 assert_eq!(arr[2].as_i64().unwrap(), 3);
             }
             Err(e) => {
-                println!("Flow sequence parsing failed: {}", e);
-                // Flow sequences are complex, so failure is expected for now
-            }
-        }
-    }
-
-    #[test]
-    fn test_debug_parsing() {
-        // Debug with just two lines
-        let s = "hello: world\nint: 42";
-        let result = YamlLoader::load_from_str(s);
-        match result {
-            Ok(docs) => {
-                println!("Successfully parsed {} documents", docs.len());
-                if !docs.is_empty() {
-                    println!("First doc: {:?}", docs[0]);
-                }
-            }
-            Err(e) => {
-                println!("Debug parsing failed: {}", e);
-                // This is expected - let's see what happens with just the problematic part
-                let simple = "hello: world";
-                let simple_result = YamlLoader::load_from_str(simple);
-                println!("Simple parsing result: {:?}", simple_result);
-            }
-        }
-    }
-
-    #[test]
-    fn test_token_debug() {
-        use crate::scanner::Scanner;
-
-        // Let's see what tokens the scanner produces for "hello: world"
-        let input = "hello: world";
-        let mut scanner = Scanner::new(input.chars());
-
-        println!("Debugging tokens for: '{}'", input);
-
-        // Fetch all tokens and print them
-        loop {
-            match scanner.peek_token() {
-                Ok(token) => {
-                    println!("Token at {}:{}: {:?}", token.0.line, token.0.col, token.1);
-                    if matches!(
-                        token.1,
-                        crate::events::TokenType::StreamEnd | crate::events::TokenType::NoToken
-                    ) {
-                        break;
-                    }
-                    scanner.skip();
-                }
-                Err(e) => {
-                    println!("Scanner error: {}", e);
-                    break;
-                }
+                panic!("Flow sequence parsing failed: {}", e);
             }
         }
     }
 
     #[test]
     fn test_two_line_mapping() {
-        // Test the minimal case that fails - just two key-value pairs
         let s = "hello: world\nint: 42";
         let result = YamlLoader::load_from_str(s);
         match result {
             Ok(docs) => {
                 assert_eq!(docs.len(), 1);
                 let doc = &docs[0];
-                println!("Successfully parsed: {:?}", doc);
                 assert_eq!(doc["hello"].as_str().unwrap(), "world");
                 assert_eq!(doc["int"].as_i64().unwrap(), 42);
             }
             Err(e) => {
-                println!("Two-line mapping failed: {}", e);
-                // For now, just pass the test - we know this is the issue
+                panic!("Two-line mapping failed: {}", e);
             }
         }
     }
-
-    #[test]
-    fn test_two_line_tokens() {
-        use crate::scanner::Scanner;
-        
-        // Let's see what tokens the scanner produces for "hello: world\nint: 42"
-        let input = "hello: world\nint: 42";
-        let mut scanner = Scanner::new(input.chars());
-        
-        println!("Debugging tokens for two-line mapping: '{}'", input);
-        
-        // Fetch all tokens and print them
-        loop {
-            match scanner.peek_token() {
-                Ok(token) => {
-                    println!("Token at {}:{}: {:?}", token.0.line, token.0.col, token.1);
-                    if matches!(
-                        token.1,
-                        crate::events::TokenType::StreamEnd | crate::events::TokenType::NoToken
-                    ) {
-                        break;
-                    }
-                    scanner.skip();
-                }
-                Err(e) => {
-                    println!("Scanner error: {}", e);
-                    break;
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_parser_states() {
-        use crate::parser::Parser;
-        use crate::events::Event;
-        
-        let input = "hello: world";
-        let mut parser = Parser::new(input.chars());
-        
-        println!("Tracing parser states for: '{}'", input);
-        
-        // Manually step through parser events
-        for i in 0..10 {  // limit to 10 steps to avoid infinite loops
-            match parser.next() {
-                Ok((event, mark)) => {
-                    println!("Step {}: State={:?}, Event={:?} at {}:{}", 
-                             i, parser.state, event, mark.line, mark.col);
-                    if matches!(event, Event::StreamEnd) {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    println!("Step {}: State={:?}, Error: {}", i, parser.state, e);
-                    break;
-                }
-            }
-        }
-    }
-
-    // Commented out more complex tests for now - we'll add them back once basic parsing works
-    // #[test]
-    // fn test_simple_doc() { ... }
-
-    // #[test]
-    // fn test_anchors() { ... }
-
-    // etc.
 }

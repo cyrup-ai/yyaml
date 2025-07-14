@@ -7,13 +7,55 @@
 )]
 
 use indoc::indoc;
-use yaml_sugar::{Yaml, YamlLoader};
+use serde_derive::Deserialize;
+use std::collections::BTreeMap;
+use std::fmt::Debug;
+use yyaml::{Deserializer, Number, Value};
 
-/// Helper function to test that we can parse YAML and verify the structure
-fn test_parse(yaml: &str) -> Yaml {
-    let docs = YamlLoader::load_from_str(yaml).expect("Failed to parse YAML");
-    assert!(!docs.is_empty(), "Expected at least one document");
-    docs[0].clone()
+fn test_de<T>(yaml: &str, expected: &T)
+where
+    T: serde::de::DeserializeOwned + PartialEq + Debug,
+{
+    let deserialized: T = yyaml::from_str(yaml).unwrap();
+    assert_eq!(*expected, deserialized);
+
+    let value: Value = yyaml::from_str(yaml).unwrap();
+    let deserialized = T::deserialize(&value).unwrap();
+    assert_eq!(*expected, deserialized);
+
+    let deserialized: T = yyaml::from_value(value).unwrap();
+    assert_eq!(*expected, deserialized);
+
+    yyaml::from_str::<serde::de::IgnoredAny>(yaml).unwrap();
+
+    let mut deserializer = Deserializer::from_str(yaml);
+    let document = deserializer.next().unwrap();
+    let deserialized = T::deserialize(document).unwrap();
+    assert_eq!(*expected, deserialized);
+    assert!(deserializer.next().is_none());
+}
+
+fn test_de_no_value<'de, T>(yaml: &'de str, expected: &T)
+where
+    T: serde::de::Deserialize<'de> + PartialEq + Debug,
+{
+    let deserialized: T = yyaml::from_str(yaml).unwrap();
+    assert_eq!(*expected, deserialized);
+
+    yyaml::from_str::<yyaml::Value>(yaml).unwrap();
+    yyaml::from_str::<serde::de::IgnoredAny>(yaml).unwrap();
+}
+
+fn test_de_seed<'de, T, S>(yaml: &'de str, seed: S, expected: &T)
+where
+    T: PartialEq + Debug,
+    S: serde::de::DeserializeSeed<'de, Value = T>,
+{
+    let deserialized: T = seed.deserialize(Deserializer::from_str(yaml)).unwrap();
+    assert_eq!(*expected, deserialized);
+
+    yyaml::from_str::<yyaml::Value>(yaml).unwrap();
+    yyaml::from_str::<serde::de::IgnoredAny>(yaml).unwrap();
 }
 
 #[test]
@@ -23,12 +65,8 @@ fn test_borrowed() {
         - 'single quoted'
         - \"double quoted\"
     "};
-    let doc = test_parse(yaml);
-    let arr = doc.as_vec().expect("Expected array");
-    assert_eq!(arr.len(), 3);
-    assert_eq!(arr[0].as_str().unwrap(), "plain nonàscii");
-    assert_eq!(arr[1].as_str().unwrap(), "single quoted");
-    assert_eq!(arr[2].as_str().unwrap(), "double quoted");
+    let expected = vec!["plain nonàscii", "single quoted", "double quoted"];
+    test_de_no_value(yaml, &expected);
 }
 
 #[test]
@@ -41,25 +79,44 @@ fn test_alias() {
           *alias
         third: 3
     "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["first"].as_i64().unwrap(), 1);
-    assert_eq!(doc["second"].as_i64().unwrap(), 1);
-    assert_eq!(doc["third"].as_i64().unwrap(), 3);
+    let mut expected = BTreeMap::new();
+    expected.insert("first".to_owned(), 1);
+    expected.insert("second".to_owned(), 1);
+    expected.insert("third".to_owned(), 3);
+    test_de(yaml, &expected);
 }
 
 #[test]
 fn test_option() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Data {
+        a: Option<f64>,
+        b: Option<String>,
+        c: Option<bool>,
+    }
     let yaml = indoc! {"
         b:
         c: true
     "};
-    let doc = test_parse(yaml);
-    assert!(doc["b"].is_null() || doc["b"].as_str() == Some(""));
-    assert_eq!(doc["c"].as_bool().unwrap(), true);
+    let expected = Data {
+        a: None,
+        b: None,
+        c: Some(true),
+    };
+    test_de(yaml, &expected);
 }
 
 #[test]
 fn test_option_alias() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Data {
+        a: Option<f64>,
+        b: Option<String>,
+        c: Option<bool>,
+        d: Option<f64>,
+        e: Option<String>,
+        f: Option<bool>,
+    }
     let yaml = indoc! {"
         none_f:
           &none_f
@@ -88,269 +145,482 @@ fn test_option_alias() {
         e: *some_s
         f: *some_b
     "};
-    let doc = test_parse(yaml);
-    assert!(doc["a"].is_null());
-    assert!(doc["b"].is_null());
-    assert!(doc["c"].is_null());
-    // For floating point, we might get either a Real variant or parsed as float
-    assert!(matches!(doc["d"], Yaml::Real(_)) || doc["d"].as_f64().is_some());
-    assert_eq!(doc["e"].as_str().unwrap(), "x");
-    assert_eq!(doc["f"].as_bool().unwrap(), true);
+    let expected = Data {
+        a: None,
+        b: None,
+        c: None,
+        d: Some(1.0),
+        e: Some("x".to_owned()),
+        f: Some(true),
+    };
+    test_de(yaml, &expected);
 }
 
 #[test]
-fn test_simple_sequence() {
+fn test_enum_alias() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum E {
+        A,
+        B(u8, u8),
+    }
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Data {
+        a: E,
+        b: E,
+    }
     let yaml = indoc! {"
-        - 1
-        - 2
-        - 3
+        aref:
+          &aref
+          A
+        bref:
+          &bref
+          !B
+            - 1
+            - 2
+
+        a: *aref
+        b: *bref
     "};
-    let doc = test_parse(yaml);
-    let arr = doc.as_vec().expect("Expected array");
-    assert_eq!(arr.len(), 3);
-    assert_eq!(arr[0].as_i64().unwrap(), 1);
-    assert_eq!(arr[1].as_i64().unwrap(), 2);
-    assert_eq!(arr[2].as_i64().unwrap(), 3);
+    let expected = Data {
+        a: E::A,
+        b: E::B(1, 2),
+    };
+    test_de(yaml, &expected);
+}
+
+#[test]
+fn test_enum_representations() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    enum Enum {
+        Unit,
+        Tuple(i32, i32),
+        Struct { x: i32, y: i32 },
+        String(String),
+        Number(f64),
+    }
+
+    let yaml = indoc! {"
+        - Unit
+        - 'Unit'
+        - !Unit
+        - !Unit ~
+        - !Unit null
+        - !Tuple [0, 0]
+        - !Tuple
+          - 0
+          - 0
+        - !Struct {x: 0, y: 0}
+        - !Struct
+          x: 0
+          y: 0
+        - !String '...'
+        - !String ...
+        - !Number 0
+    "};
+
+    let expected = vec![
+        Enum::Unit,
+        Enum::Unit,
+        Enum::Unit,
+        Enum::Unit,
+        Enum::Unit,
+        Enum::Tuple(0, 0),
+        Enum::Tuple(0, 0),
+        Enum::Struct { x: 0, y: 0 },
+        Enum::Struct { x: 0, y: 0 },
+        Enum::String("...".to_owned()),
+        Enum::String("...".to_owned()),
+        Enum::Number(0.0),
+    ];
+
+    test_de(yaml, &expected);
+
+    let yaml = indoc! {"
+        - !String
+    "};
+    let expected = vec![Enum::String(String::new())];
+    test_de_no_value(yaml, &expected);
 }
 
 #[test]
 fn test_number_as_string() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Num {
+        value: String,
+    }
     let yaml = indoc! {"
         # Cannot be represented as u128
         value: 340282366920938463463374607431768211457
     "};
-    let doc = test_parse(yaml);
-    // Very large numbers should be parsed as strings
-    assert_eq!(doc["value"].as_str().unwrap(), "340282366920938463463374607431768211457");
+    let expected = Num {
+        value: "340282366920938463463374607431768211457".to_owned(),
+    };
+    test_de_no_value(yaml, &expected);
 }
 
 #[test]
 fn test_empty_string() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Struct {
+        empty: String,
+        tilde: String,
+    }
     let yaml = indoc! {"
         empty:
         tilde: ~
     "};
-    let doc = test_parse(yaml);
-    // Empty value should be either empty string or null
-    assert!(doc["empty"].as_str() == Some("") || doc["empty"].is_null());
-    assert!(doc["tilde"].is_null());
+    let expected = Struct {
+        empty: String::new(),
+        tilde: "~".to_owned(),
+    };
+    test_de_no_value(yaml, &expected);
 }
 
 #[test]
-fn test_integers() {
+fn test_i128_big() {
+    let expected: i128 = i64::MIN as i128 - 1;
     let yaml = indoc! {"
-        positive: 42
-        negative: -123
-        zero: 0
+        -9223372036854775809
     "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["positive"].as_i64().unwrap(), 42);
-    assert_eq!(doc["negative"].as_i64().unwrap(), -123);
-    assert_eq!(doc["zero"].as_i64().unwrap(), 0);
+    assert_eq!(expected, yyaml::from_str::<i128>(yaml).unwrap());
+
+    let octal = indoc! {"
+        -0o1000000000000000000001
+    "};
+    assert_eq!(expected, yyaml::from_str::<i128>(octal).unwrap());
 }
 
 #[test]
-fn test_floats() {
+fn test_u128_big() {
+    let expected: u128 = u64::MAX as u128 + 1;
     let yaml = indoc! {"
-        pi: 3.14159
-        negative: -2.5
-        zero: 0.0
+        18446744073709551616
     "};
-    let doc = test_parse(yaml);
-    // Floats might be stored as Real strings or parsed values
-    assert!(matches!(doc["pi"], Yaml::Real(_)) || doc["pi"].as_f64().is_some());
-    assert!(matches!(doc["negative"], Yaml::Real(_)) || doc["negative"].as_f64().is_some());
-    assert!(matches!(doc["zero"], Yaml::Real(_)) || doc["zero"].as_f64().is_some());
+    assert_eq!(expected, yyaml::from_str::<u128>(yaml).unwrap());
+
+    let octal = indoc! {"
+        0o2000000000000000000000
+    "};
+    assert_eq!(expected, yyaml::from_str::<u128>(octal).unwrap());
 }
 
 #[test]
-fn test_booleans() {
+fn test_number_alias_as_string() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Num {
+        version: String,
+        value: String,
+    }
     let yaml = indoc! {"
-        true_value: true
-        false_value: false
-        True: True
-        False: False
+        version: &a 1.10
+        value: *a
     "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["true_value"].as_bool().unwrap(), true);
-    assert_eq!(doc["false_value"].as_bool().unwrap(), false);
-    assert_eq!(doc["True"].as_bool().unwrap(), true);
-    assert_eq!(doc["False"].as_bool().unwrap(), false);
-}
-
-#[test]
-fn test_null_values() {
-    let yaml = indoc! {"
-        null_value: null
-        tilde: ~
-        empty:
-    "};
-    let doc = test_parse(yaml);
-    assert!(doc["null_value"].is_null());
-    assert!(doc["tilde"].is_null());
-    assert!(doc["empty"].is_null() || doc["empty"].as_str() == Some(""));
+    let expected = Num {
+        version: "1.10".to_owned(),
+        value: "1.10".to_owned(),
+    };
+    test_de_no_value(yaml, &expected);
 }
 
 #[test]
 fn test_de_mapping() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Data {
+        pub substructure: yyaml::Mapping,
+    }
     let yaml = indoc! {"
         substructure:
           a: 'foo'
           b: 'bar'
     "};
-    let doc = test_parse(yaml);
-    let sub = &doc["substructure"];
-    assert_eq!(sub["a"].as_str().unwrap(), "foo");
-    assert_eq!(sub["b"].as_str().unwrap(), "bar");
+
+    let mut expected = Data {
+        substructure: yyaml::Mapping::new(),
+    };
+    expected.substructure.insert(
+        yyaml::Value::String("a".to_owned()),
+        yyaml::Value::String("foo".to_owned()),
+    );
+    expected.substructure.insert(
+        yyaml::Value::String("b".to_owned()),
+        yyaml::Value::String("bar".to_owned()),
+    );
+
+    test_de(yaml, &expected);
 }
 
 #[test]
-fn test_flow_sequence() {
-    let yaml = "[1, 2, 3]";
-    let doc = test_parse(yaml);
-    let arr = doc.as_vec().expect("Expected array");
-    assert_eq!(arr.len(), 3);
-    assert_eq!(arr[0].as_i64().unwrap(), 1);
-    assert_eq!(arr[1].as_i64().unwrap(), 2);
-    assert_eq!(arr[2].as_i64().unwrap(), 3);
+fn test_byte_order_mark() {
+    let yaml = "\u{feff}- 0\n";
+    let expected = vec![0];
+    test_de(yaml, &expected);
 }
 
 #[test]
-fn test_flow_mapping() {
-    let yaml = "{a: 1, b: 2}";
-    let doc = test_parse(yaml);
-    assert_eq!(doc["a"].as_i64().unwrap(), 1);
-    assert_eq!(doc["b"].as_i64().unwrap(), 2);
-}
+fn test_bomb() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Data {
+        expected: String,
+    }
 
-#[test]
-fn test_nested_structures() {
+    // This would deserialize an astronomical number of elements if we were
+    // vulnerable.
     let yaml = indoc! {"
-        level1:
-          level2:
-            - item1
-            - item2
-          other: value
+        a: &a ~
+        b: &b [*a,*a,*a,*a,*a,*a,*a,*a,*a]
+        c: &c [*b,*b,*b,*b,*b,*b,*b,*b,*b]
+        d: &d [*c,*c,*c,*c,*c,*c,*c,*c,*c]
+        e: &e [*d,*d,*d,*d,*d,*d,*d,*d,*d]
+        f: &f [*e,*e,*e,*e,*e,*e,*e,*e,*e]
+        g: &g [*f,*f,*f,*f,*f,*f,*f,*f,*f]
+        h: &h [*g,*g,*g,*g,*g,*g,*g,*g,*g]
+        i: &i [*h,*h,*h,*h,*h,*h,*h,*h,*h]
+        j: &j [*i,*i,*i,*i,*i,*i,*i,*i,*i]
+        k: &k [*j,*j,*j,*j,*j,*j,*j,*j,*j]
+        l: &l [*k,*k,*k,*k,*k,*k,*k,*k,*k]
+        m: &m [*l,*l,*l,*l,*l,*l,*l,*l,*l]
+        n: &n [*m,*m,*m,*m,*m,*m,*m,*m,*m]
+        o: &o [*n,*n,*n,*n,*n,*n,*n,*n,*n]
+        p: &p [*o,*o,*o,*o,*o,*o,*o,*o,*o]
+        q: &q [*p,*p,*p,*p,*p,*p,*p,*p,*p]
+        r: &r [*q,*q,*q,*q,*q,*q,*q,*q,*q]
+        s: &s [*r,*r,*r,*r,*r,*r,*r,*r,*r]
+        t: &t [*s,*s,*s,*s,*s,*s,*s,*s,*s]
+        u: &u [*t,*t,*t,*t,*t,*t,*t,*t,*t]
+        v: &v [*u,*u,*u,*u,*u,*u,*u,*u,*u]
+        w: &w [*v,*v,*v,*v,*v,*v,*v,*v,*v]
+        x: &x [*w,*w,*w,*w,*w,*w,*w,*w,*w]
+        y: &y [*x,*x,*x,*x,*x,*x,*x,*x,*x]
+        z: &z [*y,*y,*y,*y,*y,*y,*y,*y,*y]
+        expected: string
     "};
-    let doc = test_parse(yaml);
-    let level2 = &doc["level1"]["level2"];
-    let arr = level2.as_vec().expect("Expected array");
-    assert_eq!(arr.len(), 2);
-    assert_eq!(arr[0].as_str().unwrap(), "item1");
-    assert_eq!(arr[1].as_str().unwrap(), "item2");
-    assert_eq!(doc["level1"]["other"].as_str().unwrap(), "value");
+
+    let expected = Data {
+        expected: "string".to_owned(),
+    };
+
+    assert_eq!(expected, yyaml::from_str::<Data>(yaml).unwrap());
 }
 
 #[test]
-fn test_mixed_types() {
-    let yaml = indoc! {"
-        string: hello
-        number: 42
-        float: 3.14
-        bool: true
-        null_val: ~
-        array:
-          - 1
-          - two
-          - 3.0
-        object:
-          key: value
-    "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["string"].as_str().unwrap(), "hello");
-    assert_eq!(doc["number"].as_i64().unwrap(), 42);
-    assert!(matches!(doc["float"], Yaml::Real(_)) || doc["float"].as_f64().is_some());
-    assert_eq!(doc["bool"].as_bool().unwrap(), true);
-    assert!(doc["null_val"].is_null());
-    
-    let arr = doc["array"].as_vec().expect("Expected array");
-    assert_eq!(arr.len(), 3);
-    assert_eq!(arr[0].as_i64().unwrap(), 1);
-    assert_eq!(arr[1].as_str().unwrap(), "two");
-    
-    assert_eq!(doc["object"]["key"].as_str().unwrap(), "value");
-}
-
-#[test]
-fn test_quoted_strings() {
-    let yaml = indoc! {"
-        single: 'single quoted'
-        double: \"double quoted\"
-        plain: plain string
-    "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["single"].as_str().unwrap(), "single quoted");
-    assert_eq!(doc["double"].as_str().unwrap(), "double quoted");
-    assert_eq!(doc["plain"].as_str().unwrap(), "plain string");
-}
-
-#[test]
-fn test_special_characters() {
-    let yaml = indoc! {"
-        unicode: 'Hello 世界'
-        colon: 'key: value'
-        brackets: '[array]'
-        braces: '{object}'
-    "};
-    let doc = test_parse(yaml);
-    assert_eq!(doc["unicode"].as_str().unwrap(), "Hello 世界");
-    assert_eq!(doc["colon"].as_str().unwrap(), "key: value");
-    assert_eq!(doc["brackets"].as_str().unwrap(), "[array]");
-    assert_eq!(doc["braces"].as_str().unwrap(), "{object}");
-}
-
-#[test]
-fn test_multiline_strings() {
-    let yaml = indoc! {"
-        literal: |
-          Line 1
-          Line 2
-          Line 3
-        folded: >
-          This is a long
-          line that will be
-          folded into one line
-    "};
-    let doc = test_parse(yaml);
-    // Our parser might not handle literal/folded scalars yet, so just check they parse
-    assert!(doc["literal"].as_str().is_some());
-    assert!(doc["folded"].as_str().is_some());
-}
-
-#[test]
-fn test_empty_document() {
-    let yaml = "";
-    // Empty document should either fail or return empty/null
-    let result = YamlLoader::load_from_str(yaml);
-    match result {
-        Ok(docs) => {
-            // If it succeeds, should be empty or contain null
-            assert!(docs.is_empty() || docs[0].is_null());
+fn test_numbers() {
+    let cases = [
+        ("0xF0", "240"),
+        ("+0xF0", "240"),
+        ("-0xF0", "-240"),
+        ("0o70", "56"),
+        ("+0o70", "56"),
+        ("-0o70", "-56"),
+        ("0b10", "2"),
+        ("+0b10", "2"),
+        ("-0b10", "-2"),
+        ("127", "127"),
+        ("+127", "127"),
+        ("-127", "-127"),
+        (".inf", ".inf"),
+        (".Inf", ".inf"),
+        (".INF", ".inf"),
+        ("-.inf", "-.inf"),
+        ("-.Inf", "-.inf"),
+        ("-.INF", "-.inf"),
+        (".nan", ".nan"),
+        (".NaN", ".nan"),
+        (".NAN", ".nan"),
+        ("0.1", "0.1"),
+    ];
+    for &(yaml, expected) in &cases {
+        let value = yyaml::from_str::<Value>(yaml).unwrap();
+        match value {
+            Value::Number(number) => assert_eq!(number.to_string(), expected),
+            _ => panic!("expected number. input={:?}, result={:?}", yaml, value),
         }
-        Err(_) => {
-            // Empty document parsing failure is acceptable
+    }
+
+    // NOT numbers.
+    let cases = [
+        "0127", "+0127", "-0127", "++.inf", "+-.inf", "++1", "+-1", "-+1", "--1", "0x+1", "0x-1",
+        "-0x+1", "-0x-1", "++0x1", "+-0x1", "-+0x1", "--0x1",
+    ];
+    for yaml in &cases {
+        let value = yyaml::from_str::<Value>(yaml).unwrap();
+        match value {
+            Value::String(string) => assert_eq!(string, *yaml),
+            _ => panic!("expected string. input={:?}, result={:?}", yaml, value),
         }
     }
 }
 
 #[test]
-fn test_comment_only() {
-    let yaml = "# This is just a comment";
-    // Comment-only document should either fail or return empty/null
-    let result = YamlLoader::load_from_str(yaml);
-    match result {
-        Ok(docs) => {
-            // If it succeeds, should be empty or contain null
-            assert!(docs.is_empty() || docs[0].is_null());
-        }
-        Err(_) => {
-            // Comment-only document parsing failure is acceptable
+fn test_nan() {
+    // There is no negative NaN in YAML.
+    assert!(yyaml::from_str::<f32>(".nan").unwrap().is_sign_positive());
+    assert!(yyaml::from_str::<f64>(".nan").unwrap().is_sign_positive());
+}
+
+#[test]
+fn test_stateful() {
+    struct Seed(i64);
+
+    impl<'de> serde::de::DeserializeSeed<'de> for Seed {
+        type Value = i64;
+        fn deserialize<D>(self, deserializer: D) -> Result<i64, D::Error>
+        where
+            D: serde::de::Deserializer<'de>,
+        {
+            struct Visitor(i64);
+            impl<'de> serde::de::Visitor<'de> for Visitor {
+                type Value = i64;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(formatter, "an integer")
+                }
+
+                fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<i64, E> {
+                    Ok(v * self.0)
+                }
+
+                fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<i64, E> {
+                    Ok(v as i64 * self.0)
+                }
+            }
+
+            deserializer.deserialize_any(Visitor(self.0))
         }
     }
+
+    let cases = [("3", 5, 15), ("6", 7, 42), ("-5", 9, -45)];
+    for &(yaml, seed, expected) in &cases {
+        test_de_seed(yaml, Seed(seed), &expected);
+    }
+}
+
+#[test]
+fn test_ignore_tag() {
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct Data {
+        struc: Struc,
+        tuple: Tuple,
+        newtype: Newtype,
+        map: BTreeMap<char, usize>,
+        vec: Vec<usize>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct Struc {
+        x: usize,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct Tuple(usize, usize);
+
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct Newtype(usize);
+
+    let yaml = indoc! {"
+        struc: !wat
+          x: 0
+        tuple: !wat
+          - 0
+          - 0
+        newtype: !wat 0
+        map: !wat
+          x: 0
+        vec: !wat
+          - 0
+    "};
+
+    let expected = Data {
+        struc: Struc { x: 0 },
+        tuple: Tuple(0, 0),
+        newtype: Newtype(0),
+        map: {
+            let mut map = BTreeMap::new();
+            map.insert('x', 0);
+            map
+        },
+        vec: vec![0],
+    };
+
+    test_de(yaml, &expected);
+}
+
+#[test]
+fn test_no_required_fields() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    pub struct NoRequiredFields {
+        optional: Option<usize>,
+    }
+
+    for document in ["", "# comment\n"] {
+        let expected = NoRequiredFields { optional: None };
+        let deserialized: NoRequiredFields = yyaml::from_str(document).unwrap();
+        assert_eq!(expected, deserialized);
+
+        let expected = Vec::<String>::new();
+        let deserialized: Vec<String> = yyaml::from_str(document).unwrap();
+        assert_eq!(expected, deserialized);
+
+        let expected = BTreeMap::new();
+        let deserialized: BTreeMap<char, usize> = yyaml::from_str(document).unwrap();
+        assert_eq!(expected, deserialized);
+
+        let expected = None;
+        let deserialized: Option<String> = yyaml::from_str(document).unwrap();
+        assert_eq!(expected, deserialized);
+
+        let expected = Value::Null;
+        let deserialized: Value = yyaml::from_str(document).unwrap();
+        assert_eq!(expected, deserialized);
+    }
+}
+
+#[test]
+fn test_empty_scalar() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Struct<T> {
+        thing: T,
+    }
+
+    let yaml = "thing:\n";
+    let expected = Struct {
+        thing: yyaml::Sequence::new(),
+    };
+    test_de(yaml, &expected);
+
+    let expected = Struct {
+        thing: yyaml::Mapping::new(),
+    };
+    test_de(yaml, &expected);
+}
+
+#[test]
+fn test_python_safe_dump() {
+    #[derive(Serialize, Deserialize, PartialEq, Debug)]
+    struct Frob {
+        foo: u32,
+    }
+
+    // This matches output produced by PyYAML's `yaml.safe_dump` when using the
+    // default_style parameter.
+    //
+    //    >>> import yaml
+    //    >>> d = {"foo": 7200}
+    //    >>> print(yaml.safe_dump(d, default_style="|"))
+    //    "foo": !!int |-
+    //      7200
+    //
+    let yaml = indoc! {r#"
+        "foo": !!int |-
+            7200
+    "#};
+
+    let expected = Frob { foo: 7200 };
+    test_de(yaml, &expected);
 }
 
 #[test]
 fn test_tag_resolution() {
+    // https://yaml.org/spec/1.2.2/#1032-tag-resolution
     let yaml = indoc! {"
         - null
         - Null
@@ -380,31 +650,64 @@ fn test_tag_resolution() {
         - Off
         - OFF
     "};
-    
-    let doc = test_parse(yaml);
-    let arr = doc.as_vec().expect("Expected array");
-    
-    // According to YAML 1.2, only these should be parsed as special values:
-    // null, Null, NULL, ~, (empty) -> null
-    // true, True, TRUE -> true  
-    // false, False, FALSE -> false
-    // The rest should be strings
-    
-    assert!(arr[0].is_null()); // null
-    assert!(arr[1].is_null()); // Null  
-    assert!(arr[2].is_null()); // NULL
-    assert!(arr[3].is_null()); // ~
-    assert!(arr[4].is_null() || arr[4].as_str() == Some("")); // empty
-    assert_eq!(arr[5].as_bool().unwrap(), true); // true
-    assert_eq!(arr[6].as_bool().unwrap(), true); // True
-    assert_eq!(arr[7].as_bool().unwrap(), true); // TRUE
-    assert_eq!(arr[8].as_bool().unwrap(), false); // false
-    assert_eq!(arr[9].as_bool().unwrap(), false); // False
-    assert_eq!(arr[10].as_bool().unwrap(), false); // FALSE
-    
-    // The rest should be strings
-    assert_eq!(arr[11].as_str().unwrap(), "y");
-    assert_eq!(arr[12].as_str().unwrap(), "Y");
-    assert_eq!(arr[13].as_str().unwrap(), "yes");
-    // ... etc for the remaining items
+
+    let expected = vec![
+        Value::Null,
+        Value::Null,
+        Value::Null,
+        Value::Null,
+        Value::Null,
+        Value::Bool(true),
+        Value::Bool(true),
+        Value::Bool(true),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::String("y".to_owned()),
+        Value::String("Y".to_owned()),
+        Value::String("yes".to_owned()),
+        Value::String("Yes".to_owned()),
+        Value::String("YES".to_owned()),
+        Value::String("n".to_owned()),
+        Value::String("N".to_owned()),
+        Value::String("no".to_owned()),
+        Value::String("No".to_owned()),
+        Value::String("NO".to_owned()),
+        Value::String("on".to_owned()),
+        Value::String("On".to_owned()),
+        Value::String("ON".to_owned()),
+        Value::String("off".to_owned()),
+        Value::String("Off".to_owned()),
+        Value::String("OFF".to_owned()),
+    ];
+
+    test_de(yaml, &expected);
+}
+
+#[test]
+fn test_parse_number() {
+    let n = "111".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(111));
+
+    let n = "-111".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(-111));
+
+    let n = "-1.1".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(-1.1));
+
+    let n = ".nan".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(f64::NAN));
+    assert!(n.as_f64().unwrap().is_sign_positive());
+
+    let n = ".inf".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(f64::INFINITY));
+
+    let n = "-.inf".parse::<Number>().unwrap();
+    assert_eq!(n, Number::from(f64::NEG_INFINITY));
+
+    let err = "null".parse::<Number>().unwrap_err();
+    assert_eq!(err.to_string(), "failed to parse YAML number");
+
+    let err = " 1 ".parse::<Number>().unwrap_err();
+    assert_eq!(err.to_string(), "failed to parse YAML number");
 }

@@ -1,5 +1,5 @@
-use crate::error::{ScanError, Marker};
-use crate::events::{TokenType, TScalarStyle, TEncoding};
+use crate::error::{Marker, ScanError};
+use crate::events::{TEncoding, TScalarStyle, TokenType};
 use std::collections::VecDeque;
 
 /// A single token: (Marker, TokenType).
@@ -24,40 +24,44 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             rdr: src,
             buffer: VecDeque::new(),
             done: false,
-            mark: Marker { index: 0, line: 1, col: 0 },
+            mark: Marker {
+                index: 0,
+                line: 1,
+                col: 0,
+            },
             token: None,
             stream_start_produced: false,
             stream_end_produced: false,
         }
     }
-    
+
     pub fn mark(&self) -> Marker {
         self.mark
     }
-    
+
     pub fn peek_token(&mut self) -> Result<&Token, ScanError> {
         if self.token.is_none() {
             self.token = Some(self.fetch_next_token()?);
         }
         Ok(self.token.as_ref().unwrap())
     }
-    
+
     pub fn fetch_token(&mut self) -> Token {
         self.token.take().unwrap()
     }
-    
+
     pub fn skip(&mut self) {
         self.token = None;
     }
-    
+
     pub fn stream_started(&self) -> bool {
         self.stream_start_produced
     }
-    
+
     pub fn stream_ended(&self) -> bool {
         self.stream_end_produced
     }
-    
+
     fn fetch_next_token(&mut self) -> Result<Token, ScanError> {
         // inline the logic for scanning the next token
         if !self.stream_start_produced {
@@ -86,7 +90,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         };
         let start_mark = self.mark;
-        
+
         match c {
             // handle doc start ---
             '-' => {
@@ -110,7 +114,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
                 // otherwise treat as plain scalar
                 let scalar = self.scan_plain_scalar()?;
-                return Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::Plain, scalar)));
+                return Ok(Token(
+                    start_mark,
+                    TokenType::Scalar(TScalarStyle::Plain, scalar),
+                ));
             }
             '.' => {
                 // might be doc end ...
@@ -126,7 +133,10 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
                 // else parse as scalar
                 let scalar = self.scan_plain_scalar()?;
-                return Ok(Token(start_mark, TokenType::Scalar(TScalarStyle::Plain, scalar)));
+                return Ok(Token(
+                    start_mark,
+                    TokenType::Scalar(TScalarStyle::Plain, scalar),
+                ));
             }
             '[' => {
                 self.next_char();
@@ -172,7 +182,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             '|' => {
                 // block scalar literal
                 self.next_char();
-                let block_str = self.scan_block_scalar(/*literal=*/true)?;
+                let block_str = self.scan_block_scalar(/*literal=*/ true)?;
                 return Ok(Token(
                     start_mark,
                     TokenType::Scalar(TScalarStyle::Literal, block_str),
@@ -181,7 +191,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             '>' => {
                 // block scalar folded
                 self.next_char();
-                let block_str = self.scan_block_scalar(/*literal=*/false)?;
+                let block_str = self.scan_block_scalar(/*literal=*/ false)?;
                 return Ok(Token(
                     start_mark,
                     TokenType::Scalar(TScalarStyle::Folded, block_str),
@@ -205,12 +215,12 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 ));
             }
             '#' => {
-                // comment? skip entire line
-                while let Some(cc) = self.buffer.front() {
-                    if *cc == '\n' {
+                // comment - skip entire line including the newline
+                while let Some(&cc) = self.buffer.front() {
+                    self.next_char();
+                    if cc == '\n' {
                         break;
                     }
-                    self.next_char();
                 }
                 // produce next token
                 return self.fetch_next_token();
@@ -378,12 +388,21 @@ impl<T: Iterator<Item = char>> Scanner<T> {
                 }
             };
             if c == '#' {
-                // skip to line end
-                while let Some(&c2) = self.buffer.front() {
-                    if c2 == '\n' {
-                        break;
+                // skip the entire comment line including the newline
+                self.next_char(); // consume the '#'
+                loop {
+                    self.fill_buffer(1); // ensure buffer has content
+                    match self.buffer.front() {
+                        Some(&c2) => {
+                            self.next_char();
+                            if c2 == '\n' {
+                                break;
+                            }
+                        }
+                        None => {
+                            break;
+                        }
                     }
-                    self.next_char();
                 }
             } else if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
                 self.next_char();
@@ -392,7 +411,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
     }
-    
+
     fn fill_buffer(&mut self, n: usize) {
         while self.buffer.len() < n && !self.done {
             if let Some(ch) = self.rdr.next() {
@@ -402,7 +421,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
             }
         }
     }
-    
+
     fn next_char(&mut self) {
         if let Some(c) = self.buffer.pop_front() {
             self.mark.index += 1;
@@ -440,4 +459,4 @@ fn fold_newlines(input: &str) -> String {
         }
     }
     out
-} 
+}

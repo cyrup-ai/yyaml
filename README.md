@@ -4,7 +4,7 @@ Serde support for [yaml-rust2](https://github.com/Ethiraric/yaml-rust2), providi
 
 ## Why yaml_sugar?
 
-The original `serde_yaml` crate has been unmaintained since 2021. While `yaml-rust2` is a well-maintained YAML 1.2 parser, it doesn't provide serde integration out of the box. `yaml_sugar` bridges this gap by adding serde support to yaml-rust2.
+The original `yyaml` crate has been unmaintained since 2021. While `yaml-rust2` is a well-maintained YAML 1.2 parser, it doesn't provide serde integration out of the box. `yaml_sugar` bridges this gap by adding serde support to yaml-rust2.
 
 ## Features
 
@@ -149,14 +149,14 @@ fn save_config(config: &AppConfig, path: &str) -> Result<(), Box<dyn std::error:
 }
 ```
 
-## Comparison with serde_yaml
+## Comparison with yyaml
 
-`yaml_sugar` provides a compatible API with `serde_yaml`, making migration straightforward:
+`yaml_sugar` provides a compatible API with `yyaml`, making migration straightforward:
 
 ```rust
-// Before (serde_yaml)
-let value: MyType = serde_yaml::from_str(&yaml_string)?;
-let yaml_string = serde_yaml::to_string(&value)?;
+// Before (yyaml)
+let value: MyType = yyaml::from_str(&yaml_string)?;
+let yaml_string = yyaml::to_string(&value)?;
 
 // After (yaml_sugar)
 let value: MyType = yaml_sugar::from_str(&yaml_string)?;
