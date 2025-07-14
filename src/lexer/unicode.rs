@@ -78,7 +78,11 @@ impl UnicodeProcessor {
         for _ in 0..count {
             match chars.next() {
                 Some(ch) if ch.is_ascii_hexdigit() => {
-                    result = result * 16 + ch.to_digit(16).unwrap();
+                    if let Some(digit) = ch.to_digit(16) {
+                        result = result * 16 + digit;
+                    } else {
+                        return Err(EscapeError::InvalidHexDigit(ch));
+                    }
                 }
                 Some(ch) => return Err(EscapeError::InvalidHexDigit(ch)),
                 None => return Err(EscapeError::UnexpectedEndOfInput),

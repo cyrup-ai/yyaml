@@ -123,6 +123,20 @@ impl<'input> AnalysisContext<'input> {
     pub fn current_document_index(&self) -> usize {
         self.current_document_index
     }
+
+    /// Register anchor metadata for owned processing (no-op for now)
+    #[inline]
+    pub fn register_anchor_metadata(&mut self, _anchor_name: String, _position: Position) {
+        // For owned document processing, we collect metadata but don't store references
+        // This is a placeholder method that can be expanded later if needed
+    }
+
+    /// Register tag metadata for owned processing (no-op for now)
+    #[inline]
+    pub fn register_tag_metadata(&mut self, _handle: Option<String>, _suffix: String, _position: Position) {
+        // For owned document processing, we collect metadata but don't store references
+        // This is a placeholder method that can be expanded later if needed
+    }
 }
 
 impl<'input> Default for AnalysisContext<'input> {

@@ -68,7 +68,17 @@ impl<'input> Scanner<'input> {
         if self.peeked_token.is_none() {
             self.peeked_token = Some(self.scan_token_impl(position)?);
         }
-        Ok(self.peeked_token.as_ref().unwrap().clone())
+        // Safe to unwrap here as we just ensured it's Some, but use pattern matching instead
+        match &self.peeked_token {
+            Some(token) => Ok(token.clone()),
+            None => {
+                // This should never happen due to the logic above, but handle gracefully
+                Err(LexError::new(
+                    LexErrorKind::UnexpectedCharacter('\0'.to_string()),
+                    position.current(),
+                ))
+            }
+        }
     }
 
     /// Internal token scanning implementation
@@ -89,7 +99,15 @@ impl<'input> Scanner<'input> {
             return Ok(Token::new(TokenKind::StreamStart, start_pos, 0));
         }
 
-        let ch = *self.chars.peek().unwrap();
+        let ch = match self.chars.peek() {
+            Some(&ch) => ch,
+            None => {
+                return Err(LexError::new(
+                    LexErrorKind::UnexpectedCharacter('\0'.to_string()),
+                    position.current(),
+                ));
+            }
+        };
 
         // Handle indentation at start of line
         if start_pos.column == 1 && !chars::is_break(ch) {
@@ -176,7 +194,14 @@ impl<'input> Scanner<'input> {
             }
         }
 
-        let current_indent = *self.indent_stack.last().unwrap();
+        let current_indent = match self.indent_stack.last() {
+            Some(&indent) => indent,
+            None => {
+                // This should never happen as indent_stack is initialized with [0]
+                // but handle gracefully by treating as zero indentation
+                0
+            }
+        };
 
         if indent > current_indent {
             self.indent_stack.push(indent);

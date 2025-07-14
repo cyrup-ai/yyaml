@@ -13,6 +13,32 @@ use std::borrow::Cow;
 pub struct ScalarParser;
 
 impl ScalarParser {
+    /// Parse scalar using ParsingContext (zero-allocation, blazing-fast)
+    /// This is the preferred method for ParsingContext-based parsing
+    pub fn parse_with_context<'input>(
+        context: &mut super::ParsingContext<'_, 'input>,
+        parse_context: &ParseContext,
+    ) -> Result<Node<'input>, ParseError> {
+        let token = context.consume_token().map_err(|_| {
+            ParseError::new(
+                ParseErrorKind::UnexpectedEndOfInput,
+                context.current_position(),
+                "expected scalar token",
+            )
+        })?;
+        
+        Self::parse_scalar(token, parse_context)
+    }
+    
+    /// Parse scalar from consumed token using ParsingContext architecture
+    pub fn parse_scalar_with_context<'input>(
+        token: Token<'input>,
+        _context: &mut super::ParsingContext<'_, 'input>,
+        parse_context: &ParseContext,
+    ) -> Result<Node<'input>, ParseError> {
+        Self::parse_scalar(token, parse_context)
+    }
+
     /// Parse scalar token into appropriate node type
     pub fn parse_scalar<'input>(
         token: Token<'input>,

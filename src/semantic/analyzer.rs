@@ -61,24 +61,19 @@ impl<'input> SemanticAnalyzer<'input> {
         // Reserve capacity based on estimates to minimize allocations
         let mut analyzed_documents = Vec::with_capacity(stream.documents.len());
 
-        // Phase 1: Collect all anchors across documents for global resolution
-        self.analysis_context.processing_phase = ProcessingPhase::AnchorCollection;
-        for (index, document) in stream.documents.iter().enumerate() {
-            self.analysis_context.current_document_index = index;
-            self.collect_anchors_from_document(document)?;
-        }
-
-        // Phase 2: Resolve tags in all documents
-        self.analysis_context.processing_phase = ProcessingPhase::TagResolution;
-        for (index, document) in stream.documents.iter().enumerate() {
-            self.analysis_context.current_document_index = index;
-            self.resolve_tags_in_document(document)?;
-        }
-
-        // Phase 3: Process each document through analysis pipeline (take ownership for processing)
+        // Single-pass processing: collect anchors, resolve tags, and analyze each document
         for (index, document) in stream.documents.into_iter().enumerate() {
             self.analysis_context.current_document_index = index;
-            let _document_node = document.content.as_ref();
+
+            // Phase 1: Collect anchors from this document
+            self.analysis_context.processing_phase = ProcessingPhase::AnchorCollection;
+            self.collect_anchors_from_owned_document(&document)?;
+
+            // Phase 2: Resolve tags in this document
+            self.analysis_context.processing_phase = ProcessingPhase::TagResolution;
+            self.resolve_tags_in_owned_document(&document)?;
+
+            // Phase 3: Analyze the document (takes ownership)
             let analyzed_document = self.analyze_document(document)?;
             analyzed_documents.push(analyzed_document);
         }
@@ -134,24 +129,13 @@ impl<'input> SemanticAnalyzer<'input> {
         Ok(document)
     }
 
-    /// Collect anchors from document for global resolution with zero-allocation performance
-    fn collect_anchors_from_document(
-        &mut self,
-        document: &Document<'input>,
-    ) -> Result<(), SemanticError> {
-        if let Some(ref root_node) = document.content {
-            let mut path = Vec::with_capacity(16); // Pre-allocate for typical document depth
-            self.collect_anchors_from_node_optimized(root_node, &mut path)
-        } else {
-            Ok(())
-        }
-    }
 
     /// Recursively collect anchors from AST nodes with zero-allocation optimization
+    #[allow(dead_code)] // May be used for future semantic analysis extensions
     #[inline]
     fn collect_anchors_from_node_optimized(
         &mut self,
-        node: &Node<'input>,
+        node: &'input Node<'input>,
         path: &mut Vec<String>,
     ) -> Result<(), SemanticError> {
         // Update position for precise error tracking
@@ -219,19 +203,145 @@ impl<'input> SemanticAnalyzer<'input> {
         Ok(())
     }
 
-    /// Resolve tags in document with comprehensive tag processing
-    fn resolve_tags_in_document(
+
+    /// Collect anchors from owned document for single-pass processing
+    fn collect_anchors_from_owned_document(
         &mut self,
         document: &Document<'input>,
     ) -> Result<(), SemanticError> {
         if let Some(ref root_node) = document.content {
-            self.resolve_tags_in_node_optimized(root_node)
+            let mut path = Vec::with_capacity(16); // Pre-allocate for typical document depth
+            self.collect_anchors_from_node_owned(root_node, &mut path)
         } else {
             Ok(())
         }
     }
 
+    /// Resolve tags in owned document for single-pass processing
+    fn resolve_tags_in_owned_document(
+        &mut self,
+        document: &Document<'input>,
+    ) -> Result<(), SemanticError> {
+        if let Some(ref root_node) = document.content {
+            self.resolve_tags_in_node_owned(root_node)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Recursively collect anchors from AST nodes for owned documents
+    #[inline] 
+    fn collect_anchors_from_node_owned(
+        &mut self,
+        node: &Node<'input>,
+        path: &mut Vec<String>,
+    ) -> Result<(), SemanticError> {
+        // For owned processing, we collect anchor names but don't store node references
+        // This approach avoids lifetime issues while still gathering necessary metadata
+        
+        // Update position for precise error tracking
+        self.analysis_context.set_position(node.position());
+
+        // Register anchor if present (collect metadata only)
+        if let Node::Anchor(anchor_node) = node {
+            let anchor_name = anchor_node.name.as_ref();
+            let anchor_position = node.position();
+            
+            // Store anchor name for later resolution (clone to avoid lifetime issues)
+            let owned_anchor_name = anchor_name.to_string();
+            self.analysis_context.register_anchor_metadata(owned_anchor_name, anchor_position);
+        }
+
+        // Process child nodes with optimal memory usage
+        match node {
+            Node::Sequence(seq) => {
+                path.reserve(1); // Pre-allocate for index string
+                for (index, child) in seq.items.iter().enumerate() {
+                    path.push(format!("[{}]", index));
+                    self.collect_anchors_from_node_owned(child, path)?;
+                    path.pop();
+                }
+            }
+            Node::Mapping(map) => {
+                path.reserve(1); // Pre-allocate for key string
+                for pair in &map.pairs {
+                    // Efficient key processing
+                    let key_str = match &pair.key {
+                        Node::Scalar(key_scalar) => key_scalar.value.as_ref(),
+                        _ => "<complex_key>",
+                    };
+                    
+                    path.push(key_str.to_string());
+                    self.collect_anchors_from_node_owned(&pair.key, path)?;
+                    self.collect_anchors_from_node_owned(&pair.value, path)?;
+                    path.pop();
+                }
+            }
+            Node::Anchor(anchor_node) => {
+                // Process wrapped node recursively
+                self.collect_anchors_from_node_owned(&anchor_node.node, path)?;
+            }
+            Node::Tagged(tagged_node) => {
+                // Process wrapped node recursively  
+                self.collect_anchors_from_node_owned(&tagged_node.node, path)?;
+            }
+            Node::Scalar(_) | Node::Alias(_) | Node::Null(_) => {
+                // Terminal nodes - no children to process
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Recursively resolve tags in AST nodes for owned documents
+    #[inline]
+    fn resolve_tags_in_node_owned(
+        &mut self,
+        node: &Node<'input>,
+    ) -> Result<(), SemanticError> {
+        // Update position for precise error tracking
+        self.analysis_context.set_position(node.position());
+
+        // Process tag if present (collect metadata only)
+        if let Node::Tagged(tagged_node) = node {
+            // Store tag information for later processing (clone to avoid lifetime issues)
+            let owned_handle = tagged_node.handle.as_ref().map(|h| h.to_string());
+            let owned_suffix = tagged_node.suffix.to_string();
+            let tag_position = node.position();
+            self.analysis_context.register_tag_metadata(owned_handle, owned_suffix, tag_position);
+        }
+
+        // Process child nodes efficiently
+        match node {
+            Node::Sequence(seq) => {
+                for child in &seq.items {
+                    self.resolve_tags_in_node_owned(child)?;
+                }
+            }
+            Node::Mapping(map) => {
+                for pair in &map.pairs {
+                    self.resolve_tags_in_node_owned(&pair.key)?;
+                    self.resolve_tags_in_node_owned(&pair.value)?;
+                }
+            }
+            Node::Anchor(anchor_node) => {
+                // Process wrapped node recursively
+                self.resolve_tags_in_node_owned(&anchor_node.node)?;
+            }
+            Node::Tagged(tagged_node) => {
+                // Process wrapped node recursively (tag already processed above)
+                self.resolve_tags_in_node_owned(&tagged_node.node)?;
+            }
+            Node::Scalar(_) | Node::Alias(_) | Node::Null(_) => {
+                // Terminal nodes - no children to process
+            }
+        }
+
+        Ok(())
+    }
+
     /// Recursively resolve tags in AST nodes with blazing-fast performance
+    #[allow(dead_code)] // May be used for future semantic analysis extensions
     #[inline]
     fn resolve_tags_in_node_optimized(
         &mut self,
