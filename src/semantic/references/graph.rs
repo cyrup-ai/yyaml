@@ -635,12 +635,12 @@ mod tests {
         assert!(path.is_some());
         if let Some(path) = path {
             assert_eq!(path.len(), 3);
+            assert_eq!(path[0], id1);
+            assert_eq!(path[1], id2);
+            assert_eq!(path[2], id3);
         } else {
             panic!("Expected path to be found");
         }
-        assert_eq!(path[0], id1);
-        assert_eq!(path[1], id2);
-        assert_eq!(path[2], id3);
     }
 
     #[test]

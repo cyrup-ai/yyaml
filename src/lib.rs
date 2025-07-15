@@ -102,7 +102,10 @@ mod tests {
     #[test]
     fn test_basic_parsing() {
         let yaml_val = Yaml::String("test".to_string());
-        assert_eq!(yaml_val.as_str().unwrap(), "test");
+        match yaml_val.as_str() {
+            Some(s) => assert_eq!(s, "test"),
+            None => panic!("Expected string value"),
+        }
     }
 
     #[test]
@@ -155,7 +158,10 @@ mod tests {
             Ok(docs) => {
                 assert_eq!(docs.len(), 1);
                 let doc = &docs[0];
-                assert_eq!(doc["key"].as_str().unwrap(), "value");
+                match doc["key"].as_str() {
+                    Some(s) => assert_eq!(s, "value"),
+                    None => panic!("Expected string value for key"),
+                }
             }
             Err(e) => {
                 panic!("Parsing failed: {}", e);
@@ -174,9 +180,18 @@ nulltest: ~";
             Ok(docs) => {
                 assert_eq!(docs.len(), 1);
                 let doc = &docs[0];
-                assert_eq!(doc["hello"].as_str().unwrap(), "world");
-                assert_eq!(doc["int"].as_i64().unwrap(), 42);
-                assert_eq!(doc["bool"].as_bool().unwrap(), true);
+                match doc["hello"].as_str() {
+                    Some(s) => assert_eq!(s, "world"),
+                    None => panic!("Expected string value for hello"),
+                }
+                match doc["int"].as_i64() {
+                    Some(i) => assert_eq!(i, 42),
+                    None => panic!("Expected integer value for int"),
+                }
+                match doc["bool"].as_bool() {
+                    Some(b) => assert_eq!(b, true),
+                    None => panic!("Expected boolean value for bool"),
+                }
                 assert!(doc["nulltest"].is_null());
             }
             Err(e) => {
@@ -191,11 +206,24 @@ nulltest: ~";
         let result = YamlLoader::load_from_str(s);
         match result {
             Ok(docs) => {
-                let arr = docs[0].as_vec().unwrap();
-                assert_eq!(arr.len(), 3);
-                assert_eq!(arr[0].as_i64().unwrap(), 1);
-                assert_eq!(arr[1].as_i64().unwrap(), 2);
-                assert_eq!(arr[2].as_i64().unwrap(), 3);
+                match docs[0].as_vec() {
+                    Some(arr) => {
+                        assert_eq!(arr.len(), 3);
+                        match arr[0].as_i64() {
+                            Some(i) => assert_eq!(i, 1),
+                            None => panic!("Expected integer value for arr[0]"),
+                        }
+                        match arr[1].as_i64() {
+                            Some(i) => assert_eq!(i, 2),
+                            None => panic!("Expected integer value for arr[1]"),
+                        }
+                        match arr[2].as_i64() {
+                            Some(i) => assert_eq!(i, 3),
+                            None => panic!("Expected integer value for arr[2]"),
+                        }
+                    }
+                    None => panic!("Expected vector value"),
+                }
             }
             Err(e) => {
                 panic!("Flow sequence parsing failed: {}", e);
@@ -211,8 +239,14 @@ nulltest: ~";
             Ok(docs) => {
                 assert_eq!(docs.len(), 1);
                 let doc = &docs[0];
-                assert_eq!(doc["hello"].as_str().unwrap(), "world");
-                assert_eq!(doc["int"].as_i64().unwrap(), 42);
+                match doc["hello"].as_str() {
+                    Some(s) => assert_eq!(s, "world"),
+                    None => panic!("Expected string value for hello"),
+                }
+                match doc["int"].as_i64() {
+                    Some(i) => assert_eq!(i, 42),
+                    None => panic!("Expected integer value for int"),
+                }
             }
             Err(e) => {
                 panic!("Two-line mapping failed: {}", e);
@@ -226,10 +260,14 @@ nulltest: ~";
         let models_yaml_url = "https://raw.githubusercontent.com/cyrup-ai/fluent-ai/main/provider/models.yaml";
         
         // Download the real models.yaml file
-        let yaml_content = reqwest::blocking::get(models_yaml_url)
-            .expect("Failed to download models.yaml")
-            .text()
-            .expect("Failed to read models.yaml content");
+        let response = match reqwest::blocking::get(models_yaml_url) {
+            Ok(resp) => resp,
+            Err(e) => panic!("Failed to download models.yaml: {}", e),
+        };
+        let yaml_content = match response.text() {
+            Ok(content) => content,
+            Err(e) => panic!("Failed to read models.yaml content: {}", e),
+        };
         
         println!("Downloaded models.yaml: {} bytes", yaml_content.len());
         
@@ -250,8 +288,7 @@ nulltest: ~";
                     
                     // Validate first provider has expected structure
                     let first_provider = &providers[0];
-                    if first_provider["provider"].as_str().is_some() {
-                        let provider_name = first_provider["provider"].as_str().expect("Provider name should be string");
+                    if let Some(provider_name) = first_provider["provider"].as_str() {
                         println!("First provider: '{}'", provider_name);
                     } else {
                         println!("First provider structure: {:?}", first_provider);
