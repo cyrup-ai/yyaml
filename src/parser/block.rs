@@ -142,9 +142,15 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if first && parser.first_mapping_key.is_some() {
         // We have a pre-loaded key from parse_node
-        let (event, mark) = parser.first_mapping_key.take().unwrap();
-        parser.state = State::BlockMappingValue;
-        return Ok((event, mark));
+        if let Some((event, mark)) = parser.first_mapping_key.take() {
+            parser.state = State::BlockMappingValue;
+            return Ok((event, mark));
+        }
+        // This should never happen since we checked is_some() above, but handle gracefully
+        return Err(ScanError::new(
+            crate::error::Marker::default(),
+            "Expected first mapping key to be present",
+        ));
     }
 
     // Look for the next key or end of mapping

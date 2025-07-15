@@ -562,9 +562,10 @@ mod tests {
         let node = create_test_node();
 
         // First create an anchor
-        tracker
-            .track_anchor(Cow::Borrowed("anchor"), &node, Position::default())
-            .unwrap();
+        match tracker.track_anchor(Cow::Borrowed("anchor"), &node, Position::default()) {
+            Ok(_) => {}, // Anchor tracking successful
+            Err(_) => panic!("Expected successful anchor tracking"),
+        }
 
         // Then create an alias
         let result = tracker.track_alias(
@@ -584,9 +585,10 @@ mod tests {
         let node = create_test_node();
 
         // Track first anchor
-        tracker
-            .track_anchor(Cow::Borrowed("duplicate"), &node, Position::default())
-            .unwrap();
+        match tracker.track_anchor(Cow::Borrowed("duplicate"), &node, Position::default()) {
+            Ok(_) => {}, // Anchor tracking successful
+            Err(_) => panic!("Expected successful anchor tracking"),
+        }
 
         // Try to track duplicate
         let result = tracker.track_alias(
@@ -603,9 +605,10 @@ mod tests {
         let mut tracker = ReferenceTracker::new();
         let node = create_test_node();
 
-        tracker
-            .track_anchor(Cow::Borrowed("test"), &node, Position::default())
-            .unwrap();
+        match tracker.track_anchor(Cow::Borrowed("test"), &node, Position::default()) {
+            Ok(_) => {}, // Anchor tracking successful
+            Err(_) => panic!("Expected successful anchor tracking"),
+        }
 
         assert_eq!(tracker.total_references(), 1);
 

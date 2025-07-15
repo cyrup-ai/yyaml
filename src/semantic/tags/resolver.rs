@@ -450,11 +450,12 @@ mod tests {
         let resolver = TagResolver::new();
         let context = AnalysisContext::new();
 
-        let full_tag = resolver
-            .construct_full_tag(&Some(Cow::Borrowed("!!")), &Cow::Borrowed("str"), &context)
-            .unwrap();
-
-        assert_eq!(full_tag, "tag:yaml.org,2002:str");
+        match resolver.construct_full_tag(&Some(Cow::Borrowed("!!")), &Cow::Borrowed("str"), &context) {
+            Ok(full_tag) => {
+                assert_eq!(full_tag, "tag:yaml.org,2002:str");
+            }
+            Err(_) => panic!("Expected successful tag construction"),
+        }
     }
 
     #[test]

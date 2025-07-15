@@ -123,9 +123,13 @@ mod tests {
         let result = analyze_stream(stream);
         assert!(result.is_ok());
 
-        let result = result.unwrap();
-        assert_eq!(result.documents.len(), 0);
-        assert_eq!(result.metrics.documents_processed, 0);
+        match result {
+            Ok(analysis_result) => {
+                assert_eq!(analysis_result.documents.len(), 0);
+                assert_eq!(analysis_result.metrics.documents_processed, 0);
+            }
+            Err(_) => panic!("Expected successful analysis of empty stream"),
+        }
     }
 
     #[test]

@@ -622,17 +622,22 @@ mod tests {
             is_critical: false,
         };
 
-        graph
-            .add_edge(id1, id2, EdgeType::ChildRelation, metadata.clone())
-            .unwrap();
-        graph
-            .add_edge(id2, id3, EdgeType::ChildRelation, metadata)
-            .unwrap();
+        match graph.add_edge(id1, id2, EdgeType::ChildRelation, metadata.clone()) {
+            Ok(_) => {}, // Edge addition successful
+            Err(_) => panic!("Expected successful edge addition"),
+        }
+        match graph.add_edge(id2, id3, EdgeType::ChildRelation, metadata) {
+            Ok(_) => {}, // Edge addition successful
+            Err(_) => panic!("Expected successful edge addition"),
+        }
 
         let path = graph.get_shortest_path(id1, id3);
         assert!(path.is_some());
-        let path = path.unwrap();
-        assert_eq!(path.len(), 3);
+        if let Some(path) = path {
+            assert_eq!(path.len(), 3);
+        } else {
+            panic!("Expected path to be found");
+        }
         assert_eq!(path[0], id1);
         assert_eq!(path[1], id2);
         assert_eq!(path[2], id3);
@@ -655,9 +660,10 @@ mod tests {
             is_critical: false,
         };
 
-        graph
-            .add_edge(id1, id2, EdgeType::ChildRelation, metadata)
-            .unwrap();
+        match graph.add_edge(id1, id2, EdgeType::ChildRelation, metadata) {
+            Ok(_) => {}, // Edge addition successful
+            Err(_) => panic!("Expected successful edge addition"),
+        }
         assert!(graph.has_path(id1, id2));
     }
 }
