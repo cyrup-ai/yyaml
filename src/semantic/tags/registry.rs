@@ -465,10 +465,10 @@ mod tests {
         // Add many tags
         for i in 0..50 {
             let tag = ResolvedTag::new(
-                format!("tag:test:type{}", i),
-                Cow::Owned(format!("type{}", i)),
+                format!("tag:test:type{i}"),
+                Cow::Owned(format!("type{i}")),
                 Some(Cow::Borrowed("!!")),
-                Cow::Owned(format!("type{}", i)),
+                Cow::Owned(format!("type{i}")),
                 YamlType::Str,
                 Position::new(1, 1, 0),
             );

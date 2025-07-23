@@ -164,11 +164,18 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
     // Look for the next key or end of mapping
     let token = parser.scanner.peek_token()?;
     let current_indent = *parser.indents.last().unwrap_or(&0);
+    
+    eprintln!("BLOCK_MAPPING_KEY DEBUG: token={:?}, current_indent={}, token_col={}", 
+              token.1, current_indent, token.0.col);
 
     // High-performance mapping key validation
-    match validate_block_mapping_indentation(&token, current_indent, true) {
+    let indent_result = validate_block_mapping_indentation(&token, current_indent, true);
+    eprintln!("BLOCK_MAPPING_KEY DEBUG: indent_result={:?}", indent_result);
+    
+    match indent_result {
         IndentationResult::Continue => {}
         IndentationResult::EndMapping(marker) => {
+            eprintln!("BLOCK_MAPPING_KEY DEBUG: EndMapping due to indentation");
             parser.pop_indent();
             parser.pop_state();
             return Ok((Event::MappingEnd, marker));
@@ -213,23 +220,30 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
             }
         }
         TokenType::StreamEnd | TokenType::DocumentEnd | TokenType::DocumentStart => {
+            eprintln!("BLOCK_MAPPING_KEY DEBUG: Ending mapping due to stream/document token");
             parser.pop_state();
             let mk = parser.scanner.mark();
             Ok((Event::MappingEnd, mk))
         }
         _ => {
+            eprintln!("BLOCK_MAPPING_KEY DEBUG: Trying to parse node as key for token: {:?}", token.1);
             // Try to parse a node as the next key
             let saved_state = parser.state;
             parser.push_state(saved_state);
             match parser.parse_node(true, false) {
                 Ok((event, mark)) => {
+                    eprintln!("BLOCK_MAPPING_KEY DEBUG: parse_node succeeded: event={:?}", event);
                     // Check if the next token is a colon
-                    match parser.scanner.peek_token()?.1 {
+                    let next_token = parser.scanner.peek_token()?;
+                    eprintln!("BLOCK_MAPPING_KEY DEBUG: next token after parse_node: {:?}", next_token.1);
+                    match next_token.1 {
                         TokenType::Value => {
+                            eprintln!("BLOCK_MAPPING_KEY DEBUG: Found colon, continuing with mapping value");
                             parser.state = State::BlockMappingValue;
                             Ok((event, mark))
                         }
                         _ => {
+                            eprintln!("BLOCK_MAPPING_KEY DEBUG: No colon found, ending mapping");
                             // Not a mapping key, end the mapping
                             parser.pop_state();
                             parser.current = Some((event, mark));
@@ -238,7 +252,8 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
                         }
                     }
                 }
-                Err(_) => {
+                Err(e) => {
+                    eprintln!("BLOCK_MAPPING_KEY DEBUG: parse_node failed: {:?}, ending mapping", e);
                     // Failed to parse node, end mapping
                     parser.pop_state();
                     let mk = parser.scanner.mark();
@@ -252,7 +267,10 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
 pub fn block_mapping_value<T: Iterator<Item = char>>(
     parser: &mut Parser<T>,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
-    match parser.scanner.peek_token()?.1 {
+    let token = parser.scanner.peek_token()?;
+    eprintln!("BLOCK_MAPPING_VALUE DEBUG: Processing token: {:?}", token.1);
+    
+    match token.1 {
         TokenType::Value => {
             let _tok = parser.scanner.fetch_token(); // consume the ':'
             
@@ -262,6 +280,7 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
             
             loop {
                 let token = parser.scanner.peek_token()?;
+                eprintln!("BLOCK_MAPPING_VALUE DEBUG: Processing token in anchor loop: {:?}", token.1);
                 match &token.1 {
                     TokenType::Alias(_) => {
                         let tok = parser.scanner.fetch_token();
@@ -269,11 +288,14 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                             TokenType::Alias(n) => n,
                             _ => unreachable!(),
                         };
+                        eprintln!("BLOCK_MAPPING_VALUE DEBUG: Found alias: {}", name);
                         if let Some(aid) = parser.anchors.get(&name) {
                             parser.state = State::BlockMappingKey;
+                            eprintln!("BLOCK_MAPPING_VALUE DEBUG: Resolved alias {} to id {}, transitioning to BlockMappingKey", name, aid);
                             return Ok((Event::Alias(*aid), tok.0));
                         } else {
                             parser.state = State::BlockMappingKey;
+                            eprintln!("BLOCK_MAPPING_VALUE DEBUG: Unresolved alias {}, using fallback id, transitioning to BlockMappingKey", name);
                             return Ok((Event::Alias(9999999), tok.0));
                         }
                     }
@@ -283,13 +305,18 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                             TokenType::Anchor(n) => n,
                             _ => unreachable!(),
                         };
-                        anchor_id = parser.register_anchor(name);
+                        anchor_id = parser.register_anchor(name.clone());
+                        eprintln!("BLOCK_MAPPING_VALUE DEBUG: Registered anchor {} with id {}", name, anchor_id);
                     }
                     TokenType::Tag(..) => {
                         let tok = parser.scanner.fetch_token();
                         tag = Some(tok.1);
+                        eprintln!("BLOCK_MAPPING_VALUE DEBUG: Found tag: {:?}", tag);
                     }
-                    _ => break,
+                    _ => {
+                        eprintln!("BLOCK_MAPPING_VALUE DEBUG: Exiting anchor loop");
+                        break;
+                    }
                 }
             }
             
@@ -303,6 +330,7 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                         _ => unreachable!(),
                     };
                     parser.state = State::BlockMappingKey;
+                    eprintln!("BLOCK_MAPPING_VALUE DEBUG: Parsed scalar value, transitioning to BlockMappingKey state");
                     Ok((Event::Scalar(val, style, anchor_id, tag), tok.0))
                 }
                 TokenType::FlowSequenceStart => {

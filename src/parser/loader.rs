@@ -12,18 +12,41 @@ impl YamlLoader {
     pub fn load_from_str(s: &str) -> Result<Vec<Yaml>, ScanError> {
         // Fast path for simple cases - zero allocation, blazing fast
         match Self::try_fast_parse(s) {
-            Ok(Some(result)) => return Ok(vec![result]),
-            Ok(None) => {}, // Fall through to full parser
-            Err(error) => return Err(error), // Propagate parsing errors
+            Ok(Some(result)) => {
+                eprintln!("PARSER DEBUG: Fast parser succeeded with: {result:?}");
+                return Ok(vec![result]);
+            }
+            Ok(None) => {
+                eprintln!("PARSER DEBUG: Fast parser detected complex syntax, falling back to full parser");
+            }, // Fall through to full parser
+            Err(error) => {
+                eprintln!("PARSER DEBUG: Fast parser failed: {error:?}");
+                return Err(error);
+            } // Propagate parsing errors
         }
 
         // Fallback to full parser - default to single document mode for load_from_str
         let mut parser = Parser::new(s.chars());
         let mut loader = YamlReceiver::new();
-        parser.load(&mut loader, false)?;
+        
+        match parser.load(&mut loader, false) {
+            Ok(()) => {
+                eprintln!("PARSER DEBUG: Full parser completed successfully");
+                eprintln!("PARSER DEBUG: Loaded {} documents", loader.docs.len());
+                for (i, doc) in loader.docs.iter().enumerate() {
+                    eprintln!("PARSER DEBUG: Document {i}: {doc:?}");
+                }
+                eprintln!("PARSER DEBUG: Anchors: {:?}", loader.anchors);
+            }
+            Err(e) => {
+                eprintln!("PARSER DEBUG: Full parser failed: {e:?}");
+                return Err(e);
+            }
+        }
         
         // If no documents were parsed, return empty array rather than fail
         if loader.docs.is_empty() {
+            eprintln!("PARSER DEBUG: No documents parsed, returning Null");
             // Try to handle as empty document
             return Ok(vec![Yaml::Null]);
         }
@@ -509,6 +532,7 @@ impl YamlReceiver {
 
 impl EventReceiver for YamlReceiver {
     fn on_event(&mut self, ev: Event) {
+        eprintln!("YAML EVENT: {:?} (doc_stack len: {}, docs len: {})", ev, self.doc_stack.len(), self.docs.len());
         match ev {
             Event::DocumentStart => {}
             Event::DocumentEnd => match self.doc_stack.len() {
@@ -528,7 +552,7 @@ impl EventReceiver for YamlReceiver {
                 } else {
                     // Anchor not found - this is an error condition
                     // For now, insert null to avoid BadValue but this should be investigated
-                    eprintln!("Warning: Anchor ID {} not found, using null", id);
+                    eprintln!("Warning: Anchor ID {id} not found, using null");
                     self.insert_new_node((Yaml::Null, 0));
                 }
             }

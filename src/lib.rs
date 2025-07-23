@@ -164,7 +164,7 @@ mod tests {
                 }
             }
             Err(e) => {
-                panic!("Parsing failed: {}", e);
+                panic!("Parsing failed: {e}");
             }
         }
     }
@@ -189,13 +189,13 @@ nulltest: ~";
                     None => panic!("Expected integer value for int"),
                 }
                 match doc["bool"].as_bool() {
-                    Some(b) => assert_eq!(b, true),
+                    Some(b) => assert!(b),
                     None => panic!("Expected boolean value for bool"),
                 }
                 assert!(doc["nulltest"].is_null());
             }
             Err(e) => {
-                panic!("Parsing failed: {}", e);
+                panic!("Parsing failed: {e}");
             }
         }
     }
@@ -226,7 +226,7 @@ nulltest: ~";
                 }
             }
             Err(e) => {
-                panic!("Flow sequence parsing failed: {}", e);
+                panic!("Flow sequence parsing failed: {e}");
             }
         }
     }
@@ -249,7 +249,7 @@ nulltest: ~";
                 }
             }
             Err(e) => {
-                panic!("Two-line mapping failed: {}", e);
+                panic!("Two-line mapping failed: {e}");
             }
         }
     }
@@ -262,12 +262,12 @@ nulltest: ~";
         // Download the real models.yaml file
         let rt = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
-            Err(e) => panic!("Failed to create tokio runtime: {}", e),
+            Err(e) => panic!("Failed to create tokio runtime: {e}"),
         };
         let yaml_content = rt.block_on(async {
             let response = match reqwest::get(models_yaml_url).await {
                 Ok(resp) => resp,
-                Err(e) => panic!("Failed to download models.yaml: {}", e),
+                Err(e) => panic!("Failed to download models.yaml: {e}"),
             };
             match response.text().await {
                 Ok(content) => content,
