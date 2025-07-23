@@ -124,7 +124,7 @@ impl<'a, 'input> ParsingContext<'a, 'input> {
             return Err(ParseError::new(
                 ParseErrorKind::RecursionLimitExceeded,
                 self.current_position(),
-                format!("recursion depth exceeded: {}", MAX_RECURSION_DEPTH),
+                format!("recursion depth exceeded: {MAX_RECURSION_DEPTH}"),
             ));
         }
         Ok(())
@@ -568,7 +568,7 @@ impl<'input> YamlParser<'input> {
                         context,
                         token,
                         0,
-                        |ctx| Self::parse_node_with_context_static(ctx),
+                        Self::parse_node_with_context_static,
                     )
                 } else {
                     Err(ParseError::new(
@@ -692,7 +692,7 @@ impl ParseError {
         Self {
             kind: ParseErrorKind::LexicalError,
             position: error.position,
-            message: error.kind.to_string().into(),
+            message: error.kind.to_string(),
         }
     }
 }

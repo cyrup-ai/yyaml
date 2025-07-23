@@ -32,10 +32,8 @@ impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
         Q: PartialEq + ?Sized,
     {
         for id in &self.order {
-            if let Some((k, v)) = self.map.get(id) {
-                if k.borrow() == key {
-                    return Some(v);
-                }
+            if let Some((k, v)) = self.map.get(id) && k.borrow() == key {
+                return Some(v);
             }
         }
         None
@@ -44,11 +42,9 @@ impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         // check if key exists
         for id in &self.order {
-            if let Some((k, old_v)) = self.map.get_mut(id) {
-                if k == &key {
-                    let old = std::mem::replace(old_v, value);
-                    return Some(old);
-                }
+            if let Some((k, old_v)) = self.map.get_mut(id) && k == &key {
+                let old = std::mem::replace(old_v, value);
+                return Some(old);
             }
         }
         let id = self.next_id;
@@ -89,10 +85,10 @@ impl<'a, K: PartialEq + Eq, V> Iterator for Iter<'a, K, V> {
     type Item = (&'a K, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(&id) = self.inner.next() {
-            if let Some((k, v)) = self.map.get(&id) {
-                return Some((k, v));
-            }
+        if let Some(&id) = self.inner.next()
+            && let Some((k, v)) = self.map.get(&id)
+        {
+            return Some((k, v));
         }
         None
     }

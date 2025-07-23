@@ -86,9 +86,7 @@ impl CacheStatistics {
         };
 
         // Rough memory usage estimate (string keys + cached nodes)
-        let memory_usage_estimate = cache
-            .iter()
-            .map(|(key, _)| key.len() + std::mem::size_of::<CachedResolution<'_>>())
+        let memory_usage_estimate = cache.keys().map(|key| key.len() + std::mem::size_of::<CachedResolution<'_>>())
             .sum::<usize>();
 
         Self {

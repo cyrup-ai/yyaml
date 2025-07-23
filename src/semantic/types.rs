@@ -201,7 +201,7 @@ impl SemanticWarning {
     pub fn message(&self) -> String {
         match self {
             SemanticWarning::UnusedAnchor { anchor_name, .. } => {
-                format!("Unused anchor definition: '{}'", anchor_name)
+                format!("Unused anchor definition: '{anchor_name}'")
             }
             SemanticWarning::DeprecatedTag {
                 tag,
@@ -209,9 +209,9 @@ impl SemanticWarning {
                 ..
             } => {
                 if let Some(replacement) = suggested_replacement {
-                    format!("Deprecated tag '{}', consider using '{}'", tag, replacement)
+                    format!("Deprecated tag '{tag}', consider using '{replacement}'")
                 } else {
-                    format!("Deprecated tag '{}'", tag)
+                    format!("Deprecated tag '{tag}'")
                 }
             }
             SemanticWarning::InefficiencyWarning {
@@ -219,14 +219,14 @@ impl SemanticWarning {
                 suggestion,
                 ..
             } => {
-                format!("{} (Suggestion: {})", description, suggestion)
+                format!("{description} (Suggestion: {suggestion})")
             }
             SemanticWarning::CustomValidationWarning {
                 validator_name,
                 message,
                 ..
             } => {
-                format!("[{}] {}", validator_name, message)
+                format!("[{validator_name}] {message}")
             }
         }
     }

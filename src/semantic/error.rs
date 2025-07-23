@@ -133,14 +133,13 @@ impl SemanticError {
     pub fn message(&self) -> String {
         match self {
             SemanticError::UnresolvedAlias { alias_name, .. } => {
-                format!("Unresolved alias reference: '{}'", alias_name)
+                format!("Unresolved alias reference: '{alias_name}'")
             }
             SemanticError::CircularReference {
                 alias_name, path, ..
             } => {
                 format!(
-                    "Circular reference detected for alias '{}' at path '{}'",
-                    alias_name, path
+                    "Circular reference detected for alias '{alias_name}' at path '{path}'"
                 )
             }
             SemanticError::DuplicateAnchor {
@@ -154,13 +153,13 @@ impl SemanticError {
                 )
             }
             SemanticError::InvalidTagHandle { handle, .. } => {
-                format!("Invalid tag handle: '{}'", handle)
+                format!("Invalid tag handle: '{handle}'")
             }
             SemanticError::UnknownTag { tag, .. } => {
-                format!("Unknown tag: '{}'", tag)
+                format!("Unknown tag: '{tag}'")
             }
             SemanticError::TagResolutionFailed { tag, reason, .. } => {
-                format!("Failed to resolve tag '{}': {}", tag, reason)
+                format!("Failed to resolve tag '{tag}': {reason}")
             }
             SemanticError::ValidationDepthExceeded {
                 max_depth,
@@ -168,61 +167,59 @@ impl SemanticError {
                 ..
             } => {
                 format!(
-                    "Validation depth exceeded: {} > {} (maximum)",
-                    current_depth, max_depth
+                    "Validation depth exceeded: {current_depth} > {max_depth} (maximum)"
                 )
             }
             SemanticError::UnknownTagHandle { handle, .. } => {
-                format!("Unknown tag handle: '{}'", handle)
+                format!("Unknown tag handle: '{handle}'")
             }
             SemanticError::CustomTagResolutionFailed { tag, error, .. } => {
-                format!("Custom tag resolution failed for '{}': {}", tag, error)
+                format!("Custom tag resolution failed for '{tag}': {error}")
             }
             SemanticError::UnknownCustomTag { tag, .. } => {
-                format!("Unknown custom tag: '{}'", tag)
+                format!("Unknown custom tag: '{tag}'")
             }
             SemanticError::InvalidDocumentStructure { reason, .. } => {
-                format!("Invalid document structure: {}", reason)
+                format!("Invalid document structure: {reason}")
             }
             SemanticError::TypeMismatch {
                 expected, actual, ..
             } => {
-                format!("Type mismatch: expected '{}', found '{}'", expected, actual)
+                format!("Type mismatch: expected '{expected}', found '{actual}'")
             }
             SemanticError::ValueValidationFailed {
                 value, constraint, ..
             } => {
-                format!("Value '{}' failed validation: {}", value, constraint)
+                format!("Value '{value}' failed validation: {constraint}")
             }
             SemanticError::ReferenceTrackingError { reason, .. } => {
-                format!("Reference tracking error: {}", reason)
+                format!("Reference tracking error: {reason}")
             }
             SemanticError::AnchorRegistrationFailed {
                 anchor_name,
                 reason,
                 ..
             } => {
-                format!("Failed to register anchor '{}': {}", anchor_name, reason)
+                format!("Failed to register anchor '{anchor_name}': {reason}")
             }
             SemanticError::ValidationError { message, .. } => {
-                format!("Validation error: {}", message)
+                format!("Validation error: {message}")
             }
             SemanticError::InternalError { message, .. } => {
-                format!("Internal error: {}", message)
+                format!("Internal error: {message}")
             }
             SemanticError::ConflictingAnchor { anchor_name, .. } => {
-                format!("Conflicting anchor definition: '{}'", anchor_name)
+                format!("Conflicting anchor definition: '{anchor_name}'")
             }
             SemanticError::ValidationFailure { message, rule, .. } => {
-                format!("Validation rule '{}' failed: {}", rule, message)
+                format!("Validation rule '{rule}' failed: {message}")
             }
             SemanticError::MaxDepthExceeded {
                 max_depth,
                 current_path,
             } => {
                 format!(
-                    "Maximum depth {} exceeded at path: {:?}",
-                    max_depth, current_path
+                    "Maximum depth {max_depth} exceeded at path: {current_path:?}"
                 )
             }
         }

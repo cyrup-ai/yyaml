@@ -260,10 +260,10 @@ impl ContextValidationError {
     pub fn message(&self) -> String {
         match self {
             ContextValidationError::InvalidMaxDepth(depth) => {
-                format!("Invalid maximum depth: {}", depth)
+                format!("Invalid maximum depth: {depth}")
             }
             ContextValidationError::ExcessiveMaxDepth(depth) => {
-                format!("Excessive maximum depth: {} (should be <= 10000)", depth)
+                format!("Excessive maximum depth: {depth} (should be <= 10000)")
             }
             ContextValidationError::InconsistentState {
                 depth,
@@ -271,8 +271,7 @@ impl ContextValidationError {
                 visited_count,
             } => {
                 format!(
-                    "Inconsistent context state: depth={}, path_length={}, visited_count={}",
-                    depth, path_length, visited_count
+                    "Inconsistent context state: depth={depth}, path_length={path_length}, visited_count={visited_count}"
                 )
             }
         }

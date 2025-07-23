@@ -178,18 +178,15 @@ impl<'input> ReferenceTracker<'input> {
         let mut unresolved_aliases = Vec::new();
 
         for &alias_id in self.alias_registry.values() {
-            if let Some(node) = self.graph.get_node(alias_id) {
-                if let ReferenceNodeType::Alias {
+            if let Some(node) = self.graph.get_node(alias_id)
+                && let ReferenceNodeType::Alias {
                     resolved_target: None,
                     target,
                     ..
                 } = &node.node_type
-                {
-                    if let Some(&target_id) = self.anchor_registry.get(target) {
+                    && let Some(&target_id) = self.anchor_registry.get(target) {
                         unresolved_aliases.push((alias_id, target_id));
                     }
-                }
-            }
         }
 
         // Resolve aliases and create edges
@@ -204,14 +201,13 @@ impl<'input> ReferenceTracker<'input> {
                 .add_edge(alias_id, target_id, EdgeType::AliasReference, metadata)?;
 
             // Update node to mark as resolved
-            if let Some(node) = self.graph.get_node_mut(alias_id) {
-                if let ReferenceNodeType::Alias {
+            if let Some(node) = self.graph.get_node_mut(alias_id)
+                && let ReferenceNodeType::Alias {
                     resolved_target, ..
                 } = &mut node.node_type
                 {
                     *resolved_target = Some(target_id);
                 }
-            }
 
             resolved_count += 1;
         }
@@ -291,7 +287,7 @@ impl<'input> ReferenceTracker<'input> {
         // Create document node
         let node = ReferenceNode {
             id: ReferenceId(0), // Will be set by graph
-            name: Cow::Owned(format!("document_{}", document_index)),
+            name: Cow::Owned(format!("document_{document_index}")),
             node_type: ReferenceNodeType::Document {
                 root,
                 document_index,
@@ -443,7 +439,7 @@ impl<'input> ReferenceTracker<'input> {
             } else {
                 return Err(SemanticError::ValidationFailure {
                     rule: "anchor_registry_existence".to_string(),
-                    message: format!("Anchor registry points to non-existent node: {}", name),
+                    message: format!("Anchor registry points to non-existent node: {name}"),
                     position: Position::default(),
                 });
             }
@@ -488,21 +484,18 @@ impl<'input> ReferenceTracker<'input> {
     pub fn validate_references(&self) -> Result<(), SemanticError> {
         // Check that all aliases have corresponding anchors
         for (alias_name, &alias_id) in &self.alias_registry {
-            if let Some(node) = self.graph.get_node(alias_id) {
-                if let ReferenceNodeType::Alias {
+            if let Some(node) = self.graph.get_node(alias_id)
+                && let ReferenceNodeType::Alias {
                     target,
                     resolved_target,
                     ..
                 } = &node.node_type
-                {
-                    if resolved_target.is_none() && !self.anchor_registry.contains_key(target) {
+                    && resolved_target.is_none() && !self.anchor_registry.contains_key(target) {
                         return Err(SemanticError::UnresolvedAlias {
                             alias_name: alias_name.to_string(),
                             position: node.position,
                         });
                     }
-                }
-            }
         }
 
         // Validate internal consistency

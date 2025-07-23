@@ -50,14 +50,14 @@ pub fn parse_node<T: Iterator<Item = char>>(
             let mk = token.0;
             parser.push_indent(col);
             parser.state = State::IndentlessSequenceEntry;
-            return Ok((Event::SequenceStart(anchor_id), mk));
+            Ok((Event::SequenceStart(anchor_id), mk))
         }
         TokenType::BlockEntry if block => {
             let col = token.0.col;
             let mk = token.0;
             parser.push_indent(col);
             parser.state = State::BlockSequenceFirstEntry;
-            return Ok((Event::SequenceStart(anchor_id), mk));
+            Ok((Event::SequenceStart(anchor_id), mk))
         }
         TokenType::Scalar(..) => {
             if block {
@@ -70,8 +70,8 @@ pub fn parse_node<T: Iterator<Item = char>>(
                 };
 
                 // Check if next token is a colon
-                if let Ok(next_tok) = parser.scanner.peek_token() {
-                    if matches!(next_tok.1, TokenType::Value) {
+                if let Ok(next_tok) = parser.scanner.peek_token()
+                    && matches!(next_tok.1, TokenType::Value) {
                         // Found colon - this is a mapping
                         // Store the scalar key for block_mapping_key to retrieve
                         parser.first_mapping_key =
@@ -81,11 +81,10 @@ pub fn parse_node<T: Iterator<Item = char>>(
                         parser.state = State::BlockMappingFirstKey;
                         return Ok((Event::MappingStart(anchor_id), current_mark));
                     }
-                }
 
                 // No colon found - return scalar directly
                 parser.pop_state();
-                return Ok((Event::Scalar(val, style, anchor_id, tag), current_mark));
+                Ok((Event::Scalar(val, style, anchor_id, tag), current_mark))
             } else {
                 let tok = parser.scanner.fetch_token();
                 let (style, val) = match tok.1 {
@@ -93,18 +92,18 @@ pub fn parse_node<T: Iterator<Item = char>>(
                     _ => unreachable!(),
                 };
                 parser.pop_state();
-                return Ok((Event::Scalar(val, style, anchor_id, tag), tok.0));
+                Ok((Event::Scalar(val, style, anchor_id, tag), tok.0))
             }
         }
         TokenType::FlowSequenceStart => {
             parser.state = State::FlowSequenceFirstEntry;
             let tok = parser.scanner.fetch_token();
-            return Ok((Event::SequenceStart(anchor_id), tok.0));
+            Ok((Event::SequenceStart(anchor_id), tok.0))
         }
         TokenType::FlowMappingStart => {
             parser.state = State::FlowMappingFirstKey;
             let tok = parser.scanner.fetch_token();
-            return Ok((Event::MappingStart(anchor_id), tok.0));
+            Ok((Event::MappingStart(anchor_id), tok.0))
         }
         _ => {
             if anchor_id > 0 || tag.is_some() {

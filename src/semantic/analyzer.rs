@@ -149,14 +149,14 @@ impl<'input> SemanticAnalyzer<'input> {
             // Track anchor with minimal allocation
             let anchor_id = self.reference_tracker.track_anchor(
                 std::borrow::Cow::Borrowed(anchor_name),
-                &*anchor_node.node,
+                &anchor_node.node,
                 anchor_position,
             )?;
 
             // Register with anchor resolver for efficient lookup
             self.anchor_resolver.register_anchor(
                 std::borrow::Cow::Borrowed(anchor_name),
-                &*anchor_node.node,
+                &anchor_node.node,
                 anchor_id.0,
                 path.clone(),
             )?;
@@ -167,7 +167,7 @@ impl<'input> SemanticAnalyzer<'input> {
             Node::Sequence(seq) => {
                 path.reserve(1); // Pre-allocate for index string
                 for (index, child) in seq.items.iter().enumerate() {
-                    path.push(format!("[{}]", index));
+                    path.push(format!("[{index}]"));
                     self.collect_anchors_from_node_optimized(child, path)?;
                     path.pop();
                 }
@@ -257,7 +257,7 @@ impl<'input> SemanticAnalyzer<'input> {
             Node::Sequence(seq) => {
                 path.reserve(1); // Pre-allocate for index string
                 for (index, child) in seq.items.iter().enumerate() {
-                    path.push(format!("[{}]", index));
+                    path.push(format!("[{index}]"));
                     self.collect_anchors_from_node_owned(child, path)?;
                     path.pop();
                 }
@@ -445,7 +445,7 @@ impl<'input> SemanticAnalyzer<'input> {
                 // Recursively resolve aliases in sequence elements
                 let mut resolved_items = Vec::with_capacity(seq.items.len());
                 for (index, child) in seq.items.into_iter().enumerate() {
-                    path.push(format!("[{}]", index));
+                    path.push(format!("[{index}]"));
                     let resolved_child = self.resolve_aliases_in_node(child, path)?;
                     resolved_items.push(resolved_child);
                     path.pop();

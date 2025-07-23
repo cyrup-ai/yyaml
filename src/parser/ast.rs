@@ -290,10 +290,10 @@ impl<'input> MappingNode<'input> {
     /// Find value by key (string comparison)
     pub fn get(&self, key: &str) -> Option<&Node<'input>> {
         for pair in &self.pairs {
-            if let Some(scalar) = pair.key.as_scalar() {
-                if scalar.as_str() == key {
-                    return Some(&pair.value);
-                }
+            if let Some(scalar) = pair.key.as_scalar()
+                && scalar.as_str() == key
+            {
+                return Some(&pair.value);
             }
         }
         None

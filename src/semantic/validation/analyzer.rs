@@ -48,6 +48,12 @@ pub struct StructureAnalyzer<'input> {
     pub optimization_hints: Vec<OptimizationHint>,
 }
 
+impl<'input> Default for StructureAnalyzer<'input> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'input> StructureAnalyzer<'input> {
     /// Create a new structure analyzer
     #[inline]
@@ -85,11 +91,10 @@ impl<'input> StructureAnalyzer<'input> {
 
         // Detect patterns
         for detector in &self.pattern_detectors {
-            if let Some(pattern_match) = detector.detect(node, context) {
-                if let Some(hint) = pattern_match.optimization_hint {
+            if let Some(pattern_match) = detector.detect(node, context)
+                && let Some(hint) = pattern_match.optimization_hint {
                     self.optimization_hints.push(hint);
                 }
-            }
         }
     }
 

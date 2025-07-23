@@ -7,13 +7,10 @@ pub fn flow_sequence_entry<T: Iterator<Item = char>>(
     first: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if first {
-        match parser.scanner.peek_token()?.1 {
-            TokenType::FlowSequenceEnd => {
-                parser.pop_state();
-                let tok = parser.scanner.fetch_token();
-                return Ok((Event::SequenceEnd, tok.0));
-            }
-            _ => {}
+        if parser.scanner.peek_token()?.1 == TokenType::FlowSequenceEnd {
+            parser.pop_state();
+            let tok = parser.scanner.fetch_token();
+            return Ok((Event::SequenceEnd, tok.0));
         }
     } else {
         match parser.scanner.peek_token()?.1 {
@@ -105,13 +102,10 @@ pub fn flow_mapping_key<T: Iterator<Item = char>>(
     first: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
     if first {
-        match parser.scanner.peek_token()?.1 {
-            TokenType::FlowMappingEnd => {
-                parser.pop_state();
-                let tok = parser.scanner.fetch_token();
-                return Ok((Event::MappingEnd, tok.0));
-            }
-            _ => {}
+        if parser.scanner.peek_token()?.1 == TokenType::FlowMappingEnd {
+            parser.pop_state();
+            let tok = parser.scanner.fetch_token();
+            return Ok((Event::MappingEnd, tok.0));
         }
     } else {
         match parser.scanner.peek_token()?.1 {

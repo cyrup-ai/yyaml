@@ -299,18 +299,18 @@ impl TagValidationWarning {
                 tag, replacement, ..
             } => {
                 if let Some(repl) = replacement {
-                    format!("Tag '{}' is deprecated. Use '{}' instead.", tag, repl)
+                    format!("Tag '{tag}' is deprecated. Use '{repl}' instead.")
                 } else {
-                    format!("Tag '{}' is deprecated.", tag)
+                    format!("Tag '{tag}' is deprecated.")
                 }
             }
             TagValidationWarning::UnknownTag {
                 tag, suggestion, ..
             } => {
                 if let Some(sugg) = suggestion {
-                    format!("Unknown tag '{}'. Did you mean '{}'?", tag, sugg)
+                    format!("Unknown tag '{tag}'. Did you mean '{sugg}'?")
                 } else {
-                    format!("Unknown tag '{}'.", tag)
+                    format!("Unknown tag '{tag}'.")
                 }
             }
             TagValidationWarning::AmbiguousResolution {
@@ -328,8 +328,7 @@ impl TagValidationWarning {
                 ..
             } => {
                 format!(
-                    "Invalid tag format '{}'. Expected format: {}",
-                    tag, expected_format
+                    "Invalid tag format '{tag}'. Expected format: {expected_format}"
                 )
             }
             TagValidationWarning::ConflictingDefinition {
@@ -338,8 +337,7 @@ impl TagValidationWarning {
                 ..
             } => {
                 format!(
-                    "Conflicting definition for tag '{}'. Existing: {}",
-                    tag, existing_definition
+                    "Conflicting definition for tag '{tag}'. Existing: {existing_definition}"
                 )
             }
         }

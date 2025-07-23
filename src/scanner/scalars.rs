@@ -78,7 +78,7 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
                     }
 
                     // Put back the indentation chars if we continue
-                    if next_col > 0 && next_col >= start_col as usize {
+                    if next_col > 0 && next_col >= start_col {
                         // Continue scalar
                         if !result.is_empty() && !spaces.is_empty() {
                             result.push_str(&spaces);
@@ -96,11 +96,10 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
             }
 
             // Document markers
-            if ch == '-' || ch == '.' {
-                if state.check_document_start()? || state.check_document_end()? {
+            if (ch == '-' || ch == '.')
+                && (state.check_document_start()? || state.check_document_end()?) {
                     break;
                 }
-            }
 
             // Regular character
             if !spaces.is_empty() {
@@ -235,7 +234,7 @@ fn process_escape_sequence<T: Iterator<Item = char>>(
         }
         ch => Err(ScanError::new(
             state.mark(),
-            &format!("invalid escape sequence '\\{}'", ch),
+            &format!("invalid escape sequence '\\{ch}'"),
         )),
     }
 }
@@ -256,7 +255,7 @@ fn read_hex_escape<T: Iterator<Item = char>>(
             ch => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!("invalid hex digit '{}' in escape sequence", ch),
+                    &format!("invalid hex digit '{ch}' in escape sequence"),
                 ));
             }
         }
@@ -265,7 +264,7 @@ fn read_hex_escape<T: Iterator<Item = char>>(
     char::from_u32(value).ok_or_else(|| {
         ScanError::new(
             state.mark(),
-            &format!("invalid Unicode code point U+{:04X}", value),
+            &format!("invalid Unicode code point U+{value:04X}"),
         )
     })
 }
@@ -297,11 +296,10 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
 
     loop {
         // Check for document markers
-        if state.at_line_start() {
-            if state.check_document_start()? || state.check_document_end()? {
+        if state.at_line_start()
+            && (state.check_document_start()? || state.check_document_end()?) {
                 break;
             }
-        }
 
         // Read indentation
         let line_indent = count_indentation(state)?;
@@ -314,7 +312,7 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
         // Check for blank line
         if matches!(state.peek_char(), Ok('\n') | Ok('\r') | Err(_)) {
             trailing_breaks.push('\n');
-            if let Ok(_) = state.peek_char() {
+            if state.peek_char().is_ok() {
                 consume_line_break(state)?;
             }
             continue;
@@ -506,7 +504,7 @@ fn consume_line_break<T: Iterator<Item = char>>(
         ch => {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("expected line break, found '{}'", ch),
+                &format!("expected line break, found '{ch}'"),
             ));
         }
     }

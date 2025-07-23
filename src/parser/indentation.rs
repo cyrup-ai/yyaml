@@ -240,6 +240,12 @@ pub struct IndentationStateMachine {
     current_context: IndentationContext,
 }
 
+impl Default for IndentationStateMachine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IndentationStateMachine {
     #[inline]
     pub fn new() -> Self {

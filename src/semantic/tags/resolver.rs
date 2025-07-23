@@ -145,11 +145,11 @@ impl<'input> TagResolver<'input> {
             Some(handle) => {
                 // Look up handle prefix in registry
                 if let Some(prefix) = self.tag_registry.get_tag_prefix(handle) {
-                    Ok(format!("{}{}", prefix, tag_suffix))
+                    Ok(format!("{prefix}{tag_suffix}"))
                 } else {
                     // Check context for handle definitions
                     if let Some(prefix) = context.get_tag_handle(handle) {
-                        Ok(format!("{}{}", prefix, tag_suffix))
+                        Ok(format!("{prefix}{tag_suffix}"))
                     } else {
                         Err(YamlType::unknown_tag_handle_error(
                             handle,
@@ -184,7 +184,7 @@ impl<'input> TagResolver<'input> {
                     Err(err) => {
                         return Err(YamlType::custom_tag_resolution_failed_error(
                             full_tag,
-                            &format!("Custom resolver '{}' failed: {}", name, err),
+                            &format!("Custom resolver '{name}' failed: {err}"),
                             Position::default(),
                         ));
                     }
@@ -272,7 +272,7 @@ impl<'input> TagResolver<'input> {
                     warnings.push(TagValidationWarning::ConflictingDefinition {
                         tag: tag.full_tag.clone(),
                         position: tag.position,
-                        existing_definition: format!("{:?}", existing_type),
+                        existing_definition: format!("{existing_type:?}"),
                     });
                 }
             } else {

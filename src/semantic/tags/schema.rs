@@ -142,7 +142,7 @@ impl<'input> SchemaProcessor<'input> {
     /// Check if string matches binary pattern
     pub fn is_binary_pattern(&self, value: &str) -> bool {
         // Must be at least 4 characters and have proper base64 structure
-        if value.len() < 4 || value.len() % 4 != 0 {
+        if value.len() < 4 || !value.len().is_multiple_of(4) {
             return false;
         }
         

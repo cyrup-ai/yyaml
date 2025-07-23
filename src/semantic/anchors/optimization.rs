@@ -188,7 +188,7 @@ impl AnchorOptimizations {
             }
         }
 
-        let avg_depth = if registry.len() > 0 {
+        let avg_depth = if !registry.is_empty() {
             total_depth as f64 / registry.len() as f64
         } else {
             0.0

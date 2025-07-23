@@ -20,11 +20,10 @@ impl DocumentParser {
         let mut documents = Vec::new();
 
         // Parse stream start if present
-        if let Some(token) = parser.peek_token()? {
-            if matches!(token.kind, TokenKind::StreamStart) {
+        if let Some(token) = parser.peek_token()?
+            && matches!(token.kind, TokenKind::StreamStart) {
                 parser.consume_token()?;
             }
-        }
 
         // Parse documents until stream end
         while !parser.is_at_end()? {
@@ -202,7 +201,7 @@ impl DocumentParser {
             _ => Err(ParseError::new(
                 ParseErrorKind::UnexpectedToken,
                 token.position,
-                format!("unexpected token at document level: {:?}", token_kind),
+                format!("unexpected token at document level: {token_kind:?}"),
             )),
         }
     }
@@ -225,49 +224,45 @@ impl DocumentParser {
     ) -> Result<Vec<DirectiveInfo<'input>>, ParseError> {
         let mut directives = Vec::new();
 
-        loop {
-            if let Some(token) = context.peek_token()? {
-                match token.kind {
-                    TokenKind::YamlDirective { .. }
-                    | TokenKind::TagDirective { .. }
-                    | TokenKind::ReservedDirective { .. } => {
-                        // This is a directive, consume it
-                        let directive_token = context.consume_token()?;
+        while let Some(token) = context.peek_token()? {
+            match token.kind {
+                TokenKind::YamlDirective { .. }
+                | TokenKind::TagDirective { .. }
+                | TokenKind::ReservedDirective { .. } => {
+                    // This is a directive, consume it
+                    let directive_token = context.consume_token()?;
 
-                        match directive_token.kind {
-                            TokenKind::YamlDirective { major, minor } => {
-                                directives.push(DirectiveInfo::Yaml {
-                                    major,
-                                    minor,
-                                    position: directive_token.position,
-                                });
-                            }
-
-                            TokenKind::TagDirective { handle, prefix } => {
-                                directives.push(DirectiveInfo::Tag {
-                                    handle,
-                                    prefix,
-                                    position: directive_token.position,
-                                });
-                            }
-
-                            TokenKind::ReservedDirective { name, value } => {
-                                directives.push(DirectiveInfo::Reserved {
-                                    name,
-                                    value,
-                                    position: directive_token.position,
-                                });
-                            }
-
-                            _ => unreachable!("We already checked this is a directive token"),
+                    match directive_token.kind {
+                        TokenKind::YamlDirective { major, minor } => {
+                            directives.push(DirectiveInfo::Yaml {
+                                major,
+                                minor,
+                                position: directive_token.position,
+                            });
                         }
 
-                        context.skip_insignificant_tokens()?;
+                        TokenKind::TagDirective { handle, prefix } => {
+                            directives.push(DirectiveInfo::Tag {
+                                handle,
+                                prefix,
+                                position: directive_token.position,
+                            });
+                        }
+
+                        TokenKind::ReservedDirective { name, value } => {
+                            directives.push(DirectiveInfo::Reserved {
+                                name,
+                                value,
+                                position: directive_token.position,
+                            });
+                        }
+
+                        _ => unreachable!("We already checked this is a directive token"),
                     }
-                    _ => break, // Not a directive
+
+                    context.skip_insignificant_tokens()?;
                 }
-            } else {
-                break;
+                _ => break, // Not a directive
             }
         }
 
@@ -543,7 +538,7 @@ impl DocumentOptimizations {
     }
 
     /// Suggest parsing strategy based on document size
-    pub fn suggest_parsing_strategy<'input>(estimated_size: usize) -> ParsingStrategy {
+    pub fn suggest_parsing_strategy(estimated_size: usize) -> ParsingStrategy {
         if estimated_size < 1024 {
             ParsingStrategy::InMemory
         } else if estimated_size < 1024 * 1024 {

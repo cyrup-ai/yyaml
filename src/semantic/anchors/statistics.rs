@@ -238,8 +238,7 @@ impl AnchorValidationWarning {
                 ..
             } => {
                 format!(
-                    "Anchor '{}' is defined but never used (age: {}ms)",
-                    name, definition_age_ms
+                    "Anchor '{name}' is defined but never used (age: {definition_age_ms}ms)"
                 )
             }
             AnchorValidationWarning::CircularReference {
@@ -248,16 +247,14 @@ impl AnchorValidationWarning {
                 ..
             } => {
                 format!(
-                    "Circular reference detected for anchor '{}': {}",
-                    anchor_name, reference_path
+                    "Circular reference detected for anchor '{anchor_name}': {reference_path}"
                 )
             }
             AnchorValidationWarning::DeepNesting {
                 anchor_name, depth, ..
             } => {
                 format!(
-                    "Anchor '{}' has deep nesting (depth: {}), may impact performance",
-                    anchor_name, depth
+                    "Anchor '{anchor_name}' has deep nesting (depth: {depth}), may impact performance"
                 )
             }
             AnchorValidationWarning::PotentialMemoryIssue {
@@ -266,8 +263,7 @@ impl AnchorValidationWarning {
                 ..
             } => {
                 format!(
-                    "Anchor '{}' may use significant memory ({} bytes)",
-                    anchor_name, estimated_size_bytes
+                    "Anchor '{anchor_name}' may use significant memory ({estimated_size_bytes} bytes)"
                 )
             }
             AnchorValidationWarning::NamingConflict {
@@ -287,8 +283,7 @@ impl AnchorValidationWarning {
                 ..
             } => {
                 format!(
-                    "Performance issue with anchor '{}': {} resolutions, avg {:.2}ms",
-                    anchor_name, resolution_count, avg_resolution_time_ms
+                    "Performance issue with anchor '{anchor_name}': {resolution_count} resolutions, avg {avg_resolution_time_ms:.2}ms"
                 )
             }
         }

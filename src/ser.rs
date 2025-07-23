@@ -3,6 +3,12 @@ use serde::ser::{self, SerializeMap};
 
 pub struct YamlSerializer;
 
+impl Default for YamlSerializer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl YamlSerializer {
     pub fn new() -> Self {
         YamlSerializer

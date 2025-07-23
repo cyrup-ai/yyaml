@@ -16,6 +16,12 @@ pub struct DocumentValidator<'input> {
     pub validation_context: ValidationContext,
 }
 
+impl<'input> Default for DocumentValidator<'input> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'input> DocumentValidator<'input> {
     /// Create a new document validator with default settings
     #[inline]
@@ -160,7 +166,7 @@ impl<'input> DocumentValidator<'input> {
         match node {
             Node::Sequence(seq) => {
                 for (idx, item) in seq.items.iter().enumerate() {
-                    self.validation_context.push_path(format!("[{}]", idx));
+                    self.validation_context.push_path(format!("[{idx}]"));
                     warnings.extend(self.validate_node(item, analysis_context)?);
                     self.validation_context.pop_path();
                 }

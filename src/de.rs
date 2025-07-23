@@ -356,6 +356,7 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
     {
         match self.value {
             Yaml::Array(seq) => visitor.visit_seq(SeqDeserializer::new(seq.iter())),
+            Yaml::Null => visitor.visit_seq(SeqDeserializer::new([].iter())),
             _ => Err(Error::Custom("expected sequence".into())),
         }
     }
@@ -388,6 +389,10 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
     {
         match self.value {
             Yaml::Hash(map) => visitor.visit_map(MapDeserializer::new(map.iter())),
+            Yaml::Null => {
+                let empty: &[(&Yaml, &Yaml)] = &[];
+                visitor.visit_map(MapDeserializer::new(empty.iter().copied()))
+            }
             _ => Err(Error::Custom("expected mapping".into())),
         }
     }

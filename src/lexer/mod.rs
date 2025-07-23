@@ -145,17 +145,17 @@ pub enum LexErrorKind {
 impl std::fmt::Display for LexErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LexErrorKind::UnexpectedCharacter(msg) => write!(f, "unexpected character: {}", msg),
-            LexErrorKind::InvalidEscape(msg) => write!(f, "invalid escape sequence: {}", msg),
+            LexErrorKind::UnexpectedCharacter(msg) => write!(f, "unexpected character: {msg}"),
+            LexErrorKind::InvalidEscape(msg) => write!(f, "invalid escape sequence: {msg}"),
             LexErrorKind::UnterminatedString => write!(f, "unterminated string"),
             LexErrorKind::InvalidUnicode => write!(f, "invalid unicode sequence"),
             LexErrorKind::InvalidUnicodeEscape => write!(f, "invalid unicode escape"),
             LexErrorKind::InvalidNumber => write!(f, "invalid number format"),
-            LexErrorKind::InvalidTag(msg) => write!(f, "invalid tag: {}", msg),
-            LexErrorKind::InvalidAnchor(msg) => write!(f, "invalid anchor: {}", msg),
-            LexErrorKind::InvalidAlias(msg) => write!(f, "invalid alias: {}", msg),
-            LexErrorKind::InvalidDirective(msg) => write!(f, "invalid directive: {}", msg),
-            LexErrorKind::InvalidIndentation(msg) => write!(f, "invalid indentation: {}", msg),
+            LexErrorKind::InvalidTag(msg) => write!(f, "invalid tag: {msg}"),
+            LexErrorKind::InvalidAnchor(msg) => write!(f, "invalid anchor: {msg}"),
+            LexErrorKind::InvalidAlias(msg) => write!(f, "invalid alias: {msg}"),
+            LexErrorKind::InvalidDirective(msg) => write!(f, "invalid directive: {msg}"),
+            LexErrorKind::InvalidIndentation(msg) => write!(f, "invalid indentation: {msg}"),
             LexErrorKind::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
             LexErrorKind::EmptyScalar => write!(f, "empty scalar"),
         }

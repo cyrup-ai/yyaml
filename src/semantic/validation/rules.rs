@@ -34,6 +34,12 @@ pub struct ValidationRuleSet<'input> {
     pub custom_rules: Vec<Box<dyn ValidationRule<'input>>>,
 }
 
+impl<'input> Default for ValidationRuleSet<'input> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'input> ValidationRuleSet<'input> {
     /// Create a new empty rule set
     #[inline]
@@ -82,8 +88,8 @@ impl<'input> ValidationRuleSet<'input> {
 
     /// Create default rule set with standard YAML validation rules
     pub fn default() -> Self {
-        let rules = Self::new();
+        
         // Default rules would be added here
-        rules
+        Self::new()
     }
 }

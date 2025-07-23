@@ -41,7 +41,7 @@ fn scan_name<T: Iterator<Item = char>>(
                 if result.len() > 1024 {
                     return Err(ScanError::new(
                         state.mark(),
-                        &format!("{} name too long (max 1024 characters)", name_type),
+                        &format!("{name_type} name too long (max 1024 characters)"),
                     ));
                 }
             }
@@ -53,22 +53,20 @@ fn scan_name<T: Iterator<Item = char>>(
     if result.is_empty() {
         return Err(ScanError::new(
             start_mark,
-            &format!("empty {} name", name_type),
+            &format!("empty {name_type} name"),
         ));
     }
 
     // Check for invalid first character
-    if let Some(first_char) = result.chars().next() {
-        if !is_valid_first_anchor_char(first_char) {
+    if let Some(first_char) = result.chars().next()
+        && !is_valid_first_anchor_char(first_char) {
             return Err(ScanError::new(
                 start_mark,
                 &format!(
-                    "invalid first character '{}' in {} name",
-                    first_char, name_type
+                    "invalid first character '{first_char}' in {name_type} name"
                 ),
             ));
         }
-    }
 
     // Validate all characters are proper anchor chars
     for (i, ch) in result.chars().enumerate() {
@@ -76,8 +74,7 @@ fn scan_name<T: Iterator<Item = char>>(
             return Err(ScanError::new(
                 start_mark,
                 &format!(
-                    "invalid character '{}' at position {} in {} name",
-                    ch, i, name_type
+                    "invalid character '{ch}' at position {i} in {name_type} name"
                 ),
             ));
         }
@@ -180,28 +177,25 @@ pub fn validate_anchor_name(name: &str) -> Result<(), String> {
     }
 
     // Check first character
-    if let Some(first) = name.chars().next() {
-        if !is_valid_first_anchor_char(first) {
+    if let Some(first) = name.chars().next()
+        && !is_valid_first_anchor_char(first) {
             return Err(format!(
-                "invalid first character '{}' in anchor name",
-                first
+                "invalid first character '{first}' in anchor name"
             ));
         }
-    }
 
     // Check all characters
     for (i, ch) in name.chars().enumerate() {
         if !is_anchor_char(ch) {
             return Err(format!(
-                "invalid character '{}' at position {} in anchor name",
-                ch, i
+                "invalid character '{ch}' at position {i} in anchor name"
             ));
         }
     }
 
     // Check for reserved names that might cause confusion
     if is_reserved_anchor_name(name) {
-        return Err(format!("anchor name '{}' is reserved", name));
+        return Err(format!("anchor name '{name}' is reserved"));
     }
 
     Ok(())
@@ -231,9 +225,9 @@ fn is_reserved_anchor_name(name: &str) -> bool {
 /// Generate unique anchor name with prefix
 pub fn generate_unique_anchor_name(prefix: &str, counter: usize) -> String {
     if prefix.is_empty() {
-        format!("anchor_{}", counter)
+        format!("anchor_{counter}")
     } else {
-        format!("{}_{}", prefix, counter)
+        format!("{prefix}_{counter}")
     }
 }
 

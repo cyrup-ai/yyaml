@@ -293,7 +293,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
     #[inline]
     pub fn check_block_entry(&mut self) -> Result<bool, ScanError> {
         self.ensure_buffer(2);
-        if self.buffer.get(0) == Some(&'-') {
+        if self.buffer.front() == Some(&'-') {
             match self.buffer.get(1) {
                 Some(&' ') | Some(&'\t') | Some(&'\n') | Some(&'\r') => Ok(true),
                 None => Ok(true), // EOF after -

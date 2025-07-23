@@ -79,7 +79,7 @@ pub fn consume_line_break<T: Iterator<Item = char>>(
         ch => {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("expected line break, found '{}'", ch),
+                &format!("expected line break, found '{ch}'"),
             ));
         }
     }
@@ -181,11 +181,11 @@ pub fn needs_escaping_in_double_quoted(ch: char) -> bool {
 pub fn is_printable(ch: char) -> bool {
     match ch {
         '\t' | '\n' | '\r' => true,
-        ch if ch >= ' ' && ch <= '\u{7E}' => true,
+        ch if (' '..='\u{7E}').contains(&ch) => true,
         '\u{85}' => true,
-        ch if ch >= '\u{A0}' && ch <= '\u{D7FF}' => true,
-        ch if ch >= '\u{E000}' && ch <= '\u{FFFD}' => true,
-        ch if ch >= '\u{10000}' && ch <= '\u{10FFFF}' => true,
+        ch if ('\u{A0}'..='\u{D7FF}').contains(&ch) => true,
+        ch if ('\u{E000}'..='\u{FFFD}').contains(&ch) => true,
+        ch if ('\u{10000}'..='\u{10FFFF}').contains(&ch) => true,
         _ => false,
     }
 }
@@ -218,7 +218,7 @@ where
         if result.len() >= max_length {
             return Err(ScanError::new(
                 start_mark,
-                &format!("{} too long (max {} characters)", context, max_length),
+                &format!("{context} too long (max {max_length} characters)"),
             ));
         }
 
@@ -244,8 +244,7 @@ pub fn read_exact_chars<T: Iterator<Item = char>>(
                 return Err(ScanError::new(
                     state.mark(),
                     &format!(
-                        "unexpected end of input in {} (expected {} characters, got {})",
-                        context, n, i
+                        "unexpected end of input in {context} (expected {n} characters, got {i})"
                     ),
                 ));
             }
@@ -266,7 +265,7 @@ pub fn expect_char<T: Iterator<Item = char>>(
         ch if ch == expected => Ok(()),
         ch => Err(ScanError::new(
             state.mark(),
-            &format!("expected '{}' in {}, found '{}'", expected, context, ch),
+            &format!("expected '{expected}' in {context}, found '{ch}'"),
         )),
     }
 }
@@ -285,8 +284,7 @@ pub fn expect_string<T: Iterator<Item = char>>(
                 return Err(ScanError::new(
                     state.mark(),
                     &format!(
-                        "expected '{}' in {} at position {}, found '{}'",
-                        expected, context, i, ch
+                        "expected '{expected}' in {context} at position {i}, found '{ch}'"
                     ),
                 ));
             }
@@ -294,8 +292,7 @@ pub fn expect_string<T: Iterator<Item = char>>(
                 return Err(ScanError::new(
                     state.mark(),
                     &format!(
-                        "unexpected end of input in {} (expected '{}', got {} characters)",
-                        context, expected, i
+                        "unexpected end of input in {context} (expected '{expected}', got {i} characters)"
                     ),
                 ));
             }
@@ -337,7 +334,7 @@ pub fn validate_char_in_set(
     } else {
         Err(ScanError::new(
             position,
-            &format!("invalid character '{}' in {}", ch, context),
+            &format!("invalid character '{ch}' in {context}"),
         ))
     }
 }

@@ -53,7 +53,7 @@ fn scan_directive_name<T: Iterator<Item = char>>(
         ch => {
             return Err(ScanError::new(
                 start_mark,
-                &format!("invalid directive name start character '{}'", ch),
+                &format!("invalid directive name start character '{ch}'"),
             ));
         }
     }
@@ -198,7 +198,7 @@ fn scan_version_number<T: Iterator<Item = char>>(
             if number_str.len() > 6 {
                 return Err(ScanError::new(
                     start_mark,
-                    &format!("{} number too long", context),
+                    &format!("{context} number too long"),
                 ));
             }
         } else {
@@ -209,14 +209,14 @@ fn scan_version_number<T: Iterator<Item = char>>(
     if number_str.is_empty() {
         return Err(ScanError::new(
             start_mark,
-            &format!("expected {} number", context),
+            &format!("expected {context} number"),
         ));
     }
 
     number_str.parse::<u32>().map_err(|_| {
         ScanError::new(
             start_mark,
-            &format!("invalid {} number '{}'", context, number_str),
+            &format!("invalid {context} number '{number_str}'"),
         )
     })
 }
@@ -247,7 +247,7 @@ fn scan_tag_handle_directive<T: Iterator<Item = char>>(
         } else {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("invalid character '{}' in tag handle", ch),
+                &format!("invalid character '{ch}' in tag handle"),
             ));
         }
 
@@ -290,7 +290,7 @@ fn scan_tag_prefix_directive<T: Iterator<Item = char>>(
         } else {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("invalid character '{}' in tag prefix", ch),
+                &format!("invalid character '{ch}' in tag prefix"),
             ));
         }
 
@@ -347,7 +347,7 @@ fn scan_percent_encoding<T: Iterator<Item = char>>(
         ch => {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("invalid hex digit '{}' in percent encoding", ch),
+                &format!("invalid hex digit '{ch}' in percent encoding"),
             ));
         }
     };
@@ -357,12 +357,12 @@ fn scan_percent_encoding<T: Iterator<Item = char>>(
         ch => {
             return Err(ScanError::new(
                 state.mark(),
-                &format!("invalid hex digit '{}' in percent encoding", ch),
+                &format!("invalid hex digit '{ch}' in percent encoding"),
             ));
         }
     };
 
-    Ok(format!("{}{}{}", percent, hex1, hex2))
+    Ok(format!("{percent}{hex1}{hex2}"))
 }
 
 // Utility functions
@@ -384,7 +384,7 @@ fn require_whitespace<T: Iterator<Item = char>>(
     if !matches!(state.peek_char(), Ok(' ') | Ok('\t')) {
         return Err(ScanError::new(
             state.mark(),
-            &format!("expected whitespace in {}", context),
+            &format!("expected whitespace in {context}"),
         ));
     }
 
@@ -419,7 +419,7 @@ fn ensure_line_end<T: Iterator<Item = char>>(
         Err(_) => Ok(()),                         // EOF
         Ok(ch) => Err(ScanError::new(
             state.mark(),
-            &format!("unexpected character '{}' after {}", ch, context),
+            &format!("unexpected character '{ch}' after {context}"),
         )),
     }
 }
@@ -469,7 +469,7 @@ fn validate_yaml_version(major: u32, minor: u32, position: Marker) -> Result<(),
         }
         (m, _) if m > 1 => Err(ScanError::new(
             position,
-            &format!("unsupported YAML version {}.{}", major, minor),
+            &format!("unsupported YAML version {major}.{minor}"),
         )),
         (0, _) => Err(ScanError::new(
             position,
@@ -477,7 +477,7 @@ fn validate_yaml_version(major: u32, minor: u32, position: Marker) -> Result<(),
         )),
         _ => Err(ScanError::new(
             position,
-            &format!("invalid YAML version {}.{}", major, minor),
+            &format!("invalid YAML version {major}.{minor}"),
         )),
     }
 }

@@ -83,8 +83,7 @@ impl Grammar {
     /// Check if token can start a document
     #[inline]
     pub fn can_start_document(token: &TokenKind) -> bool {
-        match token {
-            TokenKind::DocumentStart
+        matches!(token, TokenKind::DocumentStart
             | TokenKind::YamlDirective { .. }
             | TokenKind::TagDirective { .. }
             | TokenKind::ReservedDirective { .. }
@@ -94,24 +93,19 @@ impl Grammar {
             | TokenKind::BlockEntry
             | TokenKind::Anchor(_)
             | TokenKind::Alias(_)
-            | TokenKind::Tag { .. } => true,
-            _ => false,
-        }
+            | TokenKind::Tag { .. })
     }
 
     /// Check if token can start a node
     #[inline]
     pub fn can_start_node(token: &TokenKind) -> bool {
-        match token {
-            TokenKind::Scalar { .. }
+        matches!(token, TokenKind::Scalar { .. }
             | TokenKind::FlowSequenceStart
             | TokenKind::FlowMappingStart
             | TokenKind::BlockEntry
             | TokenKind::Anchor(_)
             | TokenKind::Alias(_)
-            | TokenKind::Tag { .. } => true,
-            _ => false,
-        }
+            | TokenKind::Tag { .. })
     }
 
     /// Check if token can start a flow collection
@@ -212,7 +206,7 @@ impl Grammar {
                 _ => Err(ParseError::new(
                     ParseErrorKind::UnexpectedToken,
                     Position::start(),
-                    format!("unexpected token in document context: {:?}", token),
+                    format!("unexpected token in document context: {token:?}"),
                 )),
             },
 
@@ -261,7 +255,7 @@ impl Grammar {
                 _ => Err(ParseError::new(
                     ParseErrorKind::UnexpectedToken,
                     Position::start(),
-                    format!("unexpected token in key context: {:?}", token),
+                    format!("unexpected token in key context: {token:?}"),
                 )),
             },
 
@@ -335,10 +329,7 @@ impl Grammar {
     /// Check if context allows simple keys
     #[inline]
     pub fn allows_simple_keys(context: &ParseContext) -> bool {
-        match context {
-            ParseContext::FlowIn(_) | ParseContext::BlockIn(_) => true,
-            _ => false,
-        }
+        matches!(context, ParseContext::FlowIn(_) | ParseContext::BlockIn(_))
     }
 
     /// Check if context requires explicit key indicators
@@ -391,6 +382,12 @@ impl Grammar {
 #[derive(Debug, Clone)]
 pub struct ContextStack {
     stack: Vec<ParseContext>,
+}
+
+impl Default for ContextStack {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContextStack {

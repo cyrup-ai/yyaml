@@ -297,7 +297,7 @@ impl BlockParser {
     /// Parse any node in block context using ParsingContext (zero-allocation bridge)
     fn parse_context_node<'input>(
         context: &mut super::ParsingContext<'_, 'input>,
-        context_stack: &ContextStack,
+        _context_stack: &ContextStack,
         min_indent: usize,
     ) -> Result<Node<'input>, ParseError> {
         context.skip_insignificant_tokens()?;
@@ -332,14 +332,14 @@ impl BlockParser {
             TokenKind::FlowSequenceStart => {
                 let start_token = context.consume_token()?;
                 super::flows::FlowParser::parse_sequence(context, start_token, |ctx| {
-                    Self::parse_context_node(ctx, context_stack, min_indent)
+                    Self::parse_context_node(ctx, _context_stack, min_indent)
                 })
             }
 
             TokenKind::FlowMappingStart => {
                 let start_token = context.consume_token()?;
                 super::flows::FlowParser::parse_mapping(context, start_token, |ctx| {
-                    Self::parse_context_node(ctx, context_stack, min_indent)
+                    Self::parse_context_node(ctx, _context_stack, min_indent)
                 })
             }
 
@@ -356,7 +356,7 @@ impl BlockParser {
             // Anchors &anchor
             TokenKind::Anchor(name) => {
                 let anchor_token = context.consume_token()?;
-                let anchored_node = Self::parse_context_node(context, context_stack, min_indent)?;
+                let anchored_node = Self::parse_context_node(context, _context_stack, min_indent)?;
                 Ok(Node::Anchor(super::ast::AnchorNode::new(
                     name,
                     Box::new(anchored_node),
@@ -376,7 +376,7 @@ impl BlockParser {
             // Tags !tag
             TokenKind::Tag { handle, suffix } => {
                 let tag_token = context.consume_token()?;
-                let tagged_node = Self::parse_context_node(context, context_stack, min_indent)?;
+                let tagged_node = Self::parse_context_node(context, _context_stack, min_indent)?;
                 Ok(Node::Tagged(super::ast::TaggedNode::new(
                     handle,
                     suffix,
@@ -388,7 +388,7 @@ impl BlockParser {
             _ => Err(ParseError::new(
                 ParseErrorKind::UnexpectedToken,
                 token_position,
-                format!("unexpected token in block context: {:?}", token_kind),
+                format!("unexpected token in block context: {token_kind:?}"),
             )),
         }
     }
@@ -460,8 +460,7 @@ impl BlockParser {
                 ParseErrorKind::UnexpectedToken,
                 Position::start(),
                 format!(
-                    "invalid indentation in {}: expected at least {}, got {}",
-                    context, expected_indent, current_indent
+                    "invalid indentation in {context}: expected at least {expected_indent}, got {current_indent}"
                 ),
             ))
         } else {
@@ -497,7 +496,7 @@ impl BlockParser {
 
     /// Get block context information for error reporting
     pub fn get_block_context_info(indent_level: usize, structure_type: &str) -> String {
-        format!("{} at indentation level {}", structure_type, indent_level)
+        format!("{structure_type} at indentation level {indent_level}")
     }
 }
 
@@ -555,37 +554,33 @@ impl BlockErrorRecovery {
         expected_indent: usize,
     ) -> Result<Option<Node<'input>>, ParseError> {
         // Try to find the next valid structure at correct indentation
-        loop {
-            if let Some(token) = parser.peek_token()? {
-                let token_position = token.position;
-                let token_kind = token.kind.clone();
+        while let Some(token) = parser.peek_token()? {
+            let token_position = token.position;
+            let token_kind = token.kind.clone();
 
-                if token_position.column == expected_indent {
-                    // Found potential recovery point
-                    match token_kind {
-                        TokenKind::BlockEntry => {
-                            // Start of new sequence
+            if token_position.column == expected_indent {
+                // Found potential recovery point
+                match token_kind {
+                    TokenKind::BlockEntry => {
+                        // Start of new sequence
+                        return Ok(None); // Let caller handle
+                    }
+                    TokenKind::Scalar { .. } => {
+                        // Potential mapping key
+                        if BlockParser::is_potential_mapping_key(
+                            parser,
+                            token_position,
+                            expected_indent,
+                        )? {
                             return Ok(None); // Let caller handle
                         }
-                        TokenKind::Scalar { .. } => {
-                            // Potential mapping key
-                            if BlockParser::is_potential_mapping_key(
-                                parser,
-                                token_position,
-                                expected_indent,
-                            )? {
-                                return Ok(None); // Let caller handle
-                            }
-                        }
-                        _ => {}
                     }
+                    _ => {}
                 }
-
-                // Skip malformed content
-                parser.consume_token()?;
-            } else {
-                break;
             }
+
+            // Skip malformed content
+            parser.consume_token()?;
         }
 
         // Could not recover

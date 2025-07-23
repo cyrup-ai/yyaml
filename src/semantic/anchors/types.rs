@@ -145,15 +145,15 @@ impl AnchorValidationWarning {
     pub fn message(&self) -> String {
         match self {
             AnchorValidationWarning::UnusedAnchor { anchor_name, .. } => {
-                format!("unused anchor: '{}'", anchor_name)
+                format!("unused anchor: '{anchor_name}'")
             }
             AnchorValidationWarning::DeeplyNestedAnchor {
                 anchor_name, depth, ..
             } => {
-                format!("deeply nested anchor '{}' at depth {}", anchor_name, depth)
+                format!("deeply nested anchor '{anchor_name}' at depth {depth}")
             }
             AnchorValidationWarning::PotentialCircularStructure { anchor_name, .. } => {
-                format!("potential circular structure in anchor '{}'", anchor_name)
+                format!("potential circular structure in anchor '{anchor_name}'")
             }
         }
     }

@@ -55,6 +55,12 @@ pub struct ConstraintChecker<'input> {
     pub custom_constraints: Vec<Box<dyn ConstraintRule<'input>>>,
 }
 
+impl<'input> Default for ConstraintChecker<'input> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'input> ConstraintChecker<'input> {
     /// Create a new constraint checker with default settings
     #[inline]

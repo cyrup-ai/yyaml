@@ -73,11 +73,10 @@ impl CycleDetector {
         let mut cycles = Vec::new();
 
         for node_id in graph.get_all_node_ids() {
-            if !self.visited_nodes.contains(&node_id) {
-                if let Some(cycle) = self.dfs_visit(node_id, graph)? {
+            if !self.visited_nodes.contains(&node_id)
+                && let Some(cycle) = self.dfs_visit(node_id, graph)? {
                     cycles.push(cycle);
                 }
-            }
         }
 
         Ok(CycleDetectionResult {
@@ -259,7 +258,7 @@ impl CycleDetector {
                 graph
                     .get_node(node_id)
                     .map(|node| format!("{}({})", node.name, node_id))
-                    .unwrap_or_else(|| format!("unknown({})", node_id))
+                    .unwrap_or_else(|| format!("unknown({node_id})"))
             })
             .collect()
     }

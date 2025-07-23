@@ -66,11 +66,10 @@ impl FlowParser {
 
                         // Check for trailing comma
                         context.skip_insignificant_tokens()?;
-                        if let Some(next_token) = context.peek_token()? {
-                            if matches!(next_token.kind, TokenKind::FlowSequenceEnd) {
+                        if let Some(next_token) = context.peek_token()?
+                            && matches!(next_token.kind, TokenKind::FlowSequenceEnd) {
                                 continue; // Allow trailing comma
                             }
-                        }
                     }
 
                     _ => {
@@ -83,7 +82,7 @@ impl FlowParser {
                         }
 
                         // Parse sequence item
-                        let item = (&mut parse_node_fn)(context)?;
+                        let item = parse_node_fn(context)?;
                         items.push(item);
 
                         expecting_item = false;
@@ -160,11 +159,10 @@ impl FlowParser {
 
                         // Check for trailing comma
                         context.skip_insignificant_tokens()?;
-                        if let Some(next_token) = context.peek_token()? {
-                            if matches!(next_token.kind, TokenKind::FlowMappingEnd) {
+                        if let Some(next_token) = context.peek_token()?
+                            && matches!(next_token.kind, TokenKind::FlowMappingEnd) {
                                 continue; // Allow trailing comma
                             }
-                        }
                     }
 
                     _ => {
@@ -279,8 +277,7 @@ impl FlowParser {
                 ParseErrorKind::RecursionLimitExceeded,
                 Position::start(),
                 format!(
-                    "flow collection nesting depth {} exceeds maximum {}",
-                    depth, max_depth
+                    "flow collection nesting depth {depth} exceeds maximum {max_depth}"
                 ),
             ))
         } else {
@@ -290,7 +287,7 @@ impl FlowParser {
 
     /// Get flow context information for error reporting
     pub fn get_flow_context_info(nesting_level: usize) -> String {
-        format!("flow collection at nesting level {}", nesting_level)
+        format!("flow collection at nesting level {nesting_level}")
     }
 
     /// Check if token can terminate a flow collection

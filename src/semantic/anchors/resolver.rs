@@ -103,7 +103,7 @@ impl<'input> AnchorResolver<'input> {
             let path = self.cycle_detection_stack.join(" -> ");
             return Err(SemanticError::circular_reference(
                 alias_name.to_string(),
-                format!("{} -> {}", path, alias_name),
+                format!("{path} -> {alias_name}"),
                 anchor_position,
             ));
         }

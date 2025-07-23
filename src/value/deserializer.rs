@@ -10,10 +10,7 @@ impl Deserializer {
     /// Create a new deserializer from a string
     pub fn from_str(input: &str) -> Self {
         // Parse all documents upfront
-        let documents = match YamlLoader::load_from_str(input) {
-            Ok(docs) => docs,
-            Err(_) => vec![],
-        };
+        let documents = YamlLoader::load_from_str(input).unwrap_or_default();
 
         Deserializer {
             documents,

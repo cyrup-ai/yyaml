@@ -238,7 +238,7 @@ impl ScalarParser {
                             return Err(ParseError::new(
                                 ParseErrorKind::UnexpectedToken,
                                 Position::start(),
-                                format!("invalid escape sequence: \\{}", next_ch),
+                                format!("invalid escape sequence: \\{next_ch}"),
                             ));
                         }
                     }
@@ -273,7 +273,7 @@ impl ScalarParser {
                     return Err(ParseError::new(
                         ParseErrorKind::UnexpectedToken,
                         Position::start(),
-                        format!("invalid hex digit in escape sequence: {}", ch),
+                        format!("invalid hex digit in escape sequence: {ch}"),
                     ));
                 }
             } else {
@@ -531,7 +531,7 @@ impl ScalarParser {
             let after_dot = &value[dot_pos + 1..];
 
             // Check for scientific notation in the fractional part
-            if let Some(e_pos) = after_dot.find(|c| c == 'e' || c == 'E') {
+            if let Some(e_pos) = after_dot.find(['e', 'E']) {
                 let fraction = &after_dot[..e_pos];
                 let exponent = &after_dot[e_pos + 1..];
 
@@ -550,7 +550,7 @@ impl ScalarParser {
             }
         } else {
             // No decimal point, check for scientific notation
-            if let Some(e_pos) = value.find(|c| c == 'e' || c == 'E') {
+            if let Some(e_pos) = value.find(['e', 'E']) {
                 let mantissa = &value[..e_pos];
                 let exponent = &value[e_pos + 1..];
 
@@ -622,7 +622,7 @@ impl ScalarParser {
                 _ => Err(ParseError::new(
                     ParseErrorKind::UnexpectedToken,
                     Position::start(),
-                    format!("cannot convert '{}' to boolean", trimmed),
+                    format!("cannot convert '{trimmed}' to boolean"),
                 )),
             },
 
@@ -668,7 +668,7 @@ impl ScalarParser {
             ParseError::new(
                 ParseErrorKind::UnexpectedToken,
                 Position::start(),
-                format!("invalid integer value: {}", value),
+                format!("invalid integer value: {value}"),
             )
         })
     }
@@ -683,7 +683,7 @@ impl ScalarParser {
                 ParseError::new(
                     ParseErrorKind::UnexpectedToken,
                     Position::start(),
-                    format!("invalid float value: {}", value),
+                    format!("invalid float value: {value}"),
                 )
             }),
         }

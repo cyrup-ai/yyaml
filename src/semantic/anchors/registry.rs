@@ -293,6 +293,7 @@ impl<'input> AnchorDefinition<'input> {
     }
 
     /// Recursively check node for alias reference
+    #[allow(clippy::only_used_in_recursion)]
     fn check_node_for_alias(&self, node: &Node<'input>, alias_name: &str) -> bool {
         match node {
             Node::Alias(alias_node) => alias_node.name == alias_name,
@@ -355,8 +356,7 @@ impl RegistryValidationError {
                 anchor_name, depth, ..
             } => {
                 format!(
-                    "Anchor '{}' has very deep nesting (depth: {})",
-                    anchor_name, depth
+                    "Anchor '{anchor_name}' has very deep nesting (depth: {depth})"
                 )
             }
         }

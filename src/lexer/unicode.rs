@@ -166,10 +166,10 @@ pub enum EscapeError {
 impl std::fmt::Display for EscapeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EscapeError::InvalidEscape(ch) => write!(f, "invalid escape sequence '\\{}'", ch),
-            EscapeError::InvalidHexDigit(ch) => write!(f, "invalid hexadecimal digit '{}'", ch),
+            EscapeError::InvalidEscape(ch) => write!(f, "invalid escape sequence '\\{ch}'"),
+            EscapeError::InvalidHexDigit(ch) => write!(f, "invalid hexadecimal digit '{ch}'"),
             EscapeError::InvalidUnicode(code) => {
-                write!(f, "invalid unicode code point U+{:X}", code)
+                write!(f, "invalid unicode code point U+{code:X}")
             }
             EscapeError::UnterminatedEscape => write!(f, "unterminated escape sequence"),
             EscapeError::UnexpectedEndOfInput => {
@@ -333,11 +333,11 @@ pub mod chars {
         ch == '\t'
             || ch == '\n'
             || ch == '\r'
-            || (ch >= ' ' && ch <= '\u{7E}')
+            || (' '..='\u{7E}').contains(&ch)
             || ch == '\u{85}'
-            || (ch >= '\u{A0}' && ch <= '\u{D7FF}')
-            || (ch >= '\u{E000}' && ch <= '\u{FFFD}')
-            || (ch >= '\u{10000}' && ch <= '\u{10FFFF}')
+            || ('\u{A0}'..='\u{D7FF}').contains(&ch)
+            || ('\u{E000}'..='\u{FFFD}').contains(&ch)
+            || ('\u{10000}'..='\u{10FFFF}').contains(&ch)
     }
 }
 
@@ -386,20 +386,20 @@ mod tests {
 
     #[test]
     fn test_escape_processing() {
-        assert_eq!(
-            UnicodeProcessor::process_escapes("hello\\nworld").unwrap(),
-            Cow::<str>::Owned("hello\nworld".to_string())
-        );
+        match UnicodeProcessor::process_escapes("hello\\nworld") {
+            Ok(result) => assert_eq!(result, Cow::<str>::Owned("hello\nworld".to_string())),
+            Err(_) => panic!("Expected successful escape processing for hello\\nworld"),
+        }
 
-        assert_eq!(
-            UnicodeProcessor::process_escapes("no escapes").unwrap(),
-            Cow::Borrowed("no escapes")
-        );
+        match UnicodeProcessor::process_escapes("no escapes") {
+            Ok(result) => assert_eq!(result, Cow::Borrowed("no escapes")),
+            Err(_) => panic!("Expected successful escape processing for no escapes"),
+        }
 
-        assert_eq!(
-            UnicodeProcessor::process_escapes("\\u0041").unwrap(),
-            Cow::<str>::Owned("A".to_string())
-        );
+        match UnicodeProcessor::process_escapes("\\u0041") {
+            Ok(result) => assert_eq!(result, Cow::<str>::Owned("A".to_string())),
+            Err(_) => panic!("Expected successful escape processing for \\u0041"),
+        }
     }
 
     #[test]

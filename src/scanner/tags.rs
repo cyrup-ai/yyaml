@@ -61,7 +61,7 @@ fn scan_verbatim_tag<T: Iterator<Item = char>>(
             ch => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!("invalid character '{}' in verbatim tag", ch),
+                    &format!("invalid character '{ch}' in verbatim tag"),
                 ));
             }
         }
@@ -186,7 +186,7 @@ fn read_hex_digit<T: Iterator<Item = char>>(
         ch @ ('0'..='9' | 'a'..='f' | 'A'..='F') => Ok(ch),
         ch => Err(ScanError::new(
             state.mark(),
-            &format!("invalid hex digit '{}' in URI escape", ch),
+            &format!("invalid hex digit '{ch}' in URI escape"),
         )),
     }
 }
@@ -268,7 +268,7 @@ fn validate_tag_handle(handle: &str, position: Marker) -> Result<(), ScanError> 
         if !is_tag_handle_char(ch) {
             return Err(ScanError::new(
                 position,
-                &format!("invalid character '{}' in tag handle", ch),
+                &format!("invalid character '{ch}' in tag handle"),
             ));
         }
     }
@@ -295,7 +295,7 @@ fn validate_tag_suffix(suffix: &str, position: Marker) -> Result<(), ScanError> 
         if !is_tag_char(ch) && ch != '%' {
             return Err(ScanError::new(
                 position,
-                &format!("invalid character '{}' in tag suffix", ch),
+                &format!("invalid character '{ch}' in tag suffix"),
             ));
         }
     }
@@ -344,7 +344,7 @@ fn validate_tag_uri(uri: &str, position: Marker) -> Result<(), ScanError> {
         if !is_uri_char(ch) {
             return Err(ScanError::new(
                 position,
-                &format!("invalid character '{}' in tag URI", ch),
+                &format!("invalid character '{ch}' in tag URI"),
             ));
         }
     }
@@ -359,7 +359,7 @@ pub fn resolve_tag_handle(handle: &str, suffix: &str) -> Result<String, String> 
         "!!" => "tag:yaml.org,2002:", // Global tag
         _ => {
             // Named handle - would need tag directive mapping
-            return Err(format!("unresolved tag handle '{}'", handle));
+            return Err(format!("unresolved tag handle '{handle}'"));
         }
     };
 
@@ -368,7 +368,7 @@ pub fn resolve_tag_handle(handle: &str, suffix: &str) -> Result<String, String> 
         Ok(suffix.to_string())
     } else {
         // Global or named tag - concatenate
-        Ok(format!("{}{}", prefix, suffix))
+        Ok(format!("{prefix}{suffix}"))
     }
 }
 
@@ -388,10 +388,10 @@ pub fn get_standard_tag_name(uri: &str) -> Option<&str> {
 
 /// Create local tag URI
 pub fn create_local_tag(suffix: &str) -> String {
-    format!("!{}", suffix)
+    format!("!{suffix}")
 }
 
 /// Create global tag URI
 pub fn create_global_tag(type_name: &str) -> String {
-    format!("tag:yaml.org,2002:{}", type_name)
+    format!("tag:yaml.org,2002:{type_name}")
 }

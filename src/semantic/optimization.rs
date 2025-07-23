@@ -72,7 +72,7 @@ impl SemanticOptimizations {
         document
             .content
             .as_ref()
-            .map_or(false, |root| Self::has_complex_constructs(root))
+            .is_some_and(|root| Self::has_complex_constructs(root))
     }
 
     /// Check for complex YAML constructs requiring careful analysis

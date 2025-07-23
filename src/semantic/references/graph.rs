@@ -104,13 +104,13 @@ impl<'input> ReferenceGraph<'input> {
         // Add to adjacency list
         self.adjacency_list
             .entry(from)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(edge);
 
         // Add to reverse adjacency
         self.reverse_adjacency
             .entry(to)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(from);
 
         self.update_metadata();

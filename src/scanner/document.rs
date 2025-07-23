@@ -38,8 +38,7 @@ pub fn scan_document_start<T: Iterator<Item = char>>(
                 return Err(ScanError::new(
                     state.mark(),
                     &format!(
-                        "expected '-' at position {} in document start marker, found '{}'",
-                        i, ch
+                        "expected '-' at position {i} in document start marker, found '{ch}'"
                     ),
                 ));
             }
@@ -75,8 +74,7 @@ pub fn scan_document_end<T: Iterator<Item = char>>(
                 return Err(ScanError::new(
                     state.mark(),
                     &format!(
-                        "expected '.' at position {} in document end marker, found '{}'",
-                        i, ch
+                        "expected '.' at position {i} in document end marker, found '{ch}'"
                     ),
                 ));
             }
@@ -129,8 +127,7 @@ fn validate_marker_boundary<T: Iterator<Item = char>>(
         Ok(ch) => Err(ScanError::new(
             state.mark(),
             &format!(
-                "{} marker must be followed by whitespace, comment, or end of input, found '{}'",
-                marker_name, ch
+                "{marker_name} marker must be followed by whitespace, comment, or end of input, found '{ch}'"
             ),
         )),
     }
@@ -266,5 +263,5 @@ pub fn format_marker_error(marker_type: DocumentMarker, context: &str) -> String
         DocumentMarker::End => "document end",
     };
 
-    format!("{} marker '{}' {}", marker_name, marker_str, context)
+    format!("{marker_name} marker '{marker_str}' {context}")
 }

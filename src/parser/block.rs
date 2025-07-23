@@ -63,14 +63,22 @@ pub fn block_sequence_entry<T: Iterator<Item = char>>(
 
             match next_token_type {
                 TokenType::BlockEntry => {
+                    // Empty sequence item followed by another BlockEntry
                     parser.state = State::BlockSequenceEntry;
-                    return Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk));
+                    Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
                 }
                 _ => {
+                    // Parse the content after the dash
                     parser.push_state(State::BlockSequenceEntry);
-                    return parser.parse_node(true, false);
+                    parser.parse_node(true, false)
                 }
             }
+        }
+        TokenType::StreamEnd | TokenType::DocumentEnd | TokenType::DocumentStart => {
+            parser.pop_indent();
+            parser.pop_state();
+            let mk = parser.scanner.mark();
+            Ok((Event::SequenceEnd, mk))
         }
         _ => {
             parser.pop_indent();
@@ -191,7 +199,7 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
             match parser.scanner.peek_token()?.1 {
                 TokenType::Value => {
                     parser.state = State::BlockMappingValue;
-                    return Ok((Event::Scalar(val, style, 0, None), tok.0));
+                    Ok((Event::Scalar(val, style, 0, None), tok.0))
                 }
                 _ => {
                     // Scalar not followed by colon - end of mapping
@@ -199,7 +207,7 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
                     // Put the scalar back for next parsing
                     parser.current = Some((Event::Scalar(val, style, 0, None), tok.0));
                     let mk = parser.scanner.mark();
-                    return Ok((Event::MappingEnd, mk));
+                    Ok((Event::MappingEnd, mk))
                 }
             }
         }
@@ -256,21 +264,21 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                         _ => unreachable!(),
                     };
                     parser.state = State::BlockMappingKey;
-                    return Ok((Event::Scalar(val, style, 0, None), tok.0));
+                    Ok((Event::Scalar(val, style, 0, None), tok.0))
                 }
                 TokenType::FlowSequenceStart => {
                     parser.push_state(State::BlockMappingKey);
-                    return parser.parse_node(false, false);
+                    parser.parse_node(false, false)
                 }
                 TokenType::FlowMappingStart => {
                     parser.push_state(State::BlockMappingKey);
-                    return parser.parse_node(false, false);
+                    parser.parse_node(false, false)
                 }
                 _ => {
                     // Empty value - continue to next key
                     parser.state = State::BlockMappingKey;
                     let mk = parser.scanner.mark();
-                    return Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk));
+                    Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
                 }
             }
         }

@@ -60,7 +60,7 @@ impl<'input> Scanner<'input> {
         // If we have established indentation levels, check consistency
         if let Some(&min_indent) = self.indent_stack.iter().filter(|&&x| x > 0).min() {
             // YAML allows any multiple of the smallest established indentation
-            indent % min_indent == 0
+            indent.is_multiple_of(min_indent)
         } else {
             // No established indentation pattern yet, any positive value is valid
             true
