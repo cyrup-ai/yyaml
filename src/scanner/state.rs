@@ -68,7 +68,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
         Self {
             source,
             buffer: VecDeque::with_capacity(64),
-            mark: Marker::default(),
+            mark: Marker::new(),
             done: false,
             cached_token: None,
             stream_start_produced: false,
@@ -337,7 +337,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 impl Marker {
     /// Create default marker at start of stream
     #[inline]
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
             index: 0,
             line: 1,

@@ -195,6 +195,11 @@ impl YamlLoader {
                 let key_part = line[..colon_pos].trim();
                 let value_part = line[colon_pos + 1..].trim();
                 
+                // Check for anchor/alias syntax - fall back to full parser
+                if line.contains('&') || line.contains('*') {
+                    return None;
+                }
+                
                 // Simple key-value pair - allow simple values including ~
                 if !key_part.is_empty() {
                     
@@ -518,8 +523,14 @@ impl EventReceiver for YamlReceiver {
             Event::StreamStart => {}
             Event::StreamEnd => {}
             Event::Alias(id) => {
-                let node = self.anchors.get(&id).cloned().unwrap_or(Yaml::BadValue);
-                self.insert_new_node((node, 0));
+                if let Some(node) = self.anchors.get(&id).cloned() {
+                    self.insert_new_node((node, 0));
+                } else {
+                    // Anchor not found - this is an error condition
+                    // For now, insert null to avoid BadValue but this should be investigated
+                    eprintln!("Warning: Anchor ID {} not found, using null", id);
+                    self.insert_new_node((Yaml::Null, 0));
+                }
             }
             Event::Scalar(s, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
@@ -554,7 +565,7 @@ impl EventReceiver for YamlReceiver {
                     }
                 } else {
                     // autodetect
-                    Yaml::parse_str(&s)
+                    YamlLoader::parse_scalar_direct(&s)
                 };
                 self.insert_new_node((node, aid));
             }

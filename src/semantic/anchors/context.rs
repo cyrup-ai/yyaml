@@ -203,10 +203,10 @@ pub struct ResolutionSnapshot {
     pub alias_count: usize,
 }
 
-impl ResolutionSnapshot {
-    /// Get snapshot as formatted string
-    pub fn to_string(&self) -> String {
-        format!(
+impl std::fmt::Display for ResolutionSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "ResolutionSnapshot {{ depth: {}, path: [{}], visited: {}, aliases: {} }}",
             self.depth,
             self.path.join(" -> "),

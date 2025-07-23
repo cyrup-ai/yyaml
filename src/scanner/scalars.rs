@@ -18,99 +18,93 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
     let start_col = state.column();
     let in_flow = state.in_flow_context();
 
-    loop {
-        // Check for end conditions efficiently
-        if let Ok(ch) = state.peek_char() {
-            // Flow context indicators
-            if in_flow && matches!(ch, ',' | '[' | ']' | '{' | '}') {
+    while let Ok(ch) = state.peek_char() {
+        // Flow context indicators
+        if in_flow && matches!(ch, ',' | '[' | ']' | '{' | '}') {
+            break;
+        }
+
+        // Common indicators
+        if matches!(ch, ':' | '#') {
+            // Check if ':' is followed by space (value indicator)
+            if ch == ':' {
+                if let Some(next) = state.peek_char_at(1) {
+                    if matches!(next, ' ' | '\t' | '\n' | '\r')
+                        || (in_flow && matches!(next, ',' | '[' | ']' | '{' | '}'))
+                    {
+                        break;
+                    }
+                } else {
+                    // EOF after ':'
+                    break;
+                }
+            }
+            // '#' preceded by space is comment
+            if ch == '#' && !spaces.is_empty() {
+                break;
+            }
+        }
+
+        // Whitespace handling
+        if matches!(ch, ' ' | '\t') {
+            spaces.push(state.consume_char()?);
+            continue;
+        }
+
+        // Line breaks
+        if matches!(ch, '\n' | '\r') {
+            // Check if next line would change indentation in block context
+            if !in_flow {
+                let _current_mark = state.mark();
+                state.consume_char()?; // consume newline
+
+                // Skip any additional newlines
+                while matches!(state.peek_char(), Ok('\n') | Ok('\r')) {
+                    state.consume_char()?;
+                }
+
+                // Check indentation of next line
+                let mut next_col = 0;
+                let mut temp_chars = Vec::new();
+                while let Ok(ch) = state.peek_char() {
+                    if matches!(ch, ' ' | '\t') {
+                        temp_chars.push(state.consume_char()?);
+                        next_col += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Put back the indentation chars if we continue
+                if next_col > 0 && next_col >= start_col {
+                    // Continue scalar
+                    if !result.is_empty() && !spaces.is_empty() {
+                        result.push_str(&spaces);
+                    }
+                    result.push(' '); // fold newline to space
+                    spaces.clear();
+                } else {
+                    // End scalar due to dedent
+                    break;
+                }
+                continue;
+            } else {
+                break; // newline ends scalar in flow
+            }
+        }
+
+        // Document markers
+        if (ch == '-' || ch == '.')
+            && (state.check_document_start()? || state.check_document_end()?) {
                 break;
             }
 
-            // Common indicators
-            if matches!(ch, ':' | '#') {
-                // Check if ':' is followed by space (value indicator)
-                if ch == ':' {
-                    if let Some(next) = state.peek_char_at(1) {
-                        if matches!(next, ' ' | '\t' | '\n' | '\r')
-                            || (in_flow && matches!(next, ',' | '[' | ']' | '{' | '}'))
-                        {
-                            break;
-                        }
-                    } else {
-                        // EOF after ':'
-                        break;
-                    }
-                }
-                // '#' preceded by space is comment
-                if ch == '#' && !spaces.is_empty() {
-                    break;
-                }
-            }
-
-            // Whitespace handling
-            if matches!(ch, ' ' | '\t') {
-                spaces.push(state.consume_char()?);
-                continue;
-            }
-
-            // Line breaks
-            if matches!(ch, '\n' | '\r') {
-                // Check if next line would change indentation in block context
-                if !in_flow {
-                    let _current_mark = state.mark();
-                    state.consume_char()?; // consume newline
-
-                    // Skip any additional newlines
-                    while matches!(state.peek_char(), Ok('\n') | Ok('\r')) {
-                        state.consume_char()?;
-                    }
-
-                    // Check indentation of next line
-                    let mut next_col = 0;
-                    let mut temp_chars = Vec::new();
-                    while let Ok(ch) = state.peek_char() {
-                        if matches!(ch, ' ' | '\t') {
-                            temp_chars.push(state.consume_char()?);
-                            next_col += 1;
-                        } else {
-                            break;
-                        }
-                    }
-
-                    // Put back the indentation chars if we continue
-                    if next_col > 0 && next_col >= start_col {
-                        // Continue scalar
-                        if !result.is_empty() && !spaces.is_empty() {
-                            result.push_str(&spaces);
-                        }
-                        result.push(' '); // fold newline to space
-                        spaces.clear();
-                    } else {
-                        // End scalar due to dedent
-                        break;
-                    }
-                    continue;
-                } else {
-                    break; // newline ends scalar in flow
-                }
-            }
-
-            // Document markers
-            if (ch == '-' || ch == '.')
-                && (state.check_document_start()? || state.check_document_end()?) {
-                    break;
-                }
-
-            // Regular character
-            if !spaces.is_empty() {
-                result.push_str(&spaces);
-                spaces.clear();
-            }
-            result.push(state.consume_char()?);
-        } else {
-            // EOF
-            break;
+        // Regular character
+        if !spaces.is_empty() {
+            result.push_str(&spaces);
+            spaces.clear();
         }
+        result.push(state.consume_char()?);
     }
 
     // Trim trailing spaces

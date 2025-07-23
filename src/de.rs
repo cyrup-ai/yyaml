@@ -59,7 +59,7 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
             Yaml::String(s) => visitor.visit_str(s),
             Yaml::Array(_) => self.deserialize_seq(visitor),
             Yaml::Hash(_) => self.deserialize_map(visitor),
-            Yaml::Alias(_) => visitor.visit_str("~alias~"),
+            Yaml::Alias(_) => Err(Error::Custom("Unresolved alias found - this indicates a bug in YAML parsing".into())),
             Yaml::BadValue => Err(Error::Custom("bad value encountered".into())),
         }
     }

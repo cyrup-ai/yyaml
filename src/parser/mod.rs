@@ -256,6 +256,7 @@ impl<T: Iterator<Item = char>> Parser<T> {
         execute_state_machine(self)
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<(Event, Marker), ScanError> {
         match self.current.take() {
             Some(x) => Ok(x),

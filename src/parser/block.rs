@@ -156,7 +156,7 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
         }
         // This should never happen since we checked is_some() above, but handle gracefully
         return Err(ScanError::new(
-            crate::error::Marker::default(),
+            crate::error::Marker::new(),
             "Expected first mapping key to be present",
         ));
     }
@@ -199,6 +199,7 @@ pub fn block_mapping_key<T: Iterator<Item = char>>(
             match parser.scanner.peek_token()?.1 {
                 TokenType::Value => {
                     parser.state = State::BlockMappingValue;
+                    // Keys typically don't have anchors in YAML, but handle consistently
                     Ok((Event::Scalar(val, style, 0, None), tok.0))
                 }
                 _ => {
@@ -254,7 +255,45 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
     match parser.scanner.peek_token()?.1 {
         TokenType::Value => {
             let _tok = parser.scanner.fetch_token(); // consume the ':'
-            // Check what comes after the colon
+            
+            // Parse anchors, aliases, and tags before the actual value (like parse_node does)
+            let mut anchor_id = 0;
+            let mut tag = None;
+            
+            loop {
+                let token = parser.scanner.peek_token()?;
+                match &token.1 {
+                    TokenType::Alias(_) => {
+                        let tok = parser.scanner.fetch_token();
+                        let name = match tok.1 {
+                            TokenType::Alias(n) => n,
+                            _ => unreachable!(),
+                        };
+                        if let Some(aid) = parser.anchors.get(&name) {
+                            parser.state = State::BlockMappingKey;
+                            return Ok((Event::Alias(*aid), tok.0));
+                        } else {
+                            parser.state = State::BlockMappingKey;
+                            return Ok((Event::Alias(9999999), tok.0));
+                        }
+                    }
+                    TokenType::Anchor(_) => {
+                        let tok = parser.scanner.fetch_token();
+                        let name = match tok.1 {
+                            TokenType::Anchor(n) => n,
+                            _ => unreachable!(),
+                        };
+                        anchor_id = parser.register_anchor(name);
+                    }
+                    TokenType::Tag(..) => {
+                        let tok = parser.scanner.fetch_token();
+                        tag = Some(tok.1);
+                    }
+                    _ => break,
+                }
+            }
+            
+            // Now parse the actual value with anchor and tag information
             let token = parser.scanner.peek_token()?;
             match &token.1 {
                 TokenType::Scalar(..) => {
@@ -264,7 +303,7 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                         _ => unreachable!(),
                     };
                     parser.state = State::BlockMappingKey;
-                    Ok((Event::Scalar(val, style, 0, None), tok.0))
+                    Ok((Event::Scalar(val, style, anchor_id, tag), tok.0))
                 }
                 TokenType::FlowSequenceStart => {
                     parser.push_state(State::BlockMappingKey);
@@ -275,10 +314,10 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                     parser.parse_node(false, false)
                 }
                 _ => {
-                    // Empty value - continue to next key
+                    // Empty value - but might have anchor, so use anchor_id
                     parser.state = State::BlockMappingKey;
                     let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("~".into(), TScalarStyle::Plain, 0, None), mk))
+                    Ok((Event::Scalar("~".into(), TScalarStyle::Plain, anchor_id, tag), mk))
                 }
             }
         }

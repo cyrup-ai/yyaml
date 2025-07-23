@@ -379,11 +379,7 @@ pub fn is_standard_tag(uri: &str) -> bool {
 
 /// Get YAML 1.2 standard tag name from URI
 pub fn get_standard_tag_name(uri: &str) -> Option<&str> {
-    if uri.starts_with("tag:yaml.org,2002:") {
-        Some(&uri[18..])
-    } else {
-        None
-    }
+    uri.strip_prefix("tag:yaml.org,2002:")
 }
 
 /// Create local tag URI

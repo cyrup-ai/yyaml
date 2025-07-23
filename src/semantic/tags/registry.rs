@@ -223,12 +223,13 @@ impl<'input> TagRegistry<'input> {
 
     /// Get comprehensive tag statistics
     pub fn get_statistics(&self) -> TagStatistics {
-        let mut stats = TagStatistics::default();
-
-        stats.total_resolved = self.resolved_tags.len();
-        stats.standard_tags = self.get_standard_tags().len();
-        stats.custom_tags = self.get_custom_tags().len();
-        stats.deprecated_tags = self.get_deprecated_tags().len();
+        let mut stats = TagStatistics {
+            total_resolved: self.resolved_tags.len(),
+            standard_tags: self.get_standard_tags().len(),
+            custom_tags: self.get_custom_tags().len(),
+            deprecated_tags: self.get_deprecated_tags().len(),
+            ..Default::default()
+        };
 
         // Calculate average resolution time
         if !self.resolved_tags.is_empty() {

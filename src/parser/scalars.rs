@@ -8,6 +8,7 @@ use super::grammar::{Grammar, ParseContext};
 use super::{ParseError, ParseErrorKind};
 use crate::lexer::{Position, ScalarStyle, Token, TokenKind};
 use std::borrow::Cow;
+use std::fmt;
 
 /// Scalar value parser with type inference
 pub struct ScalarParser;
@@ -645,10 +646,10 @@ impl ScalarParser {
         }
 
         // Handle negative values
-        let (sign, value) = if value.starts_with('-') {
-            (-1, &value[1..])
-        } else if value.starts_with('+') {
-            (1, &value[1..])
+        let (sign, value) = if let Some(stripped) = value.strip_prefix('-') {
+            (-1, stripped)
+        } else if let Some(stripped) = value.strip_prefix('+') {
+            (1, stripped)
         } else {
             (1, value)
         };
@@ -722,27 +723,28 @@ impl<'input> ScalarValue<'input> {
             ScalarValue::String(_) => ScalarType::String,
         }
     }
+}
 
-    /// Convert to string representation
-    pub fn to_string(&self) -> String {
+impl<'input> fmt::Display for ScalarValue<'input> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ScalarValue::Null => "null".to_string(),
-            ScalarValue::Boolean(b) => b.to_string(),
-            ScalarValue::Integer(i) => i.to_string(),
-            ScalarValue::Float(f) => {
-                if f.is_infinite() {
-                    if *f > 0.0 {
-                        ".inf".to_string()
+            ScalarValue::Null => write!(f, "null"),
+            ScalarValue::Boolean(b) => write!(f, "{b}"),
+            ScalarValue::Integer(i) => write!(f, "{i}"),
+            ScalarValue::Float(float) => {
+                if float.is_infinite() {
+                    if *float > 0.0 {
+                        write!(f, ".inf")
                     } else {
-                        "-.inf".to_string()
+                        write!(f, "-.inf")
                     }
-                } else if f.is_nan() {
-                    ".nan".to_string()
+                } else if float.is_nan() {
+                    write!(f, ".nan")
                 } else {
-                    f.to_string()
+                    write!(f, "{float}")
                 }
             }
-            ScalarValue::String(s) => s.to_string(),
+            ScalarValue::String(s) => write!(f, "{s}"),
         }
     }
 }

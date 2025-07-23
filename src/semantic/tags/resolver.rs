@@ -75,6 +75,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Resolve tag with complete YAML 1.2 compliance
+    #[allow(clippy::ptr_arg)]
     pub fn resolve_tag(
         &mut self,
         tag_handle: &Option<Cow<'input, str>>,
@@ -135,6 +136,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Construct full tag URI from handle and suffix
+    #[allow(clippy::ptr_arg)]
     pub fn construct_full_tag(
         &self,
         tag_handle: &Option<Cow<'input, str>>,

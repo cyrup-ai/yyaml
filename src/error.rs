@@ -9,6 +9,16 @@ pub struct Marker {
     pub col: usize,
 }
 
+impl Default for Marker {
+    fn default() -> Self {
+        Self {
+            index: 0,
+            line: 1,
+            col: 0,
+        }
+    }
+}
+
 /// The parse error used by the scanner/parser if something goes wrong.
 #[derive(Clone, Debug)]
 pub struct ScanError {

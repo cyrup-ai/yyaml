@@ -86,10 +86,5 @@ impl<'input> ValidationRuleSet<'input> {
             .chain(self.custom_rules.iter())
     }
 
-    /// Create default rule set with standard YAML validation rules
-    pub fn default() -> Self {
-        
-        // Default rules would be added here
-        Self::new()
-    }
+
 }

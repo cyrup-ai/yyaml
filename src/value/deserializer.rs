@@ -8,7 +8,7 @@ pub struct Deserializer {
 
 impl Deserializer {
     /// Create a new deserializer from a string
-    pub fn from_str(input: &str) -> Self {
+    pub fn new(input: &str) -> Self {
         // Parse all documents upfront
         let documents = YamlLoader::load_from_str(input).unwrap_or_default();
 
@@ -18,12 +18,13 @@ impl Deserializer {
         }
     }
 
-    /// Alias for `from_str` for compatibility with tests
+    /// Alias for `new` for compatibility with tests
     pub fn parse_str(input: &str) -> Self {
-        Self::from_str(input)
+        Self::new(input)
     }
 
     /// Get the next document from the YAML stream
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn next(&mut self) -> Option<DocumentDeserializer<'_>> {
         if self.current >= self.documents.len() {
@@ -37,6 +38,14 @@ impl Deserializer {
             documents: &self.documents,
             index,
         })
+    }
+}
+
+impl std::str::FromStr for Deserializer {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(s))
     }
 }
 

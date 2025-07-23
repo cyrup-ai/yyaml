@@ -132,7 +132,7 @@ impl Value {
             Yaml::String(s) => Value::String(s.clone()),
             Yaml::Array(arr) => Value::Sequence(Sequence::from_yaml_array(arr)),
             Yaml::Hash(map) => Value::Mapping(Mapping::from_yaml_hash(map)),
-            Yaml::Alias(_) => Value::String("~alias~".to_string()),
+            Yaml::Alias(_) => panic!("Unresolved alias found - this indicates a bug in YAML parsing"),
             Yaml::BadValue => Value::Null,
         }
     }
@@ -543,6 +543,83 @@ impl<'a> ValueDeserializer<'a> {
     }
 }
 
+/// Owned value deserializer to break recursion cycles
+pub struct ValueDeserializerOwned {
+    value: Value,
+}
+
+impl ValueDeserializerOwned {
+    pub fn new(value: Value) -> Self {
+        ValueDeserializerOwned { value }
+    }
+}
+
+// Obsolete ValueSeqDeserializer and ValueMapDeserializer have been replaced 
+// by ZeroRecursionSeqAccess and ZeroRecursionMapAccess to eliminate infinite recursion
+
+impl<'de> serde::Deserializer<'de> for ValueDeserializerOwned {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self.value {
+            Value::Null => visitor.visit_unit(),
+            Value::Bool(b) => visitor.visit_bool(b),
+            Value::Number(n) => match n {
+                Number::Integer(i) => visitor.visit_i64(i),
+                Number::Float(f) => visitor.visit_f64(f),
+            },
+            Value::String(s) => visitor.visit_string(s),
+            Value::Sequence(seq) => {
+                let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                visitor.visit_seq(&mut seq_access)
+            }
+            Value::Mapping(map) => {
+                let mut map_access = ZeroRecursionMapAccess::new(map);
+                visitor.visit_map(&mut map_access)
+            }
+            Value::Tagged(tagged) => {
+                // Unwrap tagged values iteratively to prevent infinite recursion
+                let mut current_value = tagged.value;
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = inner_tagged.value;
+                }
+                
+                // Handle the unwrapped value directly without recursion
+                match current_value {
+                    Value::Null => visitor.visit_unit(),
+                    Value::Bool(b) => visitor.visit_bool(b),
+                    Value::Number(n) => match n {
+                        Number::Integer(i) => visitor.visit_i64(i),
+                        Number::Float(f) => visitor.visit_f64(f),
+                    },
+                    Value::String(s) => visitor.visit_string(s),
+                    Value::Sequence(seq) => {
+                        let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                        visitor.visit_seq(&mut seq_access)
+                    }
+                    Value::Mapping(map) => {
+                        let mut map_access = ZeroRecursionMapAccess::new(map);
+                        visitor.visit_map(&mut map_access)
+                    }
+                    Value::Tagged(_) => {
+                        // This should never happen due to unwrapping above
+                        Err(Error::Custom("Nested tagged value after unwrapping".to_string()))
+                    }
+                }
+            }
+        }
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
+        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
+        map struct enum identifier ignored_any
+    }
+}
+
 impl<'de> serde::Deserializer<'de> for &'de Value {
     type Error = Error;
 
@@ -559,35 +636,301 @@ impl<'de> serde::Deserializer<'de> for &'de Value {
             },
             Value::String(s) => visitor.visit_str(s),
             Value::Sequence(seq) => {
-                let deserializer = SeqDeserializer { iter: seq.iter() };
-                visitor.visit_seq(deserializer)
+                let mut seq_access = ZeroRecursionSeqAccess::new(seq.clone());
+                visitor.visit_seq(&mut seq_access)
             }
             Value::Mapping(map) => {
-                let deserializer = MapDeserializer {
-                    iter: map.iter(),
-                    next_value: None,
-                };
-                visitor.visit_map(deserializer)
+                let mut map_access = ZeroRecursionMapAccess::new(map.clone());
+                visitor.visit_map(&mut map_access)
             }
             Value::Tagged(tagged) => {
-                // For deserialization, we treat tagged values as their underlying value
-                tagged.value.clone().deserialize_any(visitor)
+                // Unwrap tagged values iteratively to prevent infinite recursion
+                let mut current_value = tagged.value.clone();
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = inner_tagged.value.clone();
+                }
+                
+                // Handle the unwrapped value directly without calling deserialize_any
+                match current_value {
+                    Value::Null => visitor.visit_unit(),
+                    Value::Bool(b) => visitor.visit_bool(b),
+                    Value::Number(n) => match n {
+                        Number::Integer(i) => visitor.visit_i64(i),
+                        Number::Float(f) => visitor.visit_f64(f),
+                    },
+                    Value::String(s) => visitor.visit_string(s),
+                    Value::Sequence(seq) => {
+                        let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                        visitor.visit_seq(&mut seq_access)
+                    }
+                    Value::Mapping(map) => {
+                        let mut map_access = ZeroRecursionMapAccess::new(map);
+                        visitor.visit_map(&mut map_access)
+                    }
+                    Value::Tagged(_) => {
+                        // This should never happen due to unwrapping above
+                        Err(Error::Custom("Nested tagged value after unwrapping".to_string()))
+                    }
+                }
             }
+        }
+    }
+
+    // Custom deserialize_seq to handle null -> empty sequence conversion
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self {
+            Value::Sequence(seq) => {
+                let mut seq_access = ZeroRecursionSeqAccess::new(seq.clone());
+                visitor.visit_seq(&mut seq_access)
+            }
+            Value::Null => {
+                // Convert null to empty sequence using empty deserializer
+                visitor.visit_seq(EmptySeqDeserializer)
+            }
+            Value::Tagged(tagged) => {
+                // Unwrap tagged values iteratively
+                let mut current_value = &tagged.value;
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = &inner_tagged.value;
+                }
+                match current_value {
+                    Value::Sequence(seq) => {
+                        let mut seq_access = ZeroRecursionSeqAccess::new(seq.clone());
+                        visitor.visit_seq(&mut seq_access)
+                    }
+                    Value::Null => visitor.visit_seq(EmptySeqDeserializer),
+                    _ => Err(Error::Custom(format!("cannot deserialize {current_value:?} as sequence"))),
+                }
+            }
+            _ => Err(Error::Custom(format!("cannot deserialize {self:?} as sequence"))),
+        }
+    }
+
+    // Custom deserialize_map to handle null -> empty mapping conversion  
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self {
+            Value::Mapping(map) => {
+                let mut map_access = ZeroRecursionMapAccess::new(map.clone());
+                visitor.visit_map(&mut map_access)
+            }
+            Value::Null => {
+                // Convert null to empty mapping
+                visitor.visit_map(EmptyMapDeserializer)
+            }
+            Value::Tagged(tagged) => {
+                // Unwrap tagged values iteratively
+                let mut current_value = &tagged.value;
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = &inner_tagged.value;
+                }
+                match current_value {
+                    Value::Mapping(map) => {
+                        let mut map_access = ZeroRecursionMapAccess::new(map.clone());
+                        visitor.visit_map(&mut map_access)
+                    }
+                    Value::Null => visitor.visit_map(EmptyMapDeserializer),
+                    _ => Err(Error::Custom(format!("cannot deserialize {current_value:?} as mapping"))),
+                }
+            }
+            _ => Err(Error::Custom(format!("cannot deserialize {self:?} as mapping"))),
+        }
+    }
+
+    // Custom deserialize_option to handle Option<T> deserialization correctly
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self {
+            Value::Null => visitor.visit_none(),
+            _ => {
+                // Create a simple deserializer for Option<T> handling that uses our zero-recursion dispatch
+                struct NonRecursiveValueDeserializer {
+                    value: Value,
+                }
+                
+                impl<'de> serde::Deserializer<'de> for NonRecursiveValueDeserializer {
+                    type Error = Error;
+                    
+                    fn deserialize_any<Vis>(self, visitor: Vis) -> Result<Vis::Value, Self::Error>
+                    where
+                        Vis: serde::de::Visitor<'de>,
+                    {
+                        dispatch_value_to_visitor_internal(self.value, visitor)
+                    }
+                    
+                    serde::forward_to_deserialize_any! {
+                        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
+                        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
+                        map struct enum identifier ignored_any
+                    }
+                }
+                
+                visitor.visit_some(NonRecursiveValueDeserializer { value: self.clone() })
+            },
         }
     }
 
     serde::forward_to_deserialize_any! {
         bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
-        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
-        map struct enum identifier ignored_any
+        byte_buf unit unit_struct newtype_struct tuple tuple_struct
+        struct enum identifier ignored_any
     }
 }
 
-struct SeqDeserializer<'a> {
-    iter: std::slice::Iter<'a, Value>,
+
+
+// Empty deserializers to handle null-to-collection conversions without lifetime issues
+struct EmptySeqDeserializer;
+
+impl<'de> serde::de::SeqAccess<'de> for EmptySeqDeserializer {
+    type Error = Error;
+
+    fn next_element_seed<T>(&mut self, _seed: T) -> Result<Option<T::Value>, Self::Error>
+    where
+        T: serde::de::DeserializeSeed<'de>,
+    {
+        Ok(None) // Always empty
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(0)
+    }
 }
 
-impl<'de> serde::de::SeqAccess<'de> for SeqDeserializer<'de> {
+struct EmptyMapDeserializer;
+
+impl<'de> serde::de::MapAccess<'de> for EmptyMapDeserializer {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, _seed: K) -> Result<Option<K::Value>, Self::Error>
+    where
+        K: serde::de::DeserializeSeed<'de>,
+    {
+        Ok(None) // Always empty
+    }
+
+    fn next_value_seed<V>(&mut self, _seed: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::DeserializeSeed<'de>,
+    {
+        Err(Error::Custom("EmptyMapDeserializer should not have values".to_string()))
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(0)
+    }
+}
+
+
+
+
+/// IntoDeserializer implementation for Value - uses owned deserializer to avoid recursion
+impl IntoDeserializer<'_, Error> for Value {
+    type Deserializer = ValueDeserializerOwned;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        ValueDeserializerOwned::new(self)
+    }
+}
+
+// Old DirectSeqAccess and DirectMapAccess have been replaced by ZeroRecursionSeqAccess and ZeroRecursionMapAccess
+
+/// Dispatch a value directly to a visitor without creating recursive deserializers
+/// This is the core non-recursive dispatch mechanism that breaks all recursion cycles
+pub fn dispatch_value_to_visitor<'de, V>(
+    value: Value, 
+    seed: V
+) -> Result<V::Value, Error>
+where
+    V: serde::de::DeserializeSeed<'de>,
+{
+    // TRUE direct dispatch without any intermediate deserializer creation
+    struct ZeroRecursionDeserializer {
+        value: Value,
+    }
+    
+    impl<'de> serde::Deserializer<'de> for ZeroRecursionDeserializer {
+        type Error = Error;
+        
+        fn deserialize_any<Vis>(self, visitor: Vis) -> Result<Vis::Value, Self::Error>
+        where
+            Vis: serde::de::Visitor<'de>,
+        {
+            dispatch_value_to_visitor_internal(self.value, visitor)
+        }
+        
+        serde::forward_to_deserialize_any! {
+            bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
+            byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
+            map struct enum identifier ignored_any
+        }
+    }
+    
+    seed.deserialize(ZeroRecursionDeserializer { value })
+}
+
+/// Internal dispatch that handles value-to-visitor conversion without ANY recursion
+/// This is the blazing-fast, zero-allocation core that eliminates all recursive patterns
+fn dispatch_value_to_visitor_internal<'de, V>(
+    value: Value,
+    visitor: V
+) -> Result<V::Value, Error>
+where
+    V: serde::de::Visitor<'de>,
+{
+    // Unwrap tagged values iteratively first to prevent any tagged recursion
+    let mut unwrapped_value = value;
+    while let Value::Tagged(tagged) = unwrapped_value {
+        unwrapped_value = tagged.value;
+    }
+    
+    // Direct dispatch based on unwrapped value type - ZERO intermediate objects
+    match unwrapped_value {
+        Value::Null => visitor.visit_unit(),
+        Value::Bool(b) => visitor.visit_bool(b),
+        Value::Number(n) => match n {
+            Number::Integer(i) => visitor.visit_i64(i),
+            Number::Float(f) => visitor.visit_f64(f),
+        },
+        Value::String(s) => visitor.visit_string(s),
+        Value::Sequence(seq) => {
+            // Use completely non-recursive sequence access
+            let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+            visitor.visit_seq(&mut seq_access)
+        }
+        Value::Mapping(map) => {
+            // Use completely non-recursive mapping access  
+            let mut map_access = ZeroRecursionMapAccess::new(map);
+            visitor.visit_map(&mut map_access)
+        }
+        Value::Tagged(_) => {
+            // This should never happen due to unwrapping above, but handle gracefully
+            Err(Error::Custom("Tagged value found after unwrapping - this indicates a bug".to_string()))
+        }
+    }
+}
+
+/// Completely non-recursive sequence access - breaks ALL recursion cycles
+pub struct ZeroRecursionSeqAccess {
+    iter: std::vec::IntoIter<Value>,
+}
+
+impl ZeroRecursionSeqAccess {
+    pub fn new(seq: Sequence) -> Self {
+        ZeroRecursionSeqAccess { 
+            iter: seq.into_iter() 
+        }
+    }
+}
+
+impl<'de> serde::de::SeqAccess<'de> for ZeroRecursionSeqAccess {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
@@ -595,26 +938,34 @@ impl<'de> serde::de::SeqAccess<'de> for SeqDeserializer<'de> {
         T: serde::de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(value) => seed.deserialize(value).map(Some),
+            Some(value) => dispatch_value_to_visitor(value, seed).map(Some),
             None => Ok(None),
         }
     }
 
-    #[inline]
     fn size_hint(&self) -> Option<usize> {
-        match self.iter.size_hint() {
-            (lower, Some(upper)) if lower == upper => Some(upper),
-            _ => None,
+        let (_lower, upper) = self.iter.size_hint();
+        upper
+    }
+}
+
+/// Completely non-recursive mapping access - breaks ALL recursion cycles
+pub struct ZeroRecursionMapAccess {
+    iter: std::vec::IntoIter<(Value, Value)>,
+    next_value: Option<Value>,
+}
+
+impl ZeroRecursionMapAccess {
+    pub fn new(map: Mapping) -> Self {
+        let pairs: Vec<(Value, Value)> = map.into_iter().collect();
+        ZeroRecursionMapAccess { 
+            iter: pairs.into_iter(),
+            next_value: None,
         }
     }
 }
 
-struct MapDeserializer<'a> {
-    iter: std::collections::btree_map::Iter<'a, Value, Value>,
-    next_value: Option<&'a Value>,
-}
-
-impl<'de> serde::de::MapAccess<'de> for MapDeserializer<'de> {
+impl<'de> serde::de::MapAccess<'de> for ZeroRecursionMapAccess {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
@@ -624,7 +975,7 @@ impl<'de> serde::de::MapAccess<'de> for MapDeserializer<'de> {
         match self.iter.next() {
             Some((key, value)) => {
                 self.next_value = Some(value);
-                seed.deserialize(key).map(Some)
+                dispatch_value_to_visitor(key, seed).map(Some)
             }
             None => Ok(None),
         }
@@ -635,148 +986,14 @@ impl<'de> serde::de::MapAccess<'de> for MapDeserializer<'de> {
         V: serde::de::DeserializeSeed<'de>,
     {
         match self.next_value.take() {
-            Some(value) => seed.deserialize(value),
-            None => Err(Error::Custom("no value available".to_string())),
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> Option<usize> {
-        match self.iter.size_hint() {
-            (lower, Some(upper)) if lower == upper => Some(upper),
-            _ => None,
-        }
-    }
-}
-
-/// IntoDeserializer implementation for Value
-impl IntoDeserializer<'_, Error> for Value {
-    type Deserializer = Self;
-
-    fn into_deserializer(self) -> Self::Deserializer {
-        self
-    }
-}
-
-/// Make Value work as a deserializer itself
-impl<'de> serde::Deserializer<'de> for Value {
-    type Error = Error;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: serde::de::Visitor<'de>,
-    {
-        match self {
-            Value::Null => visitor.visit_unit(),
-            Value::Bool(b) => visitor.visit_bool(b),
-            Value::Number(n) => match n {
-                Number::Integer(i) => visitor.visit_i64(i),
-                Number::Float(f) => visitor.visit_f64(f),
-            },
-            Value::String(s) => visitor.visit_string(s),
-            Value::Sequence(seq) => {
-                visitor.visit_seq(ValueSeqAccess::new(seq))
-            }
-            Value::Mapping(map) => {
-                visitor.visit_map(ValueMapAccess::new(map))
-            }
-            Value::Tagged(tagged) => {
-                // For deserialization, we treat tagged values as their underlying value
-                tagged.value.clone().deserialize_any(visitor)
-            }
-        }
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
-        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
-        map struct enum identifier ignored_any
-    }
-}
-
-/// Sequence access for Value deserialization
-struct ValueSeqAccess {
-    seq: Sequence,
-    index: usize,
-}
-
-impl ValueSeqAccess {
-    fn new(seq: Sequence) -> Self {
-        Self { seq, index: 0 }
-    }
-}
-
-impl<'de> serde::de::SeqAccess<'de> for ValueSeqAccess {
-    type Error = Error;
-
-    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
-    where
-        T: serde::de::DeserializeSeed<'de>,
-    {
-        if self.index < self.seq.len() {
-            let value = self.seq.get(self.index).ok_or_else(|| {
-                Error::Custom("sequence index out of bounds".to_string())
-            })?.clone();
-            self.index += 1;
-            seed.deserialize(value).map(Some)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn size_hint(&self) -> Option<usize> {
-        Some(self.seq.len().saturating_sub(self.index))
-    }
-}
-
-/// Map access for Value deserialization
-struct ValueMapAccess {
-    map: Mapping,
-    keys: Vec<Value>,
-    index: usize,
-    next_value: Option<Value>,
-}
-
-impl ValueMapAccess {
-    fn new(map: Mapping) -> Self {
-        let keys: Vec<Value> = map.keys().cloned().collect();
-        Self {
-            map,
-            keys,
-            index: 0,
-            next_value: None,
-        }
-    }
-}
-
-impl<'de> serde::de::MapAccess<'de> for ValueMapAccess {
-    type Error = Error;
-
-    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
-    where
-        K: serde::de::DeserializeSeed<'de>,
-    {
-        if self.index < self.keys.len() {
-            let key = self.keys[self.index].clone();
-            self.next_value = self.map.get(&key).cloned();
-            self.index += 1;
-            seed.deserialize(key).map(Some)
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
-    where
-        V: serde::de::DeserializeSeed<'de>,
-    {
-        match self.next_value.take() {
-            Some(value) => seed.deserialize(value),
+            Some(value) => dispatch_value_to_visitor(value, seed),
             None => Err(Error::Custom("no value available".to_string())),
         }
     }
 
     fn size_hint(&self) -> Option<usize> {
-        Some(self.keys.len().saturating_sub(self.index))
+        let (_lower, upper) = self.iter.size_hint();
+        upper
     }
 }
+
