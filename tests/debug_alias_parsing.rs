@@ -14,7 +14,7 @@ second:
 third: 3"#;
     
     println!("Input YAML:");
-    println!("{}", test_yaml);
+    println!("{test_yaml}");
     println!("\n--- PARSING ANALYSIS ---");
     
     // Parse with YamlLoader::load_from_str
@@ -23,19 +23,19 @@ third: 3"#;
     println!("Document count: {}", docs.len());
     
     for (i, doc) in docs.iter().enumerate() {
-        println!("\n📄 Document {}: {:#?}", i, doc);
+        println!("\n📄 Document {i}: {doc:#?}");
         
         // Analyze the structure
         match doc {
             Yaml::Hash(map) => {
                 println!("📋 Hash with {} entries:", map.len());
                 for (key, value) in map.iter() {
-                    println!("  Key: {:#?}", key);
-                    println!("  Value: {:#?}", value);
+                    println!("  Key: {key:#?}");
+                    println!("  Value: {value:#?}");
                     
                     // Check for unresolved aliases or BadValues
                     match value {
-                        Yaml::Alias(id) => println!("  ⚠️  UNRESOLVED ALIAS: {}", id),
+                        Yaml::Alias(id) => println!("  ⚠️  UNRESOLVED ALIAS: {id}"),
                         Yaml::BadValue => println!("  ❌ BAD VALUE DETECTED"),
                         _ => {}
                     }
@@ -43,7 +43,7 @@ third: 3"#;
             }
             Yaml::Null => println!("📭 Empty/Null document"),
             Yaml::BadValue => println!("❌ BadValue document"),
-            other => println!("📦 Other document type: {:#?}", other),
+            other => println!("📦 Other document type: {other:#?}"),
         }
     }
     
@@ -57,14 +57,14 @@ third: 3"#;
         
         match conversion_result {
             Ok(value) => {
-                println!("✅ Value conversion succeeded: {:#?}", value);
+                println!("✅ Value conversion succeeded: {value:#?}");
                 
                 // Test serde deserialization
                 println!("\n--- SERDE DESERIALIZATION TEST ---");
                 match yyaml::from_value::<BTreeMap<String, i32>>(value) {
                     Ok(map) => {
                         println!("✅ Serde deserialization succeeded!");
-                        println!("Final result: {:?}", map);
+                        println!("Final result: {map:?}");
                         
                         // Compare with expected
                         let mut expected = BTreeMap::new();
@@ -76,11 +76,11 @@ third: 3"#;
                             println!("🎉 PERFECT MATCH! Alias resolution working correctly!");
                         } else {
                             println!("❌ MISMATCH!");
-                            println!("Expected: {:?}", expected);
-                            println!("Got:      {:?}", map);
+                            println!("Expected: {expected:?}");
+                            println!("Got:      {map:?}");
                         }
                     }
-                    Err(e) => println!("❌ Serde deserialization failed: {}", e),
+                    Err(e) => println!("❌ Serde deserialization failed: {e}"),
                 }
             }
             Err(_) => {
@@ -98,10 +98,10 @@ alias: *test"#;
         Ok(docs) => {
             println!("Simple alias parsing result:");
             for doc in &docs {
-                println!("  {:#?}", doc);
+                println!("  {doc:#?}");
             }
         }
-        Err(e) => println!("Simple alias parsing failed: {}", e),
+        Err(e) => println!("Simple alias parsing failed: {e}"),
     }
     
     // Test what fast parser excludes
@@ -114,10 +114,10 @@ alias: *test"#;
     println!("\n--- DIRECT SERDE TEST ---");
     match yyaml::parse_str::<BTreeMap<String, i32>>(test_yaml) {
         Ok(result) => {
-            println!("✅ Direct serde parsing succeeded: {:?}", result);
+            println!("✅ Direct serde parsing succeeded: {result:?}");
         }
         Err(e) => {
-            println!("❌ Direct serde parsing failed: {}", e);
+            println!("❌ Direct serde parsing failed: {e}");
         }
     }
 }

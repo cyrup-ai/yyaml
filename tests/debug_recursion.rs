@@ -30,18 +30,19 @@ fn test_recursion_debug() {
     let simple_yaml = "test: !wat 42";
     match yyaml::parse_str::<Value>(simple_yaml) {
         Ok(value) => {
-            println!("Successfully parsed simple tagged value: {:?}", value);
+            println!("Successfully parsed simple tagged value: {value:?}");
             
             // Try to deserialize a simple struct from this
             #[derive(Debug, Deserialize)]
+            #[allow(dead_code)]
             struct Simple { test: usize }
             
             match Simple::deserialize(&value) {
-                Ok(result) => println!("Successfully deserialized simple: {:?}", result),
-                Err(e) => println!("Failed to deserialize simple: {}", e),
+                Ok(result) => println!("Successfully deserialized simple: {result:?}"),
+                Err(e) => println!("Failed to deserialize simple: {e}"),
             }
         }
-        Err(e) => println!("Failed to parse simple tagged value: {}", e),
+        Err(e) => println!("Failed to parse simple tagged value: {e}"),
     }
     
     println!("\nTesting complex tagged structure...");
@@ -66,15 +67,15 @@ vec: !wat
             
             println!("\nAttempting deserialization...");
             match Data::deserialize(&value) {
-                Ok(result) => println!("SUCCESS: Deserialized without stack overflow: {:?}", result),
+                Ok(result) => println!("SUCCESS: Deserialized without stack overflow: {result:?}"),
                 Err(e) => {
-                    println!("ERROR: Deserialization failed: {}", e);
+                    println!("ERROR: Deserialization failed: {e}");
                     panic!("Deserialization should not fail");
                 }
             }
         }
         Err(e) => {
-            println!("Failed to parse YAML: {}", e);
+            println!("Failed to parse YAML: {e}");
             panic!("YAML parsing should not fail");
         }
     }

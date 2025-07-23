@@ -1,6 +1,9 @@
-use yyaml;
 
 fn main() {
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .try_init()
+        .ok();
     let yaml_content = r#"
 # Links:
 #  - https://platform.openai.com/docs/models
@@ -32,11 +35,11 @@ fn main() {
         Ok(docs) => {
             println!("✅ YAML parsing succeeded! Parsed {} documents", docs.len());
             if let Some(doc) = docs.first() {
-                println!("First document: {:?}", doc);
+                println!("First document: {doc:?}");
             }
         },
         Err(e) => {
-            println!("❌ YAML parsing failed: {:?}", e);
+            println!("❌ YAML parsing failed: {e:?}");
             std::process::exit(1);
         }
     }

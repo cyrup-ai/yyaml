@@ -10,7 +10,20 @@ use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::sync::Once;
 use yyaml::{Deserializer, Number, Value};
+
+static INIT: Once = Once::new();
+
+fn init() {
+    INIT.call_once(|| {
+        env_logger::builder()
+            .filter_level(log::LevelFilter::Debug)
+            .is_test(true)
+            .try_init()
+            .ok();
+    });
+}
 
 fn test_de<T>(yaml: &str, expected: &T)
 where
@@ -73,6 +86,7 @@ fn test_borrowed() {
 
 #[test]
 fn test_alias() {
+    init();
     let yaml = indoc! {"
         first:
           &alias
@@ -708,8 +722,8 @@ fn test_parse_number() {
     assert_eq!(n, Number::from(f64::NEG_INFINITY));
 
     let err = "null".parse::<Number>().unwrap_err();
-    assert_eq!(err.to_string(), "failed to parse YAML number");
+    assert_eq!(err.to_string(), "custom: failed to parse YAML number");
 
     let err = " 1 ".parse::<Number>().unwrap_err();
-    assert_eq!(err.to_string(), "failed to parse YAML number");
+    assert_eq!(err.to_string(), "custom: failed to parse YAML number");
 }

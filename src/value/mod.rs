@@ -613,10 +613,76 @@ impl<'de> serde::Deserializer<'de> for ValueDeserializerOwned {
         }
     }
 
+    // Custom deserialize_seq to handle null -> empty sequence conversion for owned values
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self.value {
+            Value::Sequence(seq) => {
+                let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                visitor.visit_seq(&mut seq_access)
+            }
+            Value::Null => {
+                // Convert null to empty sequence using empty deserializer
+                visitor.visit_seq(EmptySeqDeserializer)
+            }
+            Value::Tagged(tagged) => {
+                // Unwrap tagged values iteratively
+                let mut current_value = tagged.value;
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = inner_tagged.value;
+                }
+                match current_value {
+                    Value::Sequence(seq) => {
+                        let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                        visitor.visit_seq(&mut seq_access)
+                    }
+                    Value::Null => visitor.visit_seq(EmptySeqDeserializer),
+                    _ => Err(Error::Custom(format!("cannot deserialize {current_value:?} as sequence"))),
+                }
+            }
+            _ => Err(Error::Custom(format!("cannot deserialize {:?} as sequence", self.value))),
+        }
+    }
+
+    // Custom deserialize_map to handle null -> empty mapping conversion for owned values
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: serde::de::Visitor<'de>,
+    {
+        match self.value {
+            Value::Mapping(map) => {
+                let mut map_access = ZeroRecursionMapAccess::new(map);
+                visitor.visit_map(&mut map_access)
+            }
+            Value::Null => {
+                // Convert null to empty mapping
+                visitor.visit_map(EmptyMapDeserializer)
+            }
+            Value::Tagged(tagged) => {
+                // Unwrap tagged values iteratively
+                let mut current_value = tagged.value;
+                while let Value::Tagged(inner_tagged) = current_value {
+                    current_value = inner_tagged.value;
+                }
+                match current_value {
+                    Value::Mapping(map) => {
+                        let mut map_access = ZeroRecursionMapAccess::new(map);
+                        visitor.visit_map(&mut map_access)
+                    }
+                    Value::Null => visitor.visit_map(EmptyMapDeserializer),
+                    _ => Err(Error::Custom(format!("cannot deserialize {current_value:?} as mapping"))),
+                }
+            }
+            _ => Err(Error::Custom(format!("cannot deserialize {:?} as mapping", self.value))),
+        }
+    }
+
     serde::forward_to_deserialize_any! {
         bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
-        byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
-        map struct enum identifier ignored_any
+        byte_buf option unit unit_struct newtype_struct tuple tuple_struct
+        struct enum identifier ignored_any
     }
 }
 
@@ -866,10 +932,75 @@ where
             dispatch_value_to_visitor_internal(self.value, visitor)
         }
         
+        // Custom deserialize_seq to handle null -> empty sequence conversion
+        fn deserialize_seq<Vis>(self, visitor: Vis) -> Result<Vis::Value, Self::Error>
+        where
+            Vis: serde::de::Visitor<'de>,
+        {
+            // Unwrap tagged values iteratively first
+            let mut unwrapped_value = self.value;
+            while let Value::Tagged(tagged) = unwrapped_value {
+                unwrapped_value = tagged.value;
+            }
+            
+            match unwrapped_value {
+                Value::Sequence(seq) => {
+                    let mut seq_access = ZeroRecursionSeqAccess::new(seq);
+                    visitor.visit_seq(&mut seq_access)
+                }
+                Value::Null => {
+                    // Convert null to empty sequence
+                    visitor.visit_seq(EmptySeqDeserializer)
+                }
+                _ => Err(Error::Custom(format!("cannot deserialize {unwrapped_value:?} as sequence"))),
+            }
+        }
+        
+        // Custom deserialize_map to handle null -> empty mapping conversion
+        fn deserialize_map<Vis>(self, visitor: Vis) -> Result<Vis::Value, Self::Error>
+        where
+            Vis: serde::de::Visitor<'de>,
+        {
+            // Unwrap tagged values iteratively first
+            let mut unwrapped_value = self.value;
+            while let Value::Tagged(tagged) = unwrapped_value {
+                unwrapped_value = tagged.value;
+            }
+            
+            match unwrapped_value {
+                Value::Mapping(map) => {
+                    let mut map_access = ZeroRecursionMapAccess::new(map);
+                    visitor.visit_map(&mut map_access)
+                }
+                Value::Null => {
+                    // Convert null to empty mapping
+                    visitor.visit_map(EmptyMapDeserializer)
+                }
+                _ => Err(Error::Custom(format!("cannot deserialize {unwrapped_value:?} as mapping"))),
+            }
+        }
+        
+        // Custom deserialize_option to handle null -> None conversion
+        fn deserialize_option<Vis>(self, visitor: Vis) -> Result<Vis::Value, Self::Error>
+        where
+            Vis: serde::de::Visitor<'de>,
+        {
+            // Unwrap tagged values iteratively first
+            let mut unwrapped_value = self.value;
+            while let Value::Tagged(tagged) = unwrapped_value {
+                unwrapped_value = tagged.value;
+            }
+            
+            match unwrapped_value {
+                Value::Null => visitor.visit_none(),
+                _ => visitor.visit_some(ZeroRecursionDeserializer { value: unwrapped_value }),
+            }
+        }
+        
         serde::forward_to_deserialize_any! {
             bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string bytes
-            byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct
-            map struct enum identifier ignored_any
+            byte_buf unit unit_struct newtype_struct tuple tuple_struct
+            struct enum identifier ignored_any
         }
     }
     

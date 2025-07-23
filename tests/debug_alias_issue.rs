@@ -12,7 +12,7 @@ fn debug_alias_parsing() {
     "};
     
     println!("YAML to parse:");
-    println!("{}", yaml);
+    println!("{yaml}");
     println!("---");
     
     // Try to parse as YAML documents first
@@ -20,11 +20,11 @@ fn debug_alias_parsing() {
         Ok(docs) => {
             println!("Successfully loaded {} documents", docs.len());
             for (i, doc) in docs.iter().enumerate() {
-                println!("Document {}: {:?}", i, doc);
+                println!("Document {i}: {doc:?}");
             }
         }
         Err(e) => {
-            println!("Failed to load YAML: {:?}", e);
+            println!("Failed to load YAML: {e:?}");
         }
     }
     
@@ -33,10 +33,10 @@ fn debug_alias_parsing() {
     // Try to parse as serde BTreeMap
     match yyaml::parse_str::<BTreeMap<String, i32>>(yaml) {
         Ok(result) => {
-            println!("Successfully parsed as BTreeMap: {:?}", result);
+            println!("Successfully parsed as BTreeMap: {result:?}");
         }
         Err(e) => {
-            println!("Failed to parse as BTreeMap: {:?}", e);
+            println!("Failed to parse as BTreeMap: {e:?}");
         }
     }
     

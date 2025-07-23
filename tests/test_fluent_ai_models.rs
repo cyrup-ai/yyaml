@@ -1,4 +1,3 @@
-use yyaml;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -47,7 +46,7 @@ fn main() {
             }
         },
         Err(e) => {
-            println!("❌ ERROR: {}", e);
+            println!("❌ ERROR: {e}");
         }
     }
 }

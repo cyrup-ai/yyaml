@@ -4,6 +4,7 @@ use crate::events::{Event, EventReceiver, MarkedEventReceiver, TScalarStyle, Tok
 use crate::linked_hash_map::LinkedHashMap;
 use crate::yaml::Yaml;
 use std::collections::HashMap;
+use log::{debug, trace, warn};
 
 /// Our main "public" API: load from a string → produce Vec<Yaml>.
 pub struct YamlLoader;
@@ -13,14 +14,14 @@ impl YamlLoader {
         // Fast path for simple cases - zero allocation, blazing fast
         match Self::try_fast_parse(s) {
             Ok(Some(result)) => {
-                eprintln!("PARSER DEBUG: Fast parser succeeded with: {result:?}");
+                debug!("Fast parser succeeded with: {result:?}");
                 return Ok(vec![result]);
             }
             Ok(None) => {
-                eprintln!("PARSER DEBUG: Fast parser detected complex syntax, falling back to full parser");
+                debug!("Fast parser detected complex syntax, falling back to full parser");
             }, // Fall through to full parser
             Err(error) => {
-                eprintln!("PARSER DEBUG: Fast parser failed: {error:?}");
+                debug!("Fast parser failed: {error:?}");
                 return Err(error);
             } // Propagate parsing errors
         }
@@ -31,22 +32,22 @@ impl YamlLoader {
         
         match parser.load(&mut loader, false) {
             Ok(()) => {
-                eprintln!("PARSER DEBUG: Full parser completed successfully");
-                eprintln!("PARSER DEBUG: Loaded {} documents", loader.docs.len());
+                debug!("Full parser completed successfully");
+                debug!("Loaded {} documents", loader.docs.len());
                 for (i, doc) in loader.docs.iter().enumerate() {
-                    eprintln!("PARSER DEBUG: Document {i}: {doc:?}");
+                    trace!("Document {i}: {doc:?}");
                 }
-                eprintln!("PARSER DEBUG: Anchors: {:?}", loader.anchors);
+                debug!("Anchors: {:?}", loader.anchors);
             }
             Err(e) => {
-                eprintln!("PARSER DEBUG: Full parser failed: {e:?}");
+                debug!("Full parser failed: {e:?}");
                 return Err(e);
             }
         }
         
         // If no documents were parsed, return empty array rather than fail
         if loader.docs.is_empty() {
-            eprintln!("PARSER DEBUG: No documents parsed, returning Null");
+            debug!("No documents parsed, returning Null");
             // Try to handle as empty document
             return Ok(vec![Yaml::Null]);
         }
@@ -64,6 +65,13 @@ impl YamlLoader {
             return Ok(Some(Yaml::Null));
         }
 
+        // CRITICAL FIX: If content starts with "- ", it's a sequence - ALWAYS use full parser
+        // The fast parser incorrectly handles complex sequences, so force full parser
+        if trimmed.starts_with("- ") {
+            println!("PARSER DEBUG: Detected sequence start, forcing full parser");
+            return Ok(None);
+        }
+
         // Simple scalar cases (no structure indicators)
         if !trimmed.contains(':') && !trimmed.contains('-') && 
            !trimmed.contains('[') && !trimmed.contains('{') {
@@ -73,21 +81,27 @@ impl YamlLoader {
         // Block sequence: handle lists with "- item" syntax (CHECK FIRST!)
         // If it starts with "- ", it's likely a sequence - don't let block mapping claim it
         if trimmed.starts_with("- ") {
-            // Intelligent block sequence detection with production-grade error handling
+            println!("PARSER DEBUG: Detected sequence start, trying block sequence parsing");
+            // Try parsing as block sequence - let try_parse_block_sequence handle complexity
             if Self::is_valid_block_sequence(trimmed) {
+                println!("PARSER DEBUG: Valid block sequence detected, parsing...");
                 return Self::try_parse_block_sequence(trimmed);
             } else {
-                // Malformed sequence - return specific error instead of falling back
-                return Err(ScanError::new(
-                    Marker { index: 0, line: 1, col: 0 },
-                    "malformed block sequence: invalid indentation or structure"
-                ));
+                println!("PARSER DEBUG: Invalid block sequence, falling back to full parser");
+                // Invalid structure - fall back to full parser instead of erroring
+                return Ok(None);
             }
         }
         
         // Multi-line mapping: handle simple block mappings (ONLY if not a sequence)
-        if trimmed.contains(':') && trimmed.lines().count() > 1 {
-            return Ok(Self::try_parse_block_mapping(trimmed));
+        // CRITICAL: Don't claim sequences that start with "- " as mappings!
+        if trimmed.contains(':') && trimmed.lines().count() > 1 && !trimmed.starts_with("- ") {
+            if let Some(result) = Self::try_parse_block_mapping(trimmed) {
+                return Ok(Some(result));
+            } else {
+                // Complex mapping detected (anchors/aliases), fall back to full parser
+                return Ok(None);
+            }
         }
         
         // Single-line mapping: "key: value"
@@ -532,7 +546,7 @@ impl YamlReceiver {
 
 impl EventReceiver for YamlReceiver {
     fn on_event(&mut self, ev: Event) {
-        eprintln!("YAML EVENT: {:?} (doc_stack len: {}, docs len: {})", ev, self.doc_stack.len(), self.docs.len());
+        trace!("YAML EVENT: {:?} (doc_stack len: {}, docs len: {})", ev, self.doc_stack.len(), self.docs.len());
         match ev {
             Event::DocumentStart => {}
             Event::DocumentEnd => match self.doc_stack.len() {
@@ -552,7 +566,7 @@ impl EventReceiver for YamlReceiver {
                 } else {
                     // Anchor not found - this is an error condition
                     // For now, insert null to avoid BadValue but this should be investigated
-                    eprintln!("Warning: Anchor ID {id} not found, using null");
+                    warn!("Anchor ID {id} not found, using null");
                     self.insert_new_node((Yaml::Null, 0));
                 }
             }
@@ -720,10 +734,16 @@ fn load_document<T: Iterator<Item = char>, R: MarkedEventReceiver>(
             // and let the caller handle the next document
             Ok(())
         }
+        Event::StreamEnd => {
+            // Stream end is a valid way to end a document (implicit document end)
+            recv.on_event(Event::DocumentEnd, mark3);
+            recv.on_event(Event::StreamEnd, mark3);
+            Ok(())
+        }
         other => {
             Err(ScanError::new(
                 mark3,
-                &format!("Expected DocumentEnd or DocumentStart, got {other:?}"),
+                &format!("Expected DocumentEnd, DocumentStart, or StreamEnd, got {other:?}"),
             ))
         }
     }

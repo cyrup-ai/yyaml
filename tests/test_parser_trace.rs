@@ -5,7 +5,7 @@ use yyaml::scanner::Scanner;
 #[test]
 fn trace_multiline_mapping() {
     let yaml = "hello: world\nint: 42";
-    println!("Parsing YAML: {:?}", yaml);
+    println!("Parsing YAML: {yaml:?}");
 
     // First, let's trace the scanner tokens
     println!("\n=== Scanner Token Trace ===");
@@ -24,7 +24,7 @@ fn trace_multiline_mapping() {
                 scanner.fetch_token();
             }
             Err(e) => {
-                println!("Scanner error: {:?}", e);
+                println!("Scanner error: {e:?}");
                 break;
             }
         }
@@ -37,14 +37,14 @@ fn trace_multiline_mapping() {
     loop {
         match parser.next() {
             Ok(event) => {
-                println!("Event: {:?}", event);
+                println!("Event: {event:?}");
 
                 if matches!(event.0, Event::StreamEnd) {
                     break;
                 }
             }
             Err(e) => {
-                println!("Parser error: {:?}", e);
+                println!("Parser error: {e:?}");
                 break;
             }
         }
@@ -56,11 +56,11 @@ fn trace_multiline_mapping() {
         Ok(docs) => {
             println!("Success! Loaded {} document(s)", docs.len());
             for (i, doc) in docs.iter().enumerate() {
-                println!("Document {}: {:?}", i, doc);
+                println!("Document {i}: {doc:?}");
             }
         }
         Err(e) => {
-            println!("YamlLoader error: {:?}", e);
+            println!("YamlLoader error: {e:?}");
         }
     }
 }

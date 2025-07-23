@@ -3,6 +3,7 @@ use yyaml::{Value, Mapping, Number};
 use yyaml::value::{Tag, TaggedValue};
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SimpleStruct {
     x: usize,
 }
@@ -24,13 +25,13 @@ fn test_simple_tagged_deserialization() {
     let tagged_value = TaggedValue::new(tag, inner_value);
     let value = Value::Tagged(Box::new(tagged_value));
     
-    println!("Created tagged value: {:?}", value);
+    println!("Created tagged value: {value:?}");
     
     println!("Attempting to deserialize...");
     match SimpleStruct::deserialize(&value) {
-        Ok(result) => println!("SUCCESS: {:?}", result),
+        Ok(result) => println!("SUCCESS: {result:?}"),
         Err(e) => {
-            println!("ERROR: {}", e);
+            println!("ERROR: {e}");
             panic!("Deserialization should not fail for simple tagged value");
         }
     }

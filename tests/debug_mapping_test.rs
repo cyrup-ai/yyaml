@@ -17,27 +17,27 @@ substructure:
 "#;
         
         println!("Raw YAML:");
-        println!("{}", yaml);
+        println!("{yaml}");
         
         // Parse with YamlLoader first to see raw structure
         let docs = YamlLoader::load_from_str(yaml).unwrap();
         println!("\nParsed with YamlLoader:");
         for (i, doc) in docs.iter().enumerate() {
-            println!("Document {}: {:#?}", i, doc);
+            println!("Document {i}: {doc:#?}");
         }
         
         // Try to deserialize
         println!("\nTrying serde deserialization:");
         match from_str::<Data>(yaml) {
             Ok(data) => {
-                println!("Successfully deserialized: {:#?}", data);
+                println!("Successfully deserialized: {data:#?}");
                 println!("Mapping has {} entries", data.substructure.len());
                 for (key, value) in &data.substructure {
-                    println!("  {:#?} -> {:#?}", key, value);
+                    println!("  {key:#?} -> {value:#?}");
                 }
             }
             Err(e) => {
-                println!("Deserialization failed: {:#?}", e);
+                println!("Deserialization failed: {e:#?}");
             }
         }
     }

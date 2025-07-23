@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
 /// A numeric value that can be either an integer or a float
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Number {
     Integer(i64),
     Float(f64),
@@ -47,7 +47,7 @@ impl Number {
             }
             "-.inf" | "-.Inf" | "-.INF" => Some(Number::Float(f64::NEG_INFINITY)),
             ".nan" | ".NaN" | ".NAN" => Some(Number::Float(f64::NAN)),
-            _ => s.parse::<f64>().ok().map(Number::Float),
+            _ => None, // Only handle special float values, not general numbers
         }
     }
 
@@ -167,6 +167,29 @@ impl From<f64> for Number {
     }
 }
 
+impl PartialEq for Number {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Number::Integer(a), Number::Integer(b)) => a == b,
+            (Number::Float(a), Number::Float(b)) => {
+                if a.is_nan() && b.is_nan() {
+                    true // Both NaN are considered equal
+                } else {
+                    a == b
+                }
+            }
+            (Number::Integer(i), Number::Float(f)) | (Number::Float(f), Number::Integer(i)) => {
+                if f.is_nan() {
+                    false // NaN is not equal to any integer
+                } else {
+                    *i as f64 == *f
+                }
+            }
+        }
+    }
+}
+
 impl PartialEq<i64> for Number {
     #[inline]
     fn eq(&self, other: &i64) -> bool {
@@ -228,8 +251,6 @@ impl FromStr for Number {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
-
         // Handle special float values
         if let Some(num) = Number::parse_real(s) {
             return Ok(num);

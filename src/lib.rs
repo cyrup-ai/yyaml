@@ -271,7 +271,7 @@ nulltest: ~";
             };
             match response.text().await {
                 Ok(content) => content,
-                Err(e) => panic!("Failed to read models.yaml content: {}", e),
+                Err(e) => panic!("Failed to read models.yaml content: {e}"),
             }
         });
         
@@ -292,7 +292,7 @@ nulltest: ~";
                 
                 // Inspect actual structure - MUST be an array  
                 let root_doc = &docs[0];
-                println!("Root document type: {:?}", root_doc);
+                println!("Root document type: {root_doc:?}");
                 
                 // CRITICAL: The YAML MUST be parsed as an array, not as an object
                 let providers = root_doc.as_vec().expect("YAML must be parsed as an array, not as an object with keys like '- provider'");
@@ -302,13 +302,13 @@ nulltest: ~";
                 // Validate first provider has expected structure
                 let first_provider = &providers[0];
                 if let Some(provider_name) = first_provider["provider"].as_str() {
-                    println!("First provider: '{}'", provider_name);
+                    println!("First provider: '{provider_name}'");
                 } else {
-                    println!("First provider structure: {:?}", first_provider);
+                    println!("First provider structure: {first_provider:?}");
                 }
             }
             Err(e) => {
-                panic!("Failed to parse models.yaml with yyaml: {}", e);
+                panic!("Failed to parse models.yaml with yyaml: {e}");
             }
         }
     }
