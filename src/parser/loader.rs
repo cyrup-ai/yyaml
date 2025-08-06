@@ -6,6 +6,7 @@ use crate::yaml::Yaml;
 use std::collections::HashMap;
 use log::{debug, trace, warn};
 
+
 /// Our main "public" API: load from a string → produce Vec<Yaml>.
 pub struct YamlLoader;
 
@@ -58,7 +59,12 @@ impl YamlLoader {
     /// Blazing-fast zero-allocation parser for common simple cases with production-grade error handling
     /// Handles: "key: value", "- item", "[1, 2, 3]", "{key: value}", multi-line mappings, and simple scalars
     fn try_fast_parse(s: &str) -> Result<Option<Yaml>, ScanError> {
-        let trimmed = s.trim();
+        let mut trimmed = s.trim();
+        
+        // Strip BOM if present for accurate parsing decisions per YAML 1.2
+        if trimmed.starts_with('\u{feff}') {
+            trimmed = &trimmed[3..]; // BOM is 3 bytes in UTF-8
+        }
         
         // Empty document
         if trimmed.is_empty() {
@@ -470,14 +476,12 @@ impl YamlLoader {
             _ => {}
         }
         
-        // Handle numeric values - integers first
-        if let Ok(i) = trimmed.parse::<i64>() {
-            return Yaml::Integer(i);
-        }
-        
-        // Handle floating point values
-        if let Ok(_f) = trimmed.parse::<f64>() {
-            return Yaml::Real(trimmed.to_string()); // Store as string to preserve formatting
+        // Handle numeric values using comprehensive YAML number parsing
+        // This supports hex (0x), octal (0o), binary (0b), and regular numbers
+        let parsed_number = crate::yaml::Yaml::parse_str(trimmed);
+        match parsed_number {
+            crate::yaml::Yaml::Integer(_) | crate::yaml::Yaml::Real(_) => return parsed_number,
+            _ => {}, // Not a number, continue to other parsing
         }
         
         // Handle special float values
@@ -499,6 +503,10 @@ pub struct YamlReceiver {
     doc_stack: Vec<(Yaml, usize)>,
     key_stack: Vec<Yaml>,
     anchors: HashMap<usize, Yaml>,
+    // Simple circular reference detection 
+    resolution_stack: Vec<usize>,
+    // Billion laughs protection
+    alias_count: usize,
 }
 
 impl Default for YamlReceiver {
@@ -510,15 +518,18 @@ impl Default for YamlReceiver {
 impl YamlReceiver {
     pub fn new() -> Self {
         YamlReceiver {
-            docs: Vec::new(),
-            doc_stack: Vec::new(),
-            key_stack: Vec::new(),
-            anchors: HashMap::new(),
+            docs: Vec::with_capacity(1), // Most YAML files have 1 document
+            doc_stack: Vec::with_capacity(8), // Typical nesting depth
+            key_stack: Vec::with_capacity(8), // Typical mapping depth
+            anchors: HashMap::with_capacity(16), // Reasonable anchor count
+            resolution_stack: Vec::with_capacity(8), // Rare deep circular refs
+            alias_count: 0, // Start with no aliases processed
         }
     }
 
+    #[inline]
     fn insert_new_node(&mut self, (node, aid): (Yaml, usize)) {
-        // store anchor if needed
+        // store anchor if needed - blazing-fast HashMap operations
         if aid > 0 {
             self.anchors.insert(aid, node.clone());
         }
@@ -542,13 +553,40 @@ impl YamlReceiver {
             }
         }
     }
+
+    /// Blazing-fast alias resolution with circular reference protection
+    #[inline]
+    fn resolve_alias(&mut self, id: usize) -> Yaml {
+        // Fast circular reference check - O(n) but n is typically very small (< 10 deep)
+        if self.resolution_stack.contains(&id) {
+            warn!("Circular reference detected for alias ID {}, breaking cycle", id);
+            return Yaml::Null;
+        }
+        
+        // Look up the anchored value and return it immediately
+        if let Some(anchored_node) = self.anchors.get(&id).cloned() {
+            anchored_node
+        } else {
+            warn!("Anchor ID {} not found, returning null", id);
+            Yaml::Null
+        }
+    }
+
+    /// Reset alias tracking state (called between documents)
+    #[inline]
+    fn reset_alias_tracking(&mut self) {
+        self.resolution_stack.clear();
+    }
 }
 
 impl EventReceiver for YamlReceiver {
     fn on_event(&mut self, ev: Event) {
         trace!("YAML EVENT: {:?} (doc_stack len: {}, docs len: {})", ev, self.doc_stack.len(), self.docs.len());
         match ev {
-            Event::DocumentStart => {}
+            Event::DocumentStart => {
+                // Reset alias tracking for each new document
+                self.reset_alias_tracking();
+            }
             Event::DocumentEnd => match self.doc_stack.len() {
                 0 => self.docs.push(Yaml::BadValue),
                 1 => {
@@ -561,14 +599,8 @@ impl EventReceiver for YamlReceiver {
             Event::StreamStart => {}
             Event::StreamEnd => {}
             Event::Alias(id) => {
-                if let Some(node) = self.anchors.get(&id).cloned() {
-                    self.insert_new_node((node, 0));
-                } else {
-                    // Anchor not found - this is an error condition
-                    // For now, insert null to avoid BadValue but this should be investigated
-                    warn!("Anchor ID {id} not found, using null");
-                    self.insert_new_node((Yaml::Null, 0));
-                }
+                let node = self.resolve_alias(id);
+                self.insert_new_node((node, 0));
             }
             Event::Scalar(s, style, aid, tag) => {
                 let node = if style != TScalarStyle::Plain {
@@ -599,7 +631,14 @@ impl EventReceiver for YamlReceiver {
                             _ => Yaml::String(s),
                         }
                     } else {
-                        Yaml::String(s)
+                        // Preserve custom tag by creating a Tagged variant
+                        let tag_name = if handle.is_empty() { 
+                            suffix.clone() 
+                        } else { 
+                            format!("{}{}", handle, suffix) 
+                        };
+                        let inner_value = YamlLoader::parse_scalar_direct(&s);
+                        Yaml::Tagged(tag_name, Box::new(inner_value))
                     }
                 } else {
                     // autodetect

@@ -11,9 +11,9 @@ pub fn block_sequence_entry<T: Iterator<Item = char>>(
     parser: &mut Parser<T>,
     first: bool,
 ) -> Result<(Event, crate::error::Marker), ScanError> {
-    if first {
-        parser.scanner.skip();
-    }
+    // YAML 1.2 Spec Compliance: Remove premature skip() that violated grammar rule [184]
+    // c-l-block-seq-entry(n) ::= c-sequence-entry [ lookahead ≠ ns-char ] s-l+block-indented(n,BLOCK-IN)
+    // The c-sequence-entry ("-") token should be consumed at the proper grammar position below
 
     let current_indent = *parser.indents.last().unwrap_or(&0);
     let token = parser.scanner.peek_token()?;

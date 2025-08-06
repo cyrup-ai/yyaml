@@ -57,17 +57,30 @@ pub enum Error {
     Scan(#[from] ScanError),
     #[error("emit error: {0}")]
     Emit(#[from] EmitError),
+    #[error("repetition limit exceeded")]
+    RepetitionLimitExceeded,
     #[error("custom: {0}")]
     Custom(String),
 }
 
+impl Error {
+    /// Blazing-fast constructor for repetition limit exceeded error.
+    /// Zero-allocation construction for hot path error handling.
+    #[inline(always)]
+    pub const fn repetition_limit_exceeded() -> Self {
+        Error::RepetitionLimitExceeded
+    }
+}
+
 impl serde::de::Error for Error {
+    #[inline]
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         Error::Custom(msg.to_string())
     }
 }
 
 impl serde::ser::Error for Error {
+    #[inline]
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
         Error::Custom(msg.to_string())
     }
@@ -313,3 +326,4 @@ nulltest: ~";
         }
     }
 }
+

@@ -91,6 +91,11 @@ impl<'a> YamlEmitter<'a> {
                 // If we had anchor references, we'd store them. For demonstration, we skip.
                 Ok(())
             }
+            Yaml::Tagged(tag, value) => {
+                // Emit tagged value with tag prefix
+                write!(self.writer, "{} ", tag)?;
+                self.emit_node(value)
+            }
         }
     }
 

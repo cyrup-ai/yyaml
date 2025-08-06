@@ -133,6 +133,10 @@ impl Value {
             Yaml::Array(arr) => Value::Sequence(Sequence::from_yaml_array(arr)),
             Yaml::Hash(map) => Value::Mapping(Mapping::from_yaml_hash(map)),
             Yaml::Alias(_) => panic!("Unresolved alias found - this indicates a bug in YAML parsing"),
+            Yaml::Tagged(_tag, value) => {
+                // Convert tagged value by ignoring tag and processing underlying value
+                Value::from_yaml(value)
+            }
             Yaml::BadValue => Value::Null,
         }
     }

@@ -24,7 +24,10 @@ indoc = "2.0"
 serde_derive = "1.0"
 reqwest = { version = "0.12.22", features = ["json", "stream", "http3", "rustls-tls", "rustls-tls-native-roots", "rustls-tls-manual-roots", "gzip", "deflate", "brotli"] }
 tokio = { version = "1.46.1", features = ["rt", "rt-multi-thread"] }
+cargo-nextest = "0.9.98"
 
 [lib]
 path = "./src/lib.rs"
 name = "yyaml"
+
+

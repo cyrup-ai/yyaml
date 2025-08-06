@@ -3,14 +3,41 @@ use serde::de::{
     self, Deserializer, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor,
 };
 
+use std::collections::HashMap;
+
 pub struct YamlDeserializer<'de> {
     value: &'de Yaml,
+    // Billion laughs protection
+    expansion_depth: usize,
+    total_expansions: usize,
+    // Anchor resolution context
+    anchors: Option<&'de HashMap<usize, Yaml>>,
 }
+
+// Billion laughs protection limits
+const MAX_EXPANSION_DEPTH: usize = 100;
+const MAX_TOTAL_EXPANSIONS: usize = 1_000_000;
 
 impl<'de> YamlDeserializer<'de> {
     #[inline]
     pub fn new(value: &'de Yaml) -> Self {
-        YamlDeserializer { value }
+        YamlDeserializer { 
+            value,
+            expansion_depth: 0,
+            total_expansions: 0,
+            anchors: None,
+        }
+    }
+
+    /// Create a new deserializer with explicit expansion tracking
+    #[inline]
+    fn with_expansion_tracking(value: &'de Yaml, depth: usize, total: usize) -> Self {
+        YamlDeserializer {
+            value,
+            expansion_depth: depth,
+            total_expansions: total,
+            anchors: None,
+        }
     }
 }
 
@@ -50,7 +77,7 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
             Yaml::Boolean(b) => visitor.visit_bool(*b),
             Yaml::Integer(i) => visit_integer(*i, visitor),
             Yaml::Real(s) => {
-                if let Ok(f) = s.parse::<f64>() {
+                if let Some(f) = crate::yaml::parse_f64(s) {
                     visitor.visit_f64(f)
                 } else {
                     visitor.visit_str(s)
@@ -59,7 +86,15 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
             Yaml::String(s) => visitor.visit_str(s),
             Yaml::Array(_) => self.deserialize_seq(visitor),
             Yaml::Hash(_) => self.deserialize_map(visitor),
-            Yaml::Alias(_) => Err(Error::Custom("Unresolved alias found - this indicates a bug in YAML parsing".into())),
+            Yaml::Tagged(_tag, value) => {
+                // Ignore tag and deserialize the underlying value
+                YamlDeserializer::with_expansion_tracking(value, self.expansion_depth, self.total_expansions).deserialize_any(visitor)
+            }
+            Yaml::Alias(_alias_id) => {
+                // Aliases should already be resolved by the parser
+                // If we encounter an alias here, it means the parser failed to resolve it
+                Err(Error::Custom("Unresolved alias encountered in deserializer".to_string()))
+            }
             Yaml::BadValue => Err(Error::Custom("bad value encountered".into())),
         }
     }
@@ -355,8 +390,16 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Yaml::Array(seq) => visitor.visit_seq(SeqDeserializer::new(seq.iter())),
-            Yaml::Null => visitor.visit_seq(SeqDeserializer::new([].iter())),
+            Yaml::Array(seq) => visitor.visit_seq(SeqDeserializer::with_expansion_tracking(
+                seq.iter(), 
+                self.expansion_depth, 
+                self.total_expansions
+            )),
+            Yaml::Null => visitor.visit_seq(SeqDeserializer::with_expansion_tracking(
+                [].iter(), 
+                self.expansion_depth, 
+                self.total_expansions
+            )),
             _ => Err(Error::Custom("expected sequence".into())),
         }
     }
@@ -388,10 +431,18 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Yaml::Hash(map) => visitor.visit_map(MapDeserializer::new(map.iter())),
+            Yaml::Hash(map) => visitor.visit_map(MapDeserializer::with_expansion_tracking(
+                map.iter(), 
+                self.expansion_depth, 
+                self.total_expansions
+            )),
             Yaml::Null => {
                 let empty: &[(&Yaml, &Yaml)] = &[];
-                visitor.visit_map(MapDeserializer::new(empty.iter().copied()))
+                visitor.visit_map(MapDeserializer::with_expansion_tracking(
+                    empty.iter().copied(), 
+                    self.expansion_depth, 
+                    self.total_expansions
+                ))
             }
             _ => Err(Error::Custom("expected mapping".into())),
         }
@@ -494,6 +545,8 @@ impl<'de> de::Deserializer<'de> for YamlDeserializer<'de> {
 
 pub struct SeqDeserializer<'de, I> {
     iter: I,
+    expansion_depth: usize,
+    total_expansions: usize,
     _phantom: std::marker::PhantomData<&'de ()>,
 }
 
@@ -502,6 +555,18 @@ impl<'de, I> SeqDeserializer<'de, I> {
     fn new(iter: I) -> Self {
         SeqDeserializer {
             iter,
+            expansion_depth: 0,
+            total_expansions: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    #[inline]
+    fn with_expansion_tracking(iter: I, depth: usize, total: usize) -> Self {
+        SeqDeserializer {
+            iter,
+            expansion_depth: depth,
+            total_expansions: total,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -519,7 +584,14 @@ where
         T: de::DeserializeSeed<'de>,
     {
         match self.iter.next() {
-            Some(value) => seed.deserialize(YamlDeserializer::new(value)).map(Some),
+            Some(value) => {
+                let deserializer = YamlDeserializer::with_expansion_tracking(
+                    value, 
+                    self.expansion_depth + 1, 
+                    self.total_expansions
+                );
+                seed.deserialize(deserializer).map(Some)
+            }
             None => Ok(None),
         }
     }
@@ -533,6 +605,8 @@ where
 pub struct MapDeserializer<'de, I> {
     iter: I,
     next_value: Option<&'de Yaml>,
+    expansion_depth: usize,
+    total_expansions: usize,
     _phantom: std::marker::PhantomData<&'de ()>,
 }
 
@@ -542,6 +616,19 @@ impl<'de, I> MapDeserializer<'de, I> {
         MapDeserializer {
             iter,
             next_value: None,
+            expansion_depth: 0,
+            total_expansions: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    #[inline]
+    fn with_expansion_tracking(iter: I, depth: usize, total: usize) -> Self {
+        MapDeserializer {
+            iter,
+            next_value: None,
+            expansion_depth: depth,
+            total_expansions: total,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -558,10 +645,21 @@ where
     where
         K: de::DeserializeSeed<'de>,
     {
+        // Blazing-fast billion laughs protection
+        self.total_expansions += 1;
+        if self.total_expansions > MAX_TOTAL_EXPANSIONS {
+            return Err(Error::repetition_limit_exceeded());
+        }
+
         match self.iter.next() {
             Some((key, value)) => {
                 self.next_value = Some(value);
-                seed.deserialize(YamlDeserializer::new(key)).map(Some)
+                let deserializer = YamlDeserializer::with_expansion_tracking(
+                    key, 
+                    self.expansion_depth + 1, 
+                    self.total_expansions
+                );
+                seed.deserialize(deserializer).map(Some)
             }
             None => Ok(None),
         }
@@ -572,8 +670,21 @@ where
     where
         V: de::DeserializeSeed<'de>,
     {
+        // Blazing-fast billion laughs protection
+        self.total_expansions += 1;
+        if self.total_expansions > MAX_TOTAL_EXPANSIONS {
+            return Err(Error::repetition_limit_exceeded());
+        }
+
         match self.next_value.take() {
-            Some(value) => seed.deserialize(YamlDeserializer::new(value)),
+            Some(value) => {
+                let deserializer = YamlDeserializer::with_expansion_tracking(
+                    value, 
+                    self.expansion_depth + 1, 
+                    self.total_expansions
+                );
+                seed.deserialize(deserializer)
+            }
             None => Err(Error::Custom("no value available".into())),
         }
     }

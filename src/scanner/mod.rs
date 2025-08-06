@@ -13,7 +13,7 @@ pub mod tags;
 pub mod token;
 pub mod utils;
 
-pub use state::{ScannerConfig, ScannerState};
+pub use state::{QuotedContext, ScannerConfig, ScannerState};
 pub use token::{Token, TokenProducer, TokenStream};
 
 use crate::error::{Marker, ScanError};
@@ -124,6 +124,9 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
         // Skip whitespace and comments efficiently
         utils::skip_whitespace_and_comments(&mut self.state)?;
+
+        // Handle BOM at document/stream boundaries per YAML 1.2 spec
+        self.handle_bom_at_boundary()?;
 
         // Check for stream end
         if self.state.is_done() {
@@ -302,6 +305,84 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     fn scan_comment_and_retry(&mut self, _start_mark: Marker) -> Result<Token, ScanError> {
         utils::skip_comment_line(&mut self.state)?;
         self.fetch_next_token()
+    }
+
+    /// Handle BOM at document/stream boundaries per YAML 1.2 specification  
+    #[inline]
+    fn handle_bom_at_boundary(&mut self) -> Result<(), ScanError> {
+        // Check if BOM character is present at current position
+        match self.state.peek_char() {
+            Ok('\u{feff}') => {
+                // BOM found - check if we're at a valid boundary
+                if self.is_at_valid_bom_position()? {
+                    // Valid position - strip BOM per YAML 1.2 spec
+                    self.state.consume_char()?;
+                    Ok(())
+                } else {
+                    // Invalid position - BOM inside document content
+                    let mark = self.mark();
+                    Err(ScanError::new(
+                        mark,
+                        &format!(
+                            "BOM (\\u{{feff}}) must not appear inside a document at line {}, column {} (YAML 1.2 violation). BOM is only valid at stream start or document boundaries.",
+                            mark.line,
+                            mark.col + 1
+                        ),
+                    ))
+                }
+            }
+            Ok(_) | Err(_) => {
+                // No BOM present or end of input - continue normally
+                Ok(())
+            }
+        }
+    }
+
+    /// Check if scanner is at a valid BOM position per YAML 1.2
+    #[inline] 
+    fn is_at_valid_bom_position(&mut self) -> Result<bool, ScanError> {
+        let mark = self.state.mark();
+        
+        // YAML 1.2 Rule 1: Stream start (position 0) - BOM always valid
+        if mark.index == 0 {
+            return Ok(true);
+        }
+        
+        // YAML 1.2 Rule 2: BOM only valid at document boundaries, not inside content
+        if !self.state.at_line_start() {
+            return Ok(false);
+        }
+        
+        // YAML 1.2 Rule 3: Before explicit document start marker (---)
+        if self.state.peek_char_at(0) == Some('-') &&
+           self.state.peek_char_at(1) == Some('-') &&
+           self.state.peek_char_at(2) == Some('-') {
+            // Verify boundary after --- per YAML 1.2 specification
+            match self.state.peek_char_at(3) {
+                Some(' ') | Some('\t') | Some('\n') | Some('\r') | None => return Ok(true),
+                _ => {} // Not a valid document marker, continue checking
+            }
+        }
+        
+        // YAML 1.2 Rule 4: Before document end marker (...)
+        if self.state.peek_char_at(0) == Some('.') &&
+           self.state.peek_char_at(1) == Some('.') &&
+           self.state.peek_char_at(2) == Some('.') {
+            // Verify boundary after ... per YAML 1.2 specification  
+            match self.state.peek_char_at(3) {
+                Some(' ') | Some('\t') | Some('\n') | Some('\r') | None => return Ok(true),
+                _ => {} // Not a valid document marker, continue checking
+            }
+        }
+        
+        // YAML 1.2 Rule 5: Implicit document start (single-document streams)
+        // BOM valid at start of first content line after stream start
+        if mark.line == 1 && mark.col == 0 {
+            return Ok(true);
+        }
+        
+        // YAML 1.2 Rule 6: Inside document content - BOM invalid
+        Ok(false)
     }
 }
 

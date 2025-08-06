@@ -48,6 +48,10 @@ fn check_for_aliases(yaml: &Yaml, depth: usize) {
         Yaml::BadValue => {
             println!("{}❌ BAD VALUE", indent);
         }
+        Yaml::Tagged(tag, inner) => {
+            println!("{}🏷️ Tagged ({}): ", indent, tag);
+            check_for_aliases(inner, depth + 1);
+        }
         other => {
             println!("{}✅ {}: {:#?}", indent, type_name(other), other);
         }
@@ -65,5 +69,6 @@ fn type_name(yaml: &Yaml) -> &'static str {
         Yaml::Alias(_) => "Alias",
         Yaml::Null => "Null",
         Yaml::BadValue => "BadValue",
+        Yaml::Tagged(_, _) => "Tagged",
     }
 }

@@ -7,6 +7,24 @@ use crate::error::{Marker, ScanError};
 use crate::scanner::token::Token;
 use std::collections::VecDeque;
 
+/// Context tracking for BOM filtering - preserves BOMs in quoted strings per YAML 1.2
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuotedContext {
+    /// Outside any quoted string - BOMs filtered per YAML 1.2 spec
+    None,
+    /// Inside single-quoted string - BOMs preserved as literal content
+    Single,
+    /// Inside double-quoted string - BOMs preserved as literal content
+    Double,
+}
+
+impl Default for QuotedContext {
+    #[inline]
+    fn default() -> Self {
+        QuotedContext::None
+    }
+}
+
 /// Scanner configuration for customizable behavior
 #[derive(Debug, Clone)]
 pub struct ScannerConfig {
@@ -59,6 +77,8 @@ pub struct ScannerState<T: Iterator<Item = char>> {
     indent_stack: Vec<i32>,
     /// Simple key allowed flag
     simple_key_allowed: bool,
+    /// BOM filtering context for YAML 1.2 compliance
+    quoted_context: QuotedContext,
 }
 
 impl<T: Iterator<Item = char>> ScannerState<T> {
@@ -77,6 +97,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
             indent: -1,
             indent_stack: Vec::with_capacity(16),
             simple_key_allowed: true,
+            quoted_context: QuotedContext::None,
         }
     }
 
@@ -212,6 +233,24 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
         self.cached_token = None;
     }
 
+    /// Get current quoted context for BOM filtering
+    #[inline]
+    pub fn quoted_context(&self) -> QuotedContext {
+        self.quoted_context
+    }
+
+    /// Set quoted context for BOM filtering (used by quoted string scanners)
+    #[inline]
+    pub fn set_quoted_context(&mut self, context: QuotedContext) {
+        self.quoted_context = context;
+    }
+
+    /// Check if currently inside quoted string context
+    #[inline]
+    pub fn in_quoted_context(&self) -> bool {
+        self.quoted_context != QuotedContext::None
+    }
+
     /// Fill buffer to ensure at least n characters
     #[inline]
     pub fn ensure_buffer(&mut self, n: usize) {
@@ -224,9 +263,9 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
         }
     }
 
-    /// Peek at next character without consuming
+    /// Peek at next character without consuming (raw - no BOM filtering)
     #[inline]
-    pub fn peek_char(&mut self) -> Result<char, ScanError> {
+    pub fn peek_char_raw(&mut self) -> Result<char, ScanError> {
         self.ensure_buffer(1);
         self.buffer
             .front()
@@ -234,26 +273,40 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
             .ok_or_else(|| ScanError::new(self.mark, "unexpected end of input"))
     }
 
-    /// Peek at character at offset without consuming
+    /// Peek at next character (no BOM filtering - handled at document level)
+    #[inline(always)]
+    pub fn peek_char(&mut self) -> Result<char, ScanError> {
+        self.peek_char_raw()
+    }
+
+    /// Peek at character at offset without consuming (raw - no BOM filtering)
     #[inline]
-    pub fn peek_char_at(&mut self, offset: usize) -> Option<char> {
+    pub fn peek_char_at_raw(&mut self, offset: usize) -> Option<char> {
         self.ensure_buffer(offset + 1);
         self.buffer.get(offset).copied()
     }
 
-    /// Check if next characters match a pattern
+    /// Peek at character at offset (no BOM filtering - handled at document level)
     #[inline]
-    pub fn check_chars(&mut self, pattern: &[char]) -> bool {
-        self.ensure_buffer(pattern.len());
-        if self.buffer.len() < pattern.len() {
-            return false;
-        }
-        self.buffer.iter().take(pattern.len()).eq(pattern.iter())
+    pub fn peek_char_at(&mut self, offset: usize) -> Option<char> {
+        self.peek_char_at_raw(offset)
     }
 
-    /// Consume next character and update position
+    /// Check if next characters match a pattern (no BOM filtering)
     #[inline]
-    pub fn consume_char(&mut self) -> Result<char, ScanError> {
+    pub fn check_chars(&mut self, pattern: &[char]) -> bool {
+        for (i, &expected_char) in pattern.iter().enumerate() {
+            match self.peek_char_at(i) {
+                Some(actual_char) if actual_char == expected_char => continue,
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// Consume next character and update position (raw - no BOM filtering)
+    #[inline]
+    pub fn consume_char_raw(&mut self) -> Result<char, ScanError> {
         if let Some(ch) = self.buffer.pop_front() {
             self.mark.index += 1;
             if ch == '\n' {
@@ -266,6 +319,12 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
         } else {
             Err(ScanError::new(self.mark, "unexpected end of input"))
         }
+    }
+
+    /// Consume next character (no BOM filtering - handled at document level)
+    #[inline(always)]
+    pub fn consume_char(&mut self) -> Result<char, ScanError> {
+        self.consume_char_raw()
     }
 
     /// Consume multiple characters
@@ -292,15 +351,15 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
     /// Check for block entry (- followed by space/newline)
     #[inline]
     pub fn check_block_entry(&mut self) -> Result<bool, ScanError> {
-        self.ensure_buffer(2);
-        if self.buffer.front() == Some(&'-') {
-            match self.buffer.get(1) {
-                Some(&' ') | Some(&'\t') | Some(&'\n') | Some(&'\r') => Ok(true),
-                None => Ok(true), // EOF after -
-                _ => Ok(false),
+        match self.peek_char_at(0) {
+            Some('-') => {
+                match self.peek_char_at(1) {
+                    Some(' ') | Some('\t') | Some('\n') | Some('\r') => Ok(true),
+                    None => Ok(true), // EOF after -
+                    _ => Ok(false),
+                }
             }
-        } else {
-            Ok(false)
+            _ => Ok(false),
         }
     }
 
