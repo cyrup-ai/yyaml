@@ -1,2 +1,0 @@
-    Checking yyaml v0.1.0 (/Volumes/samsung_t9/yyaml)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s

@@ -114,6 +114,50 @@ impl<T: Iterator<Item = char>> Scanner<T> {
         self.token_producer.reset();
     }
 
+    // Character-level access methods for state machine separation functions
+
+    /// Peek at next character without consuming (for separation parsing)
+    #[inline]
+    pub fn peek_char(&mut self) -> Result<char, ScanError> {
+        self.state.peek_char()
+    }
+
+    /// Consume next character and update position (for separation parsing)
+    #[inline]
+    pub fn consume_char(&mut self) -> Result<char, ScanError> {
+        self.state.consume_char()
+    }
+
+    /// Skip inline separation (spaces and tabs only) per YAML 1.2 rule [80]
+    /// Used for BLOCK-KEY and FLOW-KEY contexts
+    #[inline]
+    pub fn skip_inline_separation(&mut self) -> Result<(), ScanError> {
+        loop {
+            match self.state.peek_char() {
+                Ok(' ') | Ok('\t') => {
+                    self.state.consume_char()?;
+                }
+                Ok('#') => {
+                    // Skip comment line but this ends inline separation due to line break
+                    utils::skip_comment_line(&mut self.state)?;
+                    break;
+                }
+                _ => {
+                    // Any other character ends inline separation
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Skip multi-line separation (all whitespace and comments) per YAML 1.2 rule [80]
+    /// Used for FLOW-IN, FLOW-OUT, BLOCK-IN, BLOCK-OUT contexts
+    #[inline]
+    pub fn skip_multiline_separation(&mut self) -> Result<(), ScanError> {
+        utils::skip_whitespace_and_comments(&mut self.state)
+    }
+
     /// Fetch next token from stream with optimized dispatch
     fn fetch_next_token(&mut self) -> Result<Token, ScanError> {
         // Handle stream start/end tokens

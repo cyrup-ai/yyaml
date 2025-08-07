@@ -509,14 +509,14 @@ fn test_value() {
     }
     let thing = GenericInstructions {
         typ: "primary".to_string(),
-        config: Value::Sequence(Sequence::from_vec(vec![
+        config: Value::Sequence(vec![
             Value::Null,
             Value::Bool(true),
             Value::Number(Number::from(65535)),
             Value::Number(Number::from(0.54321)),
             Value::String("s".into()),
             Value::Mapping(Mapping::new()),
-        ])),
+        ]),
     };
     let yaml = indoc! {"
         type: primary

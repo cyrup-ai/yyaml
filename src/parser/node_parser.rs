@@ -1,4 +1,4 @@
-use super::state_machine::State;
+use super::state_machine::{State, execute_state_machine};
 use crate::error::{Marker, ScanError};
 use crate::events::{Event, TScalarStyle, TokenType};
 use crate::parser::Parser;
@@ -190,3 +190,6 @@ pub fn parse_node<T: Iterator<Item = char>>(
         }
     }
 }
+
+// Removed parse_node_block_context - it was causing infinite recursion
+// The state machine already handles all the proper YAML 1.2 compliance

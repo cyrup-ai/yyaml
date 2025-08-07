@@ -8,7 +8,7 @@
 //! assert_eq!(doc["foo"].as_i64().unwrap(), 123);
 //! ```
 
-mod de;
+// Removed broken de.rs - using value.rs system instead
 mod emitter;
 mod error;
 pub mod events;
@@ -22,7 +22,7 @@ mod ser;
 pub mod value;
 mod yaml;
 
-pub use de::*;
+// Remove broken de.rs exports
 pub use emitter::{EmitError, EmitResult, YamlEmitter};
 pub use error::{Marker, ScanError};
 pub use events::{Event, EventReceiver, MarkedEventReceiver, TEncoding, TScalarStyle, TokenType};
@@ -45,7 +45,8 @@ where
         return Err(Error::Custom("Multiple YAML documents found, expected one".to_string()));
     }
     let yaml = &docs[0];
-    let deserializer = de::YamlDeserializer::new(yaml);
+    let value = Value::from_yaml(yaml);
+    let deserializer = value::Deserializer::new(value);
     T::deserialize(deserializer)
 }
 
@@ -95,12 +96,7 @@ pub fn to_string<T: serde::Serialize>(value: &T) -> Result<String, Error> {
 }
 
 pub fn from_str<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, Error> {
-    let mut docs = YamlLoader::load_from_str(s)?;
-    if docs.is_empty() {
-        return Err(Error::Custom("no documents".to_string()));
-    }
-    let yaml = docs.remove(0);
-    T::deserialize(de::YamlDeserializer::new(&yaml))
+    parse_str(s)
 }
 
 pub fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, Error> {

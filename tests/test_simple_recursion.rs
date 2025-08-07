@@ -13,7 +13,7 @@ fn test_simple_tagged_deserialization() {
     println!("Testing simple tagged struct deserialization...");
     
     // Create a simple tagged value manually
-    let tag = Tag::new(None, "wat".to_string());
+    let tag = Tag::new("wat".to_string());
     let inner_value = Value::Mapping({
         let mut map = Mapping::new();
         map.insert(

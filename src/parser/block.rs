@@ -70,8 +70,11 @@ pub fn block_sequence_entry<T: Iterator<Item = char>>(
                 }
                 _ => {
                     // Parse the content after the dash
+                    // YAML 1.2 grammar rule [184]: c-l-block-seq-entry(n) ::= c-sequence-entry s-l+block-indented(n,BLOCK-IN)
+                    // Rule [185]: s-l+block-indented(n,BLOCK-IN) requires BLOCK-IN context parsing
                     parser.push_state(State::BlockSequenceEntry);
-                    parser.parse_node(true, false)
+                    parser.state = State::BlockNodeBlockIn;
+                    crate::parser::state_machine::execute_state_machine(parser)
                 }
             }
         }
@@ -131,7 +134,7 @@ pub fn indentless_sequence_entry<T: Iterator<Item = char>>(
                     ))
                 }
                 _ => {
-                    parser.push_state(State::IndentlessSequenceEntry);
+                    // Don't push current state to avoid infinite recursion - we're already in IndentlessSequenceEntry
                     parser.parse_node(true, false)
                 }
             }
@@ -321,11 +324,13 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                     Ok((Event::Scalar(val, style, anchor_id, tag), tok.0))
                 }
                 _ => {
-                    // For complex values (mappings, sequences), delegate to parse_node
+                    // Per YAML 1.2 spec rule [194]: mapping values use s-l+block-node(n,BLOCK-OUT)
+                    // docs/ch08-block-style-productions/collection-styles/8.2.2-block-mappings.md:82-91
                     parser.push_state(State::BlockMappingKey);
-                    match parser.parse_node(true, false) {
+                    parser.state = State::BlockNodeBlockOut;
+                    match crate::parser::state_machine::execute_state_machine(parser) {
                         Ok((mut event, mark)) => {
-                            // Apply the collected anchor and tag to whatever parse_node returned
+                            // Apply the collected anchor and tag to whatever was parsed
                             match &mut event {
                                 Event::MappingStart(aid) => {
                                     *aid = anchor_id;
@@ -341,13 +346,13 @@ pub fn block_mapping_value<T: Iterator<Item = char>>(
                                     debug!("Applied anchor_id={anchor_id} and tag to Scalar");
                                 }
                                 _ => {
-                                    debug!("parse_node returned {event:?}, no anchor/tag to apply");
+                                    debug!("Context-aware parsing returned {event:?}, no anchor/tag to apply");
                                 }
                             }
                             Ok((event, mark))
                         }
                         Err(err) => {
-                            debug!("parse_node failed: {err:?}");
+                            debug!("Context-aware parsing failed: {err:?}");
                             Err(err)
                         }
                     }
