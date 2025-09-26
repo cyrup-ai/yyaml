@@ -32,8 +32,10 @@ pub use ser::*;
 pub use value::{Deserializer, Mapping, Number, Sequence, Value, from_value};
 pub use yaml::Yaml;
 
-/// Parse a YAML string into a serde-compatible type
-pub fn parse_str<T>(s: &str) -> Result<T, Error>
+/// Deserialize an instance of type T from a string of YAML text.
+/// 
+/// This is the standard serde_yaml API function for drop-in compatibility.
+pub fn from_str<T>(s: &str) -> Result<T, Error>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -95,8 +97,12 @@ pub fn to_string<T: serde::Serialize>(value: &T) -> Result<String, Error> {
     Ok(writer)
 }
 
-pub fn from_str<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, Error> {
-    parse_str(s)
+/// Legacy compatibility function - calls the standard from_str implementation
+pub fn parse_str<T>(s: &str) -> Result<T, Error>
+where
+    T: serde::de::DeserializeOwned,
+{
+    from_str(s)
 }
 
 pub fn to_value<T: serde::Serialize>(value: &T) -> Result<Value, Error> {

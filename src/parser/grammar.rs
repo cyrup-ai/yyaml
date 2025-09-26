@@ -3,13 +3,41 @@
 //! This module provides comprehensive grammar rules, production definitions,
 //! and parsing utilities for YAML 1.2 specification compliance.
 
-use super::{ParseError, ParseErrorKind};
-use crate::lexer::{Position, TokenKind};
+use crate::lexer::{Position, TokenKind, LexError};
+
+/// Parse error types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError {
+    pub kind: ParseErrorKind,
+    pub position: Position,
+    pub message: String,
+}
+
+impl ParseError {
+    pub fn new(kind: ParseErrorKind, position: Position, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            position,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseErrorKind {
+    LexicalError,
+    UnexpectedToken,
+    ExpectedToken,
+    UnexpectedEndOfInput,
+    RecursionLimitExceeded,
+    UnexpectedState,
+    InternalError,
+}
 
 /// YAML 1.2 grammar rules and production definitions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Production {
-    // Document structure
+    // Keep existing non-parametric productions
     Stream,
     Document,
     ExplicitDocument,
@@ -55,6 +83,120 @@ pub enum Production {
     Comment,
     Directive,
     Reserved,
+
+    // ADD parametric productions (grouped by category):
+
+    // Indentation productions [YAML 1.2 spec productions 63-74]
+    SIndent(i32),                           // s-indent(n)
+    SIndentLt(i32),                         // s-indent(<n)
+    SIndentLe(i32),                         // s-indent(≤n)
+
+    // Line prefix productions [76-79]
+    SLinePrefix(i32, Context),              // s-line-prefix(n,c)
+    SBlockLinePrefix(i32),                  // s-block-line-prefix(n)
+    SFlowLinePrefix(i32),                   // s-flow-line-prefix(n)
+
+    // Separation productions [80-81]
+    SSeparate(i32, Context),                // s-separate(n,c)
+    SSeparateLines(i32),                    // s-separate-lines(n)
+
+    // Empty productions [70-73]
+    LEmpty(i32, Context),                   // l-empty(n,c)
+    BLTrimmed(i32, Context),                // b-l-trimmed(n,c)
+    BLFolded(i32, Context),                 // b-l-folded(n,c)
+
+    // Block scalar productions [162-182]
+    CLBlockScalar(i32, ChompingMode),       // c-l-block-scalar(n,t)
+    CLLiteral(i32),                         // c-l+literal(n)
+    CLFolded(i32),                          // c-l+folded(n)
+
+    // Flow scalar productions [126-135]
+    NSPlainFirst(Context),                  // ns-plain-first(c)
+    NSPlainSafe(Context),                   // ns-plain-safe(c)
+    NSPlainChar(Context),                   // ns-plain-char(c)
+
+    // Block collection productions [183-201]
+    LBlockSequence(i32),                    // l+block-sequence(n)
+    LBlockMapping(i32),                     // l+block-mapping(n)
+    NSLBlockMapEntry(i32),                  // ns-l-block-map-entry(n)
+    NSLCompactMapping(i32),                 // ns-l-compact-mapping(n)
+
+    // Flow collection productions [137-150]
+    CFlowSequence(i32, Context),            // c-flow-sequence(n,c)
+    CFlowMapping(i32, Context),             // c-flow-mapping(n,c)
+    NSFlowPair(i32, Context),               // ns-flow-pair(n,c)
+}
+
+impl Production {
+    /// Check if this production matches with given parameters
+    pub fn matches(&self, indent: i32, context: Context) -> bool {
+        match self {
+            Production::SIndent(n) => indent == *n,
+            Production::SIndentLt(n) => indent < *n,
+            Production::SIndentLe(n) => indent <= *n,
+            Production::SLinePrefix(n, c) => indent == *n && context == *c,
+            Production::SSeparate(n, c) => indent == *n && context == *c,
+            Production::LBlockSequence(n) => indent >= *n,
+            Production::LBlockMapping(n) => indent >= *n,
+            Production::NSPlainFirst(c) | Production::NSPlainSafe(c) | Production::NSPlainChar(c) => {
+                context == *c
+            }
+            Production::CFlowSequence(n, c) | Production::CFlowMapping(n, c) => {
+                indent >= *n && context == *c
+            }
+            // Non-parametric productions always match
+            _ => true,
+        }
+    }
+
+    /// Get the minimum indentation required by this production
+    pub fn min_indent(&self) -> Option<i32> {
+        match self {
+            Production::SIndent(n) => Some(*n),
+            Production::SIndentLt(n) => Some(0),  // Any indent less than n
+            Production::SIndentLe(n) => Some(0),  // Any indent <= n
+            Production::SBlockLinePrefix(n) => Some(*n),
+            Production::LBlockSequence(n) => Some(n + 1),  // Entries at n+1
+            Production::LBlockMapping(n) => Some(n + 1),   // Keys at n+1
+            Production::CLBlockScalar(n, _) => Some(*n),
+            Production::CLLiteral(n) => Some(*n),
+            Production::CLFolded(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    /// Check if production requires specific context
+    pub fn required_context(&self) -> Option<Context> {
+        match self {
+            Production::SLinePrefix(_, c) | Production::SSeparate(_, c)
+            | Production::LEmpty(_, c) | Production::BLTrimmed(_, c)
+            | Production::BLFolded(_, c) => Some(*c),
+            Production::NSPlainFirst(c) | Production::NSPlainSafe(c)
+            | Production::NSPlainChar(c) => Some(*c),
+            Production::CFlowSequence(_, c) | Production::CFlowMapping(_, c)
+            | Production::NSFlowPair(_, c) => Some(*c),
+            _ => None,
+        }
+    }
+}
+
+/// YAML 1.2 parsing contexts for parametric productions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Context {
+    BlockIn,   // BLOCK-IN
+    BlockOut,  // BLOCK-OUT
+    BlockKey,  // BLOCK-KEY
+    FlowIn,    // FLOW-IN
+    FlowOut,   // FLOW-OUT
+    FlowKey,   // FLOW-KEY
+}
+
+/// Block scalar chomping modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChompingMode {
+    Strip,  // Remove all trailing newlines
+    Clip,   // Keep first trailing newline only
+    Keep,   // Keep all trailing newlines
 }
 
 /// Context information for grammar-driven parsing
@@ -376,6 +518,70 @@ impl Grammar {
             _ => current.clone(),
         }
     }
+
+    /// Check if production is valid in current parametric context
+    pub fn is_valid_parametric_production(
+        production: &Production,
+        context: &ParametricContext,
+    ) -> bool {
+        production.matches(context.current_indent(), context.current_context)
+    }
+
+    /// Get applicable productions for current parametric context
+    pub fn applicable_parametric_productions(
+        context: &ParametricContext,
+    ) -> Vec<Production> {
+        let mut productions = Vec::new();
+        let indent = context.current_indent();
+
+        match context.current_context {
+            Context::BlockOut | Context::BlockIn => {
+                productions.push(Production::LBlockSequence(indent));
+                productions.push(Production::LBlockMapping(indent));
+                productions.push(Production::SIndent(indent));
+                productions.push(Production::SBlockLinePrefix(indent));
+            }
+            Context::FlowOut | Context::FlowIn => {
+                productions.push(Production::CFlowSequence(indent, context.current_context));
+                productions.push(Production::CFlowMapping(indent, context.current_context));
+                productions.push(Production::SFlowLinePrefix(indent));
+            }
+            Context::BlockKey | Context::FlowKey => {
+                productions.push(Production::NSPlainFirst(context.current_context));
+                productions.push(Production::NSPlainSafe(context.current_context));
+            }
+        }
+
+        productions
+    }
+
+    /// Convert between parametric context and existing parse context for compatibility
+    pub fn parametric_to_parse_context(parametric: &ParametricContext) -> ParseContext {
+        parametric.to_parse_context()
+    }
+
+    /// Determine next parametric context after parsing a production
+    pub fn next_parametric_context(
+        current: &ParametricContext,
+        production: Production,
+        new_indent: Option<i32>,
+    ) -> Context {
+        match (current.current_context, production) {
+            (Context::BlockOut, Production::Document) => Context::BlockIn,
+            (Context::BlockIn, Production::LBlockSequence(_)) => Context::BlockIn,
+            (Context::BlockIn, Production::LBlockMapping(_)) => Context::BlockIn,
+            (Context::BlockIn, Production::CFlowSequence(_, _)) => Context::FlowIn,
+            (Context::BlockIn, Production::CFlowMapping(_, _)) => Context::FlowIn,
+            (Context::FlowIn, Production::CFlowSequence(_, _)) => Context::FlowIn,
+            (Context::FlowIn, Production::CFlowMapping(_, _)) => Context::FlowIn,
+            (Context::BlockIn, Production::BlockKey) => Context::BlockKey,
+            (Context::BlockKey, Production::BlockValue) => Context::BlockIn,
+            (Context::FlowIn, Production::FlowPair) => Context::FlowKey,
+            (Context::FlowKey, Production::FlowEntry) => Context::FlowIn,
+            // Default: maintain current context
+            _ => current.current_context,
+        }
+    }
 }
 
 /// Context stack for tracking nested parsing contexts
@@ -458,6 +664,83 @@ impl ContextStack {
             ParseContext::FlowIn(level) => Some(*level),
             _ => None,
         }
+    }
+}
+
+/// Tracks parametric context during parsing - integrates with existing indentation system
+#[derive(Debug, Clone)]
+pub struct ParametricContext {
+    /// Context stack for YAML 1.2 parametric productions
+    pub context_stack: Vec<Context>,
+    pub current_context: Context,
+    pub chomping_mode: Option<ChompingMode>,
+    // REUSE existing indentation system - DO NOT DUPLICATE
+    pub indentation: crate::parser::indentation::IndentationStateMachine,
+}
+
+impl ParametricContext {
+    pub fn new() -> Self {
+        Self {
+            context_stack: vec![Context::BlockOut], // Document level starts BLOCK-OUT
+            current_context: Context::BlockOut,
+            chomping_mode: None,
+            // REUSE existing IndentationStateMachine from parser/indentation.rs
+            indentation: crate::parser::indentation::IndentationStateMachine::new(),
+        }
+    }
+
+    pub fn push_context(&mut self, context: Context, indent: i32) {
+        self.context_stack.push(self.current_context);
+        self.current_context = context;
+
+        // Use existing indentation system
+        let is_sequence = matches!(context, Context::BlockIn);
+        self.indentation.push_indent(indent as usize, is_sequence);
+    }
+
+    pub fn pop_context(&mut self) {
+        if let Some(context) = self.context_stack.pop() {
+            self.current_context = context;
+            self.indentation.pop_indent();
+        }
+    }
+
+    /// Get current indentation from existing system
+    pub fn current_indent(&self) -> i32 {
+        self.indentation.current_indent() as i32
+    }
+
+    /// Calculate n+m indentation for block collections per YAML 1.2 spec
+    pub fn calculate_block_indent(&self, base: i32, offset: i32) -> i32 {
+        base + offset
+    }
+
+    /// Set chomping mode for block scalars
+    pub fn set_chomping_mode(&mut self, mode: ChompingMode) {
+        self.chomping_mode = Some(mode);
+    }
+
+    /// Clear chomping mode after processing block scalar
+    pub fn clear_chomping_mode(&mut self) {
+        self.chomping_mode = None;
+    }
+
+    /// Convert YAML 1.2 Context to existing ParseContext for backward compatibility
+    pub fn to_parse_context(&self) -> ParseContext {
+        match self.current_context {
+            Context::BlockIn => ParseContext::BlockIn(self.current_indent() as usize),
+            Context::BlockOut => ParseContext::Document,
+            Context::BlockKey => ParseContext::BlockKey,
+            Context::FlowIn => ParseContext::FlowIn(self.context_stack.len()),
+            Context::FlowOut => ParseContext::FlowValue,
+            Context::FlowKey => ParseContext::FlowKey,
+        }
+    }
+}
+
+impl Default for ParametricContext {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

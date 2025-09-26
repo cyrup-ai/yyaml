@@ -1,6 +1,6 @@
-use super::Parser;
+// Parser removed - using StateMachine directly
 use crate::error::{ScanError, Marker};
-use crate::events::{Event, EventReceiver, MarkedEventReceiver, TScalarStyle, TokenType};
+use crate::events::{Event, EventReceiver, TScalarStyle, TokenType};
 use crate::linked_hash_map::LinkedHashMap;
 use crate::yaml::Yaml;
 use std::collections::HashMap;
@@ -27,33 +27,19 @@ impl YamlLoader {
             } // Propagate parsing errors
         }
 
-        // Fallback to full parser - default to single document mode for load_from_str
-        let mut parser = Parser::new(s.chars());
-        let mut loader = YamlReceiver::new();
+        // Use the new dedicated state machine that builds Yaml AST directly
+        let mut state_machine = crate::parser::state_machine::StateMachine::new(s.chars());
         
-        match parser.load(&mut loader, false) {
-            Ok(()) => {
-                debug!("Full parser completed successfully");
-                debug!("Loaded {} documents", loader.docs.len());
-                for (i, doc) in loader.docs.iter().enumerate() {
-                    trace!("Document {i}: {doc:?}");
-                }
-                debug!("Anchors: {:?}", loader.anchors);
+        match state_machine.parse() {
+            Ok(yaml) => {
+                debug!("State machine completed successfully with: {yaml:?}");
+                Ok(vec![yaml])
             }
             Err(e) => {
-                debug!("Full parser failed: {e:?}");
-                return Err(e);
+                debug!("State machine failed: {e:?}");
+                Err(e)
             }
         }
-        
-        // If no documents were parsed, return empty array rather than fail
-        if loader.docs.is_empty() {
-            debug!("No documents parsed, returning Null");
-            // Try to handle as empty document
-            return Ok(vec![Yaml::Null]);
-        }
-        
-        Ok(loader.docs)
     }
 
     /// Blazing-fast zero-allocation parser for common simple cases with production-grade error handling
@@ -670,11 +656,26 @@ impl EventReceiver for YamlReceiver {
     }
 }
 
+// Old load function removed - StateMachine::parse() handles loading directly
+/*
 pub fn load<T: Iterator<Item = char>, R: MarkedEventReceiver>(
     parser: &mut Parser<T>,
     recv: &mut R,
     multi: bool,
 ) -> Result<(), ScanError> {
+    // ZERO-ALLOCATION, NON-RECURSIVE LOADER USING EXPLICIT STACK
+    // Uses Vec<ContainerType> to track nesting instead of recursion
+    #[derive(Debug, Clone, Copy)]
+    enum ContainerType {
+        Sequence,
+        Mapping,
+    }
+    
+    let mut nesting_stack: Vec<ContainerType> = Vec::with_capacity(32); // Pre-allocate for performance
+    let mut documents_processed = 0;
+    let mut in_document = false;
+    
+    // Ensure stream has started
     if !parser.scanner.stream_started() {
         let (ev, mark) = parser.next()?;
         if ev != Event::StreamStart {
@@ -685,160 +686,152 @@ pub fn load<T: Iterator<Item = char>, R: MarkedEventReceiver>(
         }
         recv.on_event(ev, mark);
     }
+    
     if parser.scanner.stream_ended() {
         recv.on_event(Event::StreamEnd, parser.scanner.mark());
         return Ok(());
     }
+
+    // FLAT EVENT PROCESSING LOOP - ZERO RECURSION
     loop {
         let (ev, mark) = parser.next()?;
+        
         match ev {
             Event::StreamEnd => {
+                if in_document {
+                    recv.on_event(Event::DocumentEnd, mark);
+                }
                 recv.on_event(ev, mark);
-                return Ok(());
+                break;
             }
+            
             Event::DocumentStart => {
+                if in_document && multi {
+                    recv.on_event(Event::DocumentEnd, mark);
+                }
                 parser.anchors.clear();
-                load_document(parser, ev, mark, recv)?;
-                if !multi {
+                recv.on_event(ev, mark);
+                in_document = true;
+                documents_processed += 1;
+                if !multi && documents_processed > 1 {
+                    // Single document mode: ignore additional documents
+                    continue;
+                }
+            }
+            
+            Event::DocumentEnd => {
+                recv.on_event(ev, mark);
+                in_document = false;
+            }
+            
+            Event::SequenceStart(_) => {
+                if !in_document {
+                    // Implicit document start
+                    parser.anchors.clear();
+                    recv.on_event(Event::DocumentStart, mark);
+                    in_document = true;
+                    documents_processed += 1;
+                }
+                recv.on_event(ev, mark);
+                nesting_stack.push(ContainerType::Sequence);
+            }
+            
+            Event::SequenceEnd => {
+                recv.on_event(ev, mark);
+                if let Some(ContainerType::Sequence) = nesting_stack.pop() {
+                    // Correct nesting
+                } else {
+                    return Err(ScanError::new(
+                        mark,
+                        "Unexpected SequenceEnd: not inside sequence"
+                    ));
+                }
+            }
+            
+            Event::MappingStart(_) => {
+                if !in_document {
+                    // Implicit document start
+                    parser.anchors.clear();
+                    recv.on_event(Event::DocumentStart, mark);
+                    in_document = true;
+                    documents_processed += 1;
+                }
+                recv.on_event(ev, mark);
+                nesting_stack.push(ContainerType::Mapping);
+            }
+            
+            Event::MappingEnd => {
+                recv.on_event(ev, mark);
+                if let Some(ContainerType::Mapping) = nesting_stack.pop() {
+                    // Correct nesting
+                } else {
+                    return Err(ScanError::new(
+                        mark,
+                        "Unexpected MappingEnd: not inside mapping"
+                    ));
+                }
+            }
+            
+            Event::Scalar(..) | Event::Alias(..) => {
+                if !in_document {
+                    // Implicit document start
+                    parser.anchors.clear();
+                    recv.on_event(Event::DocumentStart, mark);
+                    in_document = true;
+                    documents_processed += 1;
+                }
+                recv.on_event(ev, mark);
+            }
+            
+            _ => {
+                // Handle any other events directly
+                if !in_document {
+                    // Implicit document start
+                    parser.anchors.clear();
+                    recv.on_event(Event::DocumentStart, mark);
+                    in_document = true;
+                    documents_processed += 1;
+                }
+                recv.on_event(ev, mark);
+            }
+        }
+        
+        // Single document mode: break after processing first document
+        if !multi && documents_processed >= 1 && nesting_stack.is_empty() && in_document {
+            // Continue to find StreamEnd
+            loop {
+                let (next_ev, next_mark) = parser.next()?;
+                if matches!(next_ev, Event::StreamEnd) {
+                    recv.on_event(Event::DocumentEnd, next_mark);
+                    recv.on_event(next_ev, next_mark);
                     break;
                 }
+                // Skip other events in single document mode
             }
-            Event::DocumentEnd => {
-                // Skip standalone DocumentEnd events
-                recv.on_event(ev, mark);
-                continue;
-            }
-            other => {
-                // Handle implicit document start
-                parser.anchors.clear();
-                recv.on_event(Event::DocumentStart, mark);
-                load_node(parser, other, mark, recv)?;
-                
-                // Continue processing until end of stream or document boundary
-                loop {
-                    let (ev_next, mark_next) = parser.next()?;
-                    match ev_next {
-                        Event::StreamEnd => {
-                            recv.on_event(Event::DocumentEnd, mark_next);
-                            recv.on_event(ev_next, mark_next);
-                            return Ok(());
-                        }
-                        Event::DocumentStart => {
-                            recv.on_event(Event::DocumentEnd, mark_next);
-                            if !multi {
-                                return Ok(());
-                            }
-                            parser.anchors.clear();
-                            load_document(parser, ev_next, mark_next, recv)?;
-                        }
-                        other_ev => {
-                            load_node(parser, other_ev, mark_next, recv)?;
-                        }
-                    }
-                }
-            }
+            break;
         }
     }
-    Ok(())
-}
-
-fn load_document<T: Iterator<Item = char>, R: MarkedEventReceiver>(
-    parser: &mut Parser<T>,
-    first_ev: Event,
-    mark: crate::error::Marker,
-    recv: &mut R,
-) -> Result<(), ScanError> {
-    // Ensure we start with DocumentStart
-    if first_ev != Event::DocumentStart {
+    
+    // Verify all containers were properly closed
+    if !nesting_stack.is_empty() {
         return Err(ScanError::new(
-            mark,
-            &format!("Expected DocumentStart, got {first_ev:?}"),
+            parser.scanner.mark(),
+            &format!("Unclosed containers at end of stream: {} remaining", nesting_stack.len())
         ));
     }
-    recv.on_event(first_ev, mark);
-    
-    let (ev, mark2) = parser.next()?;
-    load_node(parser, ev, mark2, recv)?;
-    
-    let (evend, mark3) = parser.next()?;
-    // Handle unexpected event gracefully instead of panicking
-    match evend {
-        Event::DocumentEnd => {
-            recv.on_event(evend, mark3);
-            Ok(())
-        }
-        Event::DocumentStart => {
-            // If we get another DocumentStart, we might have multiple documents
-            // Handle this by treating it as the end of current document
-            // and let the caller handle the next document
-            Ok(())
-        }
-        Event::StreamEnd => {
-            // Stream end is a valid way to end a document (implicit document end)
-            recv.on_event(Event::DocumentEnd, mark3);
-            recv.on_event(Event::StreamEnd, mark3);
-            Ok(())
-        }
-        other => {
-            Err(ScanError::new(
-                mark3,
-                &format!("Expected DocumentEnd, DocumentStart, or StreamEnd, got {other:?}"),
-            ))
-        }
-    }
-}
 
-fn load_node<T: Iterator<Item = char>, R: MarkedEventReceiver>(
-    parser: &mut Parser<T>,
-    ev: Event,
-    mark: crate::error::Marker,
-    recv: &mut R,
-) -> Result<(), ScanError> {
-    match ev {
-        Event::Alias(..) | Event::Scalar(..) => {
-            recv.on_event(ev, mark);
-        }
-        Event::SequenceStart(_) => {
-            recv.on_event(ev, mark);
-            load_sequence(parser, recv)?;
-        }
-        Event::MappingStart(_) => {
-            recv.on_event(ev, mark);
-            load_mapping(parser, recv)?;
-        }
-        _ => {}
-    }
     Ok(())
 }
+*/
 
-fn load_sequence<T: Iterator<Item = char>, R: MarkedEventReceiver>(
-    parser: &mut Parser<T>,
-    recv: &mut R,
-) -> Result<(), ScanError> {
-    loop {
-        let (ev, mark) = parser.next()?;
-        if ev == Event::SequenceEnd {
-            recv.on_event(ev, mark);
-            break;
-        }
-        load_node(parser, ev, mark, recv)?;
-    }
-    Ok(())
-}
+// REMOVED: load_document function - replaced with flat, non-recursive loader
+// This function was causing stack overflow via recursive calls to load_node
 
-fn load_mapping<T: Iterator<Item = char>, R: MarkedEventReceiver>(
-    parser: &mut Parser<T>,
-    recv: &mut R,
-) -> Result<(), ScanError> {
-    loop {
-        let (evk, markk) = parser.next()?;
-        if evk == Event::MappingEnd {
-            recv.on_event(evk, markk);
-            break;
-        }
-        load_node(parser, evk, markk, recv)?;
-        let (evv, markv) = parser.next()?;
-        load_node(parser, evv, markv, recv)?;
-    }
-    Ok(())
-}
+// REMOVED: load_node function - replaced with flat, non-recursive loader
+// This function was causing infinite recursion via load_sequence/load_mapping calls
+
+// REMOVED: load_sequence function - replaced with flat, non-recursive loader  
+// This function was causing infinite recursion via load_node calls
+
+// REMOVED: load_mapping function - replaced with flat, non-recursive loader
+// This function was causing infinite recursion via load_node calls

@@ -1,5 +1,5 @@
-use yyaml::events::{Event, TokenType};
-use yyaml::parser::{Parser, loader::YamlLoader};
+use yyaml::events::TokenType;
+use yyaml::parser::{loader::YamlLoader, StateMachine};
 use yyaml::scanner::Scanner;
 
 #[test]
@@ -30,23 +30,16 @@ fn trace_multiline_mapping() {
         }
     }
 
-    // Now let's trace the parser events
-    println!("\n=== Parser Event Trace ===");
-    let mut parser = Parser::new(yaml.chars());
+    // Now let's trace the state machine parsing
+    println!("\n=== StateMachine Parsing ===");
+    let mut state_machine = StateMachine::new(yaml.chars());
 
-    loop {
-        match parser.next() {
-            Ok(event) => {
-                println!("Event: {event:?}");
-
-                if matches!(event.0, Event::StreamEnd) {
-                    break;
-                }
-            }
-            Err(e) => {
-                println!("Parser error: {e:?}");
-                break;
-            }
+    match state_machine.parse() {
+        Ok(result) => {
+            println!("StateMachine Success: {result:?}");
+        }
+        Err(e) => {
+            println!("StateMachine error: {e:?}");
         }
     }
 

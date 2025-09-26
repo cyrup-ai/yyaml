@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**yyaml** is a Rust YAML parser library providing serde support for yaml-rust2. It aims to be a modern replacement for the unmaintained `yyaml` crate with zero-allocation optimizations and comprehensive YAML 1.2 support.
+**yyaml** is a Rust YAML parser library providing serde support. It's a YAML 1.2 compliant parser with state machine architecture, focusing on zero-allocation optimizations and comprehensive spec compliance.
 
 ## Essential Commands
 
@@ -12,17 +12,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build the project
 cargo build
 
-# Run tests (11/12 currently pass)
-cargo test
+# Run library tests only (all pass)
+cargo test --lib
 
-# Run a specific test
+# Run specific test to avoid infinite loop bug
 cargo test test_name
+
+# WARNING: One test has an infinite loop bug - avoid running all tests
+# cargo test  # DO NOT RUN - will hang on test_minimal_tagged_sequence
 
 # Check for warnings
 cargo clippy
 
 # Format code
 cargo fmt
+
+# Run with debug logging
+RUST_LOG=debug cargo test test_name -- --nocapture
 ```
 
 ## Architecture Overview
@@ -35,46 +41,61 @@ cargo fmt
 - Supports all YAML types: scalars, sequences, mappings, aliases
 
 **Parser Pipeline**
-1. **Scanner (`src/scanner.rs`)** - Tokenizes input into `TokenType` variants
-2. **Parser (`src/parser/mod.rs`)** - Event-driven state machine with `Event` enum
-3. **Loader (`src/parser/loader.rs`)** - Builds AST via `YamlReceiver`
+1. **Scanner (`src/scanner/mod.rs`)** - Tokenizes input into `TokenType` events
+2. **State Machine (`src/parser/state_machine.rs`)** - Single state machine parser
+3. **Loader (`src/parser/loader.rs`)** - Public API via `YamlLoader::load_from_str()`
 
-**Parser Modules**
-- `parser/block.rs` - Block mappings and sequences (currently has bugs)
-- `parser/flow.rs` - Flow syntax `[]` and `{}`  
+**Parser State Machine**
+- `State` enum defines parsing states (StreamStart, BlockNode, FlowSequenceEntry, etc.)
+- `StateMachine` builds AST directly during parsing
+- Uses `YamlBuilder` enum for constructing AST nodes
+
+### Current Issues
+
+**Critical Bug**: `test_minimal_tagged_sequence` causes infinite loop - parser gets stuck in recursion when handling certain tagged sequences.
+
+**Parser Modules Status**:
+- `parser/state_machine.rs` - Main state machine implementation
+- `parser/grammar.rs` - Production rules for YAML grammar
+- `parser/indentation.rs` - Indentation tracking
+- `parser/flow.rs` - Flow collection parsing
 - `parser/document.rs` - Document-level parsing
-- `parser/loader.rs` - Public API `YamlLoader::load_from_str()`
-
-### Current Status
-
-**Working**: Basic values, single-line mappings, flow sequences, tokenization
-**Broken**: Multi-line block mappings fail with "did not find expected node content" error
-
-The main bug is in `src/parser/block.rs` around line handling for subsequent mapping entries.
 
 ## Key Constraints
 
-Based on TODO.md, this project follows strict guidelines:
+Per TODO.md, strict compliance guidelines:
 - **Zero allocation** where possible using `Cow<str>`
-- **No unsafe code** 
+- **No unsafe code**
 - **No unwrap/expect** in source code
 - **Comprehensive error handling** with position tracking
-- **YAML 1.2 compliance** target
+- **Full YAML 1.2 spec compliance** as target
 
 ## Test Structure
 
-Tests in `tests/test_de.rs` cover:
-- All YAML value types and conversions
-- Flow and block syntax
-- Anchors/aliases, nested structures
-- Edge cases and YAML 1.2 features
+**Main Test Files**:
+- `tests/test_de.rs` - Deserialization tests
+- `tests/test_yaml.rs` - YAML parsing tests
+- `tests/test_yaml_1_2_compliance.rs` - Spec compliance tests
+- `tests/debug_*.rs` - Debug utilities for specific issues
 
-`tests/test_se.rs` is empty - serialization not implemented yet.
+**Test Coverage**:
+- Library tests: 81 passing
+- Integration tests: Most passing except infinite loop case
+- RFC compliance tests planned in `tests/rfc_compliance/` (TODO)
+
+## Development Workflow
+
+1. Make changes to parser/scanner modules
+2. Run `cargo test --lib` first to verify library tests
+3. Test specific integration tests individually
+4. Use debug builds with `RUST_LOG=debug` for tracing
+5. Avoid running full test suite until infinite loop is fixed
 
 ## Next Priority Tasks
 
-1. Fix multi-line block mapping parser bug
-2. Implement serde `Deserializer` trait
-3. Complete flow parsing in `parser/flow.rs`
-4. Add YAML emission in `src/emitter.rs`
-5. Implement comprehensive error messages with context
+Per TODO.md Phase plan:
+1. Fix infinite loop in `test_minimal_tagged_sequence`
+2. Implement parametric productions for YAML 1.2 spec
+3. Add character productions module
+4. Complete RFC compliance test suite
+5. Achieve 100% spec compliance

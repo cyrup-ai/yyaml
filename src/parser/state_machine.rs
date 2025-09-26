@@ -1,7 +1,12 @@
-use super::super::parser::{block, document, flow, node_parser};
-use crate::error::{Marker, ScanError};
-use crate::events::{Event, TokenType};
+use crate::yaml::Yaml;
+use crate::linked_hash_map::LinkedHashMap;
+use crate::error::ScanError;
+use crate::events::TokenType;
+use crate::scanner::Scanner;
+use crate::parser::grammar::{Context, ParametricContext};
+use std::collections::HashMap;
 
+/// YAML parsing state machine states
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 pub enum State {
     StreamStart,
@@ -10,618 +15,597 @@ pub enum State {
     DocumentContent,
     DocumentEnd,
     BlockNode,
-    BlockNodeBlockOut,
-    BlockNodeBlockIn,
     BlockSequenceFirstEntry,
     BlockSequenceEntry,
-    IndentlessSequenceEntry,
     BlockMappingFirstKey,
     BlockMappingKey,
     BlockMappingValue,
     FlowSequenceFirstEntry,
     FlowSequenceEntry,
-    FlowSequenceEntryMappingKey,
-    FlowSequenceEntryMappingValue,
-    FlowSequenceEntryMappingEnd,
     FlowMappingFirstKey,
     FlowMappingKey,
     FlowMappingValue,
-    FlowMappingEmptyValue,
-    
-    // Missing context-specific states per YAML 1.2 rule [80]
-    BlockKey,      // BLOCK-KEY context
-    FlowIn,        // FLOW-IN context  
-    FlowOut,       // FLOW-OUT context
-    FlowKey,       // FLOW-KEY context
-    
-    // REMOVED: Production rule states that caused infinite loops
-    // All functionality moved to direct token consumption in main states
-    
     End,
 }
 
-pub fn execute_state_machine<T: Iterator<Item = char>>(
-    parser: &mut crate::parser::Parser<T>,
-) -> Result<(Event, Marker), ScanError> {
-    use log::{debug, trace};
-    
-    // Universal state machine debugging - IMMUTABLE STATE LOGGING
-    let current_state = parser.state;
-    let stack_depth = parser.states.len();
-    let current_pos = parser.scanner.mark();
-    
-    // Get current token for debugging (peek without consuming)
-    let current_token = parser.scanner.peek_token().map(|token| {
-        format!("{}:{:?}", token.0.line, token.1)
-    }).unwrap_or_else(|_| "ERROR_GETTING_TOKEN".to_string());
-    
-    // STATE MACHINE DEBUG - every state transition logged
-    debug!("STATE_ENTRY: {:?} at {}:{}", current_state, current_pos.line, current_pos.col);
-    debug!("STACK_DEPTH: {} | TOKEN: {}", stack_depth, current_token);
-    
-    let result = match parser.state {
-        State::StreamStart => parser.stream_start(),
-        State::ImplicitDocumentStart => document::document_start(parser, true),
-        State::DocumentStart => document::document_start(parser, false),
-        State::DocumentContent => document::document_content(parser),
-        State::DocumentEnd => document::document_end(parser),
-        State::BlockNode => {
-            // YAML 1.2 Rule [196]: ACTUALLY PARSE THE TOKEN, don't just transition
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
+/// State machine parser that builds Yaml AST directly
+pub struct StateMachine<T: Iterator<Item = char>> {
+    pub scanner: Scanner<T>,
+    pub states: Vec<State>,
+    pub state: State,
+    pub anchors: HashMap<String, usize>,
+    pub anchor_id: usize,
+    pub indents: Vec<usize>,  // Keep for compatibility
+    ast_stack: Vec<YamlBuilder>,
+    pending_tag: Option<(String, String)>,
+
+    // ADD:
+    pub context: ParametricContext,
+    recursion_depth: usize,  // From TASK1
+    max_recursion_depth: usize,
+}
+
+/// Builder for constructing Yaml AST during parsing
+#[derive(Debug)]
+enum YamlBuilder {
+    Sequence(Vec<Yaml>),
+    Mapping(LinkedHashMap<Yaml, Yaml>, Option<Yaml>), // map, current_key
+    Scalar(String),
+}
+
+impl<T: Iterator<Item = char>> StateMachine<T> {
+    pub fn new(src: T) -> Self {
+        StateMachine {
+            scanner: Scanner::new(src),
+            states: Vec::new(),
+            state: State::StreamStart,
+            anchors: HashMap::new(),
+            anchor_id: 1,
+            indents: Vec::new(),
+            ast_stack: Vec::new(),
+            pending_tag: None,
+
+            // ADD:
+            context: ParametricContext::new(),
+            recursion_depth: 0,
+            max_recursion_depth: 100,
+        }
+    }
+
+    pub fn push_indent(&mut self, indent: usize) {
+        self.indents.push(indent);
+    }
+
+    pub fn pop_indent(&mut self) {
+        self.indents.pop();
+    }
+
+    pub fn pop_state(&mut self) {
+        if let Some(state) = self.states.pop() {
+            // Check if we're leaving a context scope
+            match (self.state, state) {
+                (State::FlowSequenceEntry, State::BlockNode) |
+                (State::FlowMappingValue, State::BlockNode) |
+                (State::BlockMappingValue, State::BlockMappingKey) => {
+                    self.context.pop_context();
                 }
-                TokenType::FlowSequenceStart => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.state = State::FlowSequenceFirstEntry;
-                    Ok((Event::SequenceStart(0), tok.0))
-                }
-                TokenType::FlowMappingStart => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.state = State::FlowMappingFirstKey;
-                    Ok((Event::MappingStart(0), tok.0))
-                }
-                TokenType::BlockEntry => {
-                    let col = token.0.col;
-                    let mk = token.0;
-                    parser.scanner.fetch_token(); // consume the token
-                    parser.push_indent(col);
-                    parser.state = State::BlockSequenceFirstEntry;
-                    Ok((Event::SequenceStart(0), mk))
-                }
-                _ => {
-                    // Default to empty scalar for unknown tokens
-                    parser.pop_state();
-                    let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
+                _ => {}
             }
+            self.state = state;
         }
-        State::BlockNodeBlockOut => {
-            // Block context parsing - DIRECTLY HANDLE TOKENS
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
-                }
-                TokenType::BlockEntry => {
-                    let col = token.0.col;
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.push_indent(col);
-                    parser.state = State::BlockSequenceFirstEntry;
-                    Ok((Event::SequenceStart(0), mk))
-                }
-                _ => {
-                    parser.pop_state();
-                    let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
-            }
+    }
+
+    pub fn push_state(&mut self, st: State) {
+        self.states.push(self.state);
+        self.state = st;
+    }
+
+    pub fn register_anchor(&mut self, name: String) -> usize {
+        let new_id = self.anchor_id;
+        self.anchor_id += 1;
+        self.anchors.insert(name, new_id);
+        new_id
+    }
+
+    /// Execute the state machine and return the constructed Yaml AST
+    pub fn parse(&mut self) -> Result<Yaml, ScanError> {
+        while self.state != State::End {
+            self.execute_state()?;
         }
-        State::BlockNodeBlockIn => {
-            // Block context parsing - DIRECTLY HANDLE TOKENS
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
-                }
-                TokenType::BlockEntry => {
-                    let col = token.0.col;
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.push_indent(col);
-                    parser.state = State::BlockSequenceFirstEntry;
-                    Ok((Event::SequenceStart(0), mk))
-                }
-                _ => {
-                    parser.pop_state();
-                    let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
-            }
-        }
-        State::BlockSequenceFirstEntry => {
-            // YAML 1.2 Rule [183]: c-l-block-seq(n) ::= (s-indent(n+1+m) c-l-block-seq-entry(n+m))+
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::BlockEntry => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token(); // consume the token
-                    parser.push_state(State::BlockNode); // Parse the sequence entry content  
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                TokenType::BlockEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::SequenceEnd, mk))
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::SequenceEnd, mk))
-                }
-            }
-        }
-        State::BlockSequenceEntry => {
-            // Subsequent sequence entries
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::BlockEntry => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token(); 
-                    parser.push_state(State::BlockNode);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::SequenceEnd, mk))
-                }
-            }
-        }
-        State::IndentlessSequenceEntry => {
-            // Indentless sequence (like in flow contexts)
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::BlockEntry => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.push_state(State::BlockNode);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    Ok((Event::SequenceEnd, mk))
-                }
-            }
-        }
-        State::BlockMappingFirstKey => {
-            // YAML 1.2 Rule [186]: c-l-block-mapping(n) ::= (s-indent(n+1+m) c-l-block-map-entry(n+m))+
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Key => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::BlockMappingValue;
-                    parser.push_state(State::BlockNode); // Parse key
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                TokenType::Scalar(style, val) => {
-                    // Implicit key
-                    let tok = parser.scanner.fetch_token();
-                    parser.state = State::BlockMappingValue;
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
-                }
-                TokenType::BlockEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::MappingEnd, mk))
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::MappingEnd, mk))
-                }
-            }
-        }
-        State::BlockMappingKey => {
-            // Subsequent mapping keys  
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Key => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::BlockMappingValue;
-                    parser.push_state(State::BlockNode);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.state = State::BlockMappingValue;
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    parser.pop_indent();
-                    Ok((Event::MappingEnd, mk))
-                }
-            }
-        }
-        State::BlockMappingValue => {
-            // Parse mapping value
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Value => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::BlockMappingKey;
-                    parser.push_state(State::BlockNode); // Parse value
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    // Null value
-                    let mk = parser.scanner.mark();
-                    parser.state = State::BlockMappingKey;
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
-            }
-        }
-        State::FlowSequenceFirstEntry => {
-            // YAML 1.2 Rule [110]: c-flow-sequence(n,c) ::= '[' s-separate(n,c)? c-flow-seq-entries(n,FLOW-IN)? ']'
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowSequenceEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::SequenceEnd, mk))
-                }
-                _ => {
-                    parser.state = State::FlowSequenceEntry;
-                    parser.push_state(State::FlowIn); // Parse entry in FLOW-IN context
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-            }
-        }
-        State::FlowSequenceEntry => {
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowEntry => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.push_state(State::FlowIn);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                TokenType::FlowSequenceEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::SequenceEnd, mk))
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    Ok((Event::SequenceEnd, mk))
-                }
-            }
-        }
-        State::FlowSequenceEntryMappingKey => {
-            // Handle mapping inside flow sequence
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Key => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::FlowSequenceEntryMappingValue;
-                    parser.push_state(State::FlowKey);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.state = State::FlowSequenceEntry;
-                    Ok((Event::MappingEnd, mk))
-                }
-            }
-        }
-        State::FlowSequenceEntryMappingValue => {
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Value => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::FlowSequenceEntryMappingEnd;
-                    parser.push_state(State::FlowIn);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.state = State::FlowSequenceEntryMappingEnd;
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
-            }
-        }
-        State::FlowSequenceEntryMappingEnd => {
-            let mk = parser.scanner.mark();
-            parser.state = State::FlowSequenceEntry;
-            Ok((Event::MappingEnd, mk))
-        }
-        State::FlowMappingFirstKey => {
-            // YAML 1.2 Rule [113]: c-flow-mapping(n,c) ::= '{' s-separate(n,c)? c-flow-map-entries(n,FLOW-IN)? '}'
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowMappingEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::MappingEnd, mk))
-                }
-                _ => {
-                    parser.state = State::FlowMappingValue;
-                    parser.push_state(State::FlowKey); // Parse key in FLOW-KEY context
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-            }
-        }
-        State::FlowMappingKey => {
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowEntry => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::FlowMappingValue;
-                    parser.push_state(State::FlowKey);
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                TokenType::FlowMappingEnd => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::MappingEnd, mk))
-                }
-                _ => {
-                    let mk = parser.scanner.mark();
-                    parser.pop_state();
-                    Ok((Event::MappingEnd, mk))
-                }
-            }
-        }
-        State::FlowMappingValue => {
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Value => {
-                    let mk = token.0;
-                    parser.scanner.fetch_token();
-                    parser.state = State::FlowMappingKey;
-                    parser.push_state(State::FlowIn); // Parse value in FLOW-IN context
-                    // Immediately call state machine again for next state
-                    execute_state_machine(parser)
-                }
-                _ => {
-                    // Null value
-                    let mk = parser.scanner.mark();
-                    parser.state = State::FlowMappingKey;
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
-            }
-        }
-        State::FlowMappingEmptyValue => {
-            // Handle empty mapping value case
-            let mk = parser.scanner.mark();
-            parser.state = State::FlowMappingKey;
-            Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-        },
         
-        // Context-specific states per YAML 1.2 rule [80] - zero allocation, blazing-fast implementations
-        State::BlockKey => {
-            // BLOCK-KEY context: Handle separation and DIRECTLY parse key
-            parser.scanner.skip_inline_separation()?;
-            
-            let token = parser.scanner.peek_token()?;
+        // Return the final constructed AST
+        if let Some(builder) = self.ast_stack.pop() {
+            Ok(self.finalize_builder(builder))
+        } else {
+            Ok(Yaml::Null)
+        }
+    }
+
+    /// Execute a single state transition
+    pub fn execute_state(&mut self) -> Result<(), ScanError> {
+        match self.state {
+            State::StreamStart => self.handle_stream_start(),
+            State::DocumentStart => self.handle_document_start(),
+            State::DocumentContent => self.handle_document_content(),
+            State::BlockNode => self.handle_block_node(),
+            State::BlockSequenceFirstEntry => self.handle_block_sequence_first_entry(),
+            State::BlockSequenceEntry => self.handle_block_sequence_entry(),
+            State::BlockMappingFirstKey => self.handle_block_mapping_first_key(),
+            State::BlockMappingKey => self.handle_block_mapping_key(),
+            State::BlockMappingValue => self.handle_block_mapping_value(),
+            State::FlowSequenceFirstEntry => self.handle_flow_sequence_first_entry(),
+            State::FlowSequenceEntry => self.handle_flow_sequence_entry(),
+            State::FlowMappingFirstKey => self.handle_flow_mapping_first_key(),
+            State::FlowMappingKey => self.handle_flow_mapping_key(),
+            State::FlowMappingValue => self.handle_flow_mapping_value(),
+            _ => {
+                self.state = State::End;
+                Ok(())
+            }
+        }
+    }
+
+    fn handle_stream_start(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::StreamStart(_) => {
+                self.scanner.fetch_token();
+                self.state = State::DocumentStart;
+                Ok(())
+            }
+            _ => Err(ScanError::new(token.0, "expected stream start")),
+        }
+    }
+
+    fn handle_document_start(&mut self) -> Result<(), ScanError> {
+        self.state = State::DocumentContent;
+        Ok(())
+    }
+
+    fn handle_document_content(&mut self) -> Result<(), ScanError> {
+        // Document content starts at indent 0, BLOCK-OUT context
+        self.context.push_context(Context::BlockOut, 0);
+        self.state = State::BlockNode;
+        Ok(())
+    }
+
+    fn handle_block_node(&mut self) -> Result<(), ScanError> {
+        // Keep parsing until we handle a non-tag token
+        loop {
+            let token = self.scanner.peek_token()?;
+
+            // ADD context validation:
+            if !self.can_accept_token(&token.1) {
+                return Err(ScanError::new(
+                    token.0,
+                    &format!("Token {:?} not allowed in {:?} context",
+                            token.1, self.context.current_context)
+                ));
+            }
+
             match &token.1 {
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
+                TokenType::Scalar(_, value) => {
+                    // Peek ahead to see if this is a mapping key
+                    self.scanner.fetch_token(); // Consume the scalar
+                    let next_token = self.scanner.peek_token()?;
+
+                    if matches!(next_token.1, TokenType::Value) {
+                        // This is a mapping key
+                        let key = Yaml::parse_str(value);
+                        self.ast_stack.push(YamlBuilder::Mapping(LinkedHashMap::new(), Some(key)));
+                        self.state = State::BlockMappingValue;
+                        return Ok(());
+                    } else {
+                        // Just a scalar value
+                        let yaml = Yaml::parse_str(value);
+                        self.push_yaml(yaml);
+                        self.pop_state();
+                        return Ok(());
+                    }
+                }
+                TokenType::BlockEntry => {
+                    self.scanner.fetch_token();
+                    self.ast_stack.push(YamlBuilder::Sequence(Vec::new()));
+                    // Don't push state - we're at root level
+                    self.state = State::BlockSequenceFirstEntry;
+                    return Ok(());
+                }
+                TokenType::Key => {
+                    self.scanner.fetch_token();
+                    self.ast_stack.push(YamlBuilder::Mapping(LinkedHashMap::new(), None));
+                    self.state = State::BlockMappingFirstKey;
+                    return Ok(());
+                }
+                TokenType::FlowSequenceStart => {
+                    self.scanner.fetch_token();
+                    self.ast_stack.push(YamlBuilder::Sequence(Vec::new()));
+                    self.state = State::FlowSequenceFirstEntry;
+                    return Ok(());
+                }
+                TokenType::FlowMappingStart => {
+                    self.scanner.fetch_token();
+                    self.ast_stack.push(YamlBuilder::Mapping(LinkedHashMap::new(), None));
+                    self.state = State::FlowMappingFirstKey;
+                    return Ok(());
+                }
+                TokenType::Tag(handle, suffix) => {
+                    // Store the tag for the next value
+                    self.pending_tag = Some((handle.clone(), suffix.clone()));
+                    self.scanner.fetch_token();
+                    // Continue looping to parse the value that follows the tag
+                    continue;
                 }
                 _ => {
-                    parser.pop_state();
-                    let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
+                    self.push_yaml(Yaml::Null);
+                    self.pop_state();
+                    return Ok(());
                 }
             }
         }
-        State::FlowIn => {
-            // FLOW-IN context: s-separate(n,FLOW-IN) ::= s-separate-lines(n)  
-            // Multi-line separation allowed with proper indentation
-            parser.scanner.skip_multiline_separation()?;
-            
-            // Parse flow content in FLOW-IN context
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowSequenceStart => {
-                    parser.state = State::FlowSequenceFirstEntry;
-                    let tok = parser.scanner.fetch_token();
-                    Ok((Event::SequenceStart(0), tok.0))
+    }
+
+    fn handle_block_sequence_first_entry(&mut self) -> Result<(), ScanError> {
+        // The first BlockEntry was already consumed when we transitioned to this state
+        // Now we need to handle the content of this first sequence item
+        self.state = State::BlockSequenceEntry;
+        self.handle_sequence_content()
+    }
+
+    fn handle_block_sequence_entry(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::BlockEntry => {
+                self.scanner.fetch_token();
+                self.handle_sequence_content()
+            }
+            _ => {
+                // End of sequence
+                if let Some(YamlBuilder::Sequence(items)) = self.ast_stack.pop() {
+                    self.push_yaml(Yaml::Array(items));
                 }
-                TokenType::FlowMappingStart => {
-                    parser.state = State::FlowMappingFirstKey;
-                    let tok = parser.scanner.fetch_token();
-                    Ok((Event::MappingStart(0), tok.0))
+                self.pop_state();
+                Ok(())
+            }
+        }
+    }
+
+    fn handle_sequence_content(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::Scalar(_, value) => {
+                self.scanner.fetch_token();
+                let yaml = Yaml::parse_str(value);
+                if let Some(YamlBuilder::Sequence(items)) = self.ast_stack.last_mut() {
+                    items.push(yaml);
                 }
-                _ => {
-                    // Regular content in flow-in context - DIRECTLY HANDLE
-                    let token = parser.scanner.fetch_token();
-                    match token.1 {
-                        TokenType::Scalar(style, val) => {
-                            parser.pop_state();
-                            Ok((Event::Scalar(val, style, 0, None), token.0))
+                Ok(())
+            }
+            TokenType::BlockEntry | TokenType::Key |
+            TokenType::FlowSequenceStart | TokenType::FlowMappingStart => {
+                // These indicate nested structures in the sequence
+                // Push the current state and transition to handle the nested structure
+                self.push_state(State::BlockSequenceEntry);
+                self.state = State::BlockNode;
+                Ok(())
+            }
+            _ => {
+                // Empty sequence item - add null
+                if let Some(YamlBuilder::Sequence(items)) = self.ast_stack.last_mut() {
+                    items.push(Yaml::Null);
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn handle_block_mapping_first_key(&mut self) -> Result<(), ScanError> {
+        // Block mapping key uses BLOCK-KEY context at n+1
+        let n = self.context.current_indent();
+        self.context.push_context(Context::BlockKey, n + 1);
+
+        self.state = State::BlockMappingKey;
+        self.handle_mapping_key()
+    }
+
+    fn handle_block_mapping_key(&mut self) -> Result<(), ScanError> {
+        self.handle_mapping_key()
+    }
+
+    fn handle_mapping_key(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::Scalar(_, value) => {
+                self.scanner.fetch_token();
+                let key = Yaml::parse_str(value);
+                if let Some(YamlBuilder::Mapping(_, current_key)) = self.ast_stack.last_mut() {
+                    *current_key = Some(key);
+                }
+                self.state = State::BlockMappingValue;
+                Ok(())
+            }
+            _ => {
+                // End of mapping
+                if let Some(YamlBuilder::Mapping(map, _)) = self.ast_stack.pop() {
+                    self.push_yaml(Yaml::Hash(map));
+                }
+
+                // Check if we're at the root level
+                if self.states.is_empty() {
+                    self.state = State::End;
+                } else {
+                    self.pop_state();
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn handle_block_mapping_value(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::Value => {
+                self.scanner.fetch_token();
+
+                // Block mapping value uses BLOCK-IN context at n+1+m
+                let n = self.context.current_indent();
+                self.context.push_context(Context::BlockIn, n + 2);  // n+1+1
+
+                // Handle tags and other tokens after the colon
+                loop {
+                    let value_token = self.scanner.peek_token()?;
+                    match &value_token.1 {
+                        TokenType::Tag(handle, suffix) => {
+                            // Store the tag for the value
+                            self.pending_tag = Some((handle.clone(), suffix.clone()));
+                            self.scanner.fetch_token();
+                            // Continue to get the actual value
+                            continue;
+                        }
+                        TokenType::Scalar(_, value) => {
+                            self.scanner.fetch_token();
+                            let yaml_value = Yaml::parse_str(value);
+                            self.add_mapping_pair(yaml_value);
+                            self.state = State::BlockMappingKey;
+                            return Ok(());
                         }
                         _ => {
-                            parser.pop_state();
-                            let mk = parser.scanner.mark();
-                            Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
+                            // Handle nested structures as the value
+                            // Push current state so when nested structure completes,
+                            // we return to BlockMappingKey to look for the next key
+                            self.push_state(State::BlockMappingKey);
+                            self.state = State::BlockNode;
+                            return Ok(());
                         }
                     }
                 }
             }
+            _ => {
+                // Null value
+                self.add_mapping_pair(Yaml::Null);
+                self.state = State::BlockMappingKey;
+                Ok(())
+            }
         }
-        State::FlowOut => {
-            // FLOW-OUT context: s-separate(n,FLOW-OUT) ::= s-separate-lines(n)
-            // Multi-line separation allowed with proper indentation  
-            parser.scanner.skip_multiline_separation()?;
-            
-            // Parse flow content in FLOW-OUT context
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::FlowSequenceStart => {
-                    parser.state = State::FlowSequenceFirstEntry;
-                    let tok = parser.scanner.fetch_token();
-                    Ok((Event::SequenceStart(0), tok.0))
+    }
+
+    fn handle_flow_sequence_first_entry(&mut self) -> Result<(), ScanError> {
+        // Flow sequence switches to FLOW-IN context
+        let current_indent = self.context.current_indent();
+        self.context.push_context(Context::FlowIn, current_indent);
+
+        self.state = State::FlowSequenceEntry;
+        Ok(())
+    }
+
+    fn handle_flow_sequence_entry(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::FlowSequenceEnd => {
+                self.scanner.fetch_token();
+                if let Some(YamlBuilder::Sequence(items)) = self.ast_stack.pop() {
+                    self.push_yaml(Yaml::Array(items));
                 }
-                TokenType::FlowMappingStart => {
-                    parser.state = State::FlowMappingFirstKey;
-                    let tok = parser.scanner.fetch_token();
-                    Ok((Event::MappingStart(0), tok.0))
+                self.pop_state();
+                Ok(())
+            }
+            TokenType::FlowEntry => {
+                self.scanner.fetch_token();
+                Ok(())
+            }
+            TokenType::Scalar(_, value) => {
+                self.scanner.fetch_token();
+                let yaml = Yaml::parse_str(value);
+                if let Some(YamlBuilder::Sequence(items)) = self.ast_stack.last_mut() {
+                    items.push(yaml);
                 }
-                _ => {
-                    // Regular content in flow-out context - DIRECTLY HANDLE
-                    let token = parser.scanner.fetch_token();
-                    match token.1 {
-                        TokenType::Scalar(style, val) => {
-                            parser.pop_state();
-                            Ok((Event::Scalar(val, style, 0, None), token.0))
-                        }
-                        _ => {
-                            parser.pop_state();
-                            let mk = parser.scanner.mark();
-                            Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                        }
+                Ok(())
+            }
+            _ => Ok(())
+        }
+    }
+
+    fn handle_flow_mapping_first_key(&mut self) -> Result<(), ScanError> {
+        self.state = State::FlowMappingKey;
+        Ok(())
+    }
+
+    fn handle_flow_mapping_key(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::FlowMappingEnd => {
+                self.scanner.fetch_token();
+                if let Some(YamlBuilder::Mapping(map, _)) = self.ast_stack.pop() {
+                    self.push_yaml(Yaml::Hash(map));
+                }
+                self.pop_state();
+                Ok(())
+            }
+            TokenType::Scalar(_, value) => {
+                self.scanner.fetch_token();
+                let key = Yaml::parse_str(value);
+                if let Some(YamlBuilder::Mapping(_, current_key)) = self.ast_stack.last_mut() {
+                    *current_key = Some(key);
+                }
+                self.state = State::FlowMappingValue;
+                Ok(())
+            }
+            _ => Ok(())
+        }
+    }
+
+    fn handle_flow_mapping_value(&mut self) -> Result<(), ScanError> {
+        let token = self.scanner.peek_token()?;
+        match &token.1 {
+            TokenType::Value => {
+                self.scanner.fetch_token();
+                let value_token = self.scanner.peek_token()?;
+                match &value_token.1 {
+                    TokenType::Scalar(_, value) => {
+                        self.scanner.fetch_token();
+                        let yaml_value = Yaml::parse_str(value);
+                        self.add_mapping_pair(yaml_value);
+                        self.state = State::FlowMappingKey;
+                        Ok(())
+                    }
+                    _ => Ok(())
+                }
+            }
+            _ => Ok(())
+        }
+    }
+
+    /// Add a key-value pair to the current mapping
+    fn add_mapping_pair(&mut self, mut value: Yaml) {
+        // Apply pending tag if present
+        if let Some((handle, suffix)) = self.pending_tag.take() {
+            let tag_uri = match handle.as_str() {
+                "!!" => format!("tag:yaml.org,2002:{}", suffix),
+                "!" => suffix,
+                _ => format!("{}{}", handle, suffix),
+            };
+            value = Yaml::Tagged(tag_uri, Box::new(value));
+        }
+
+        if let Some(YamlBuilder::Mapping(map, current_key)) = self.ast_stack.last_mut() {
+            if let Some(key) = current_key.take() {
+                map.insert(key, value);
+            }
+        }
+    }
+
+    /// Push a constructed Yaml value onto the AST stack
+    fn push_yaml(&mut self, mut yaml: Yaml) {
+        // Apply pending tag if present
+        if let Some((handle, suffix)) = self.pending_tag.take() {
+            let tag_uri = match handle.as_str() {
+                "!!" => format!("tag:yaml.org,2002:{}", suffix),
+                "!" => suffix,
+                _ => format!("{}{}", handle, suffix),
+            };
+            yaml = Yaml::Tagged(tag_uri, Box::new(yaml));
+        }
+
+        // If we have a container being built, add to it
+        if let Some(builder) = self.ast_stack.last_mut() {
+            match builder {
+                YamlBuilder::Sequence(items) => {
+                    items.push(yaml);
+                }
+                YamlBuilder::Mapping(map, current_key) => {
+                    if let Some(key) = current_key.take() {
+                        // We have a key waiting for a value
+                        map.insert(key, yaml);
+                    } else {
+                        // No key yet, this must be a key
+                        *current_key = Some(yaml);
                     }
                 }
+                _ => {}
             }
+        } else {
+            // This is the root document
+            self.ast_stack.push(YamlBuilder::Scalar(format!("{:?}", yaml)));
         }
-        State::FlowKey => {
-            // FLOW-KEY context: s-separate(n,FLOW-KEY) ::= s-separate-in-line
-            // Only horizontal separation allowed - same as BLOCK-KEY
-            parser.scanner.skip_inline_separation()?;
-            
-            // Parse key content in flow context - DIRECTLY HANDLE
-            let token = parser.scanner.peek_token()?;
-            match &token.1 {
-                TokenType::Scalar(style, val) => {
-                    let tok = parser.scanner.fetch_token();
-                    parser.pop_state();
-                    Ok((Event::Scalar(val.clone(), *style, 0, None), tok.0))
-                }
-                _ => {
-                    parser.pop_state();
-                    let mk = parser.scanner.mark();
-                    Ok((Event::Scalar("".to_string(), crate::events::TScalarStyle::Plain, 0, None), mk))
-                }
+    }
+
+    fn can_accept_token(&self, token: &TokenType) -> bool {
+        match self.context.current_context {
+            Context::FlowIn | Context::FlowOut => {
+                // Flow contexts cannot have block entries
+                !matches!(token, TokenType::BlockEntry)
             }
-        }
-        
-        // REMOVE: This state was causing infinite loops - functionality moved to BlockNode
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        // REMOVE: This state was causing infinite loops - functionality moved to direct handlers
-        
-        State::End => unreachable!(),
-    };
-    
-    // Universal state machine debugging - IMMUTABLE EXIT LOGGING
-    let new_state = parser.state;
-    let new_stack_depth = parser.states.len();
-    let state_changed = new_state != current_state;
-    let stack_changed = new_stack_depth != stack_depth;
-    
-    // STATE MACHINE EXIT DEBUG
-    debug!("STATE_EXIT: {:?} -> {:?}", current_state, new_state);
-    match &result {
-        Ok((event, marker)) => {
-            debug!("RESULT: SUCCESS | Event: {:?} at {}:{}", event, marker.line, marker.col);
-        }
-        Err(error) => {
-            debug!("RESULT: ERROR | {:?}", error);
+            Context::BlockKey => {
+                // Block key context has restricted character set
+                !matches!(token, TokenType::FlowSequenceStart | TokenType::FlowMappingStart)
+            }
+            _ => true,
         }
     }
-    
-    // Add trace-level step-by-step logging for complex debugging
-    trace!("STATE_TRANSITION: {} -> {} | Stack: {} -> {} | Token: {}", 
-           format!("{:?}", current_state), format!("{:?}", new_state), 
-           stack_depth, new_stack_depth, current_token);
-    
-    result
-}
 
-/// Debugging helper for state machine validation and trace mode
-pub fn validate_state_transition<T: Iterator<Item = char>>(
-    _parser: &crate::parser::Parser<T>,
-    from_state: State,
-    to_state: State,
-    event: &Event
-) -> Result<(), String> {
-    use log::warn;
-    
-    // State transition validation per YAML 1.2 spec
-    match (from_state, to_state, event) {
-        // Valid transitions for tagged sequences per rule [96] c-ns-properties  
-        (State::BlockMappingValue, State::BlockNodeBlockOut, Event::SequenceStart(_)) => {
-            // This is the critical path for tagged sequences like "vec: !wat\n  - 0"
-            log::info!("TAGGED_SEQUENCE_PATH: BlockMappingValue -> BlockNodeBlockOut with SequenceStart");
-            Ok(())
+    fn check_indentation(&mut self, token_indent: usize) -> Result<(), ScanError> {
+        let required_indent = match self.context.current_context {
+            Context::BlockIn => self.context.current_indent(),
+            Context::BlockKey => self.context.current_indent(),  // Keys at n+1
+            Context::BlockOut => 0,  // No restriction
+            Context::FlowIn | Context::FlowOut | Context::FlowKey => {
+                // Flow contexts ignore indentation
+                return Ok(());
+            }
+        };
+
+        if token_indent < required_indent as usize {
+            return Err(ScanError::new(
+                self.scanner.mark(),
+                &format!("Insufficient indentation: expected {}, got {}",
+                        required_indent, token_indent)
+            ));
         }
-        
-        // REMOVED: Infinite loop states eliminated - direct token consumption implemented
-        
-        // All other transitions are valid until proven otherwise
-        _ => Ok(())
+
+        Ok(())
+    }
+
+    /// Finalize a YamlBuilder into a Yaml value
+    fn finalize_builder(&self, builder: YamlBuilder) -> Yaml {
+        match builder {
+            YamlBuilder::Sequence(items) => Yaml::Array(items),
+            YamlBuilder::Mapping(map, _) => Yaml::Hash(map),
+            YamlBuilder::Scalar(s) => Yaml::String(s),
+        }
     }
 }
 
-/// Enable step-by-step debugging mode for complex cases  
-pub fn enable_trace_mode() {
-    unsafe {
-        std::env::set_var("RUST_LOG", "trace");
-    }
-    // Note: env_logger::init() should be called by the application, not the library
-    // Applications using this parser should call env_logger::init() or another logger init
-    log::info!("STATE_MACHINE: Trace mode enabled - every state transition will be logged");
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// Separation functions removed: Now handled by Scanner public methods
-// - Scanner::skip_inline_separation() for BLOCK-KEY and FLOW-KEY contexts  
-// - Scanner::skip_multiline_separation() for FLOW-IN, FLOW-OUT, BLOCK-IN, BLOCK-OUT contexts
-// This provides proper encapsulation and zero-allocation performance
+    #[test]
+    fn test_context_state_machine() {
+        let yaml = r#"
+outer:
+  - item1  # BLOCK-IN at indent 2
+  - key: value  # BLOCK-KEY at 4, BLOCK-IN at 7
+    flow: [a, b]  # FLOW-IN inside []
+"#;
+
+        let mut sm = StateMachine::new(yaml.chars());
+
+        // Parse and check context at various points
+        // This would require adding debug hooks or inspection methods
+        let result = sm.parse();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_context_validation() {
+        // Test context initialization
+        let yaml = "key: value";
+        let mut sm = StateMachine::new(yaml.chars());
+
+        // Verify ParametricContext is initialized properly
+        assert_eq!(sm.context.current_context, Context::BlockOut);
+        assert_eq!(sm.context.current_indent(), 0);
+
+        let result = sm.parse();
+        assert!(result.is_ok());
+    }
+}
