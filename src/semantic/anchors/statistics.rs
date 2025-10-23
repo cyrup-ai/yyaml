@@ -45,6 +45,7 @@ impl Default for AnchorStatistics {
 impl AnchorStatistics {
     /// Create new statistics instance
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -66,13 +67,13 @@ impl AnchorStatistics {
 
     /// Record cache hit
     #[inline]
-    pub fn record_cache_hit(&mut self) {
+    pub const fn record_cache_hit(&mut self) {
         self.cache_hits += 1;
     }
 
     /// Record cache miss
     #[inline]
-    pub fn record_cache_miss(&mut self) {
+    pub const fn record_cache_miss(&mut self) {
         self.cache_misses += 1;
     }
 
@@ -86,11 +87,12 @@ impl AnchorStatistics {
 
     /// Update memory usage estimate
     #[inline]
-    pub fn update_memory_usage(&mut self, bytes: usize) {
+    pub const fn update_memory_usage(&mut self, bytes: usize) {
         self.memory_usage_bytes = bytes;
     }
 
     /// Get cache hit rate as percentage
+    #[must_use] 
     pub fn cache_hit_rate(&self) -> f64 {
         let total_lookups = self.cache_hits + self.cache_misses;
         if total_lookups > 0 {
@@ -101,6 +103,7 @@ impl AnchorStatistics {
     }
 
     /// Get alias resolution rate as percentage
+    #[must_use] 
     pub fn alias_resolution_rate(&self) -> f64 {
         if self.total_aliases > 0 {
             (self.resolved_aliases as f64 / self.total_aliases as f64) * 100.0
@@ -110,6 +113,7 @@ impl AnchorStatistics {
     }
 
     /// Check if performance is acceptable based on thresholds
+    #[must_use] 
     pub fn is_performance_acceptable(
         &self,
         min_cache_hit_rate: f64,
@@ -120,6 +124,7 @@ impl AnchorStatistics {
     }
 
     /// Get performance summary
+    #[must_use] 
     pub fn performance_summary(&self) -> PerformanceSummary {
         PerformanceSummary {
             cache_efficiency: self.cache_hit_rate(),
@@ -139,6 +144,7 @@ impl AnchorStatistics {
     }
 
     /// Generate performance report
+    #[must_use] 
     pub fn generate_report(&self) -> String {
         let summary = self.performance_summary();
 
@@ -182,6 +188,7 @@ pub struct PerformanceSummary {
 
 impl PerformanceSummary {
     /// Get overall performance score (0-100)
+    #[must_use] 
     pub fn overall_score(&self) -> f64 {
         let cache_score = self.cache_efficiency.min(100.0);
         let resolution_score = self.resolution_efficiency.min(100.0);
@@ -230,34 +237,31 @@ pub enum AnchorValidationWarning {
 
 impl AnchorValidationWarning {
     /// Get warning message
+    #[must_use] 
     pub fn message(&self) -> String {
         match self {
-            AnchorValidationWarning::UnusedAnchor {
+            Self::UnusedAnchor {
                 name,
                 definition_age_ms,
                 ..
             } => {
-                format!(
-                    "Anchor '{name}' is defined but never used (age: {definition_age_ms}ms)"
-                )
+                format!("Anchor '{name}' is defined but never used (age: {definition_age_ms}ms)")
             }
-            AnchorValidationWarning::CircularReference {
+            Self::CircularReference {
                 anchor_name,
                 reference_path,
                 ..
             } => {
-                format!(
-                    "Circular reference detected for anchor '{anchor_name}': {reference_path}"
-                )
+                format!("Circular reference detected for anchor '{anchor_name}': {reference_path}")
             }
-            AnchorValidationWarning::DeepNesting {
+            Self::DeepNesting {
                 anchor_name, depth, ..
             } => {
                 format!(
                     "Anchor '{anchor_name}' has deep nesting (depth: {depth}), may impact performance"
                 )
             }
-            AnchorValidationWarning::PotentialMemoryIssue {
+            Self::PotentialMemoryIssue {
                 anchor_name,
                 estimated_size_bytes,
                 ..
@@ -266,7 +270,7 @@ impl AnchorValidationWarning {
                     "Anchor '{anchor_name}' may use significant memory ({estimated_size_bytes} bytes)"
                 )
             }
-            AnchorValidationWarning::NamingConflict {
+            Self::NamingConflict {
                 anchor_names,
                 similarity_score,
             } => {
@@ -276,7 +280,7 @@ impl AnchorValidationWarning {
                     similarity_score * 100.0
                 )
             }
-            AnchorValidationWarning::PerformanceIssue {
+            Self::PerformanceIssue {
                 anchor_name,
                 resolution_count,
                 avg_resolution_time_ms,
@@ -290,22 +294,24 @@ impl AnchorValidationWarning {
     }
 
     /// Get warning position
+    #[must_use] 
     pub fn position(&self) -> Position {
         match self {
-            AnchorValidationWarning::UnusedAnchor { position, .. }
-            | AnchorValidationWarning::CircularReference { position, .. }
-            | AnchorValidationWarning::DeepNesting { position, .. }
-            | AnchorValidationWarning::PotentialMemoryIssue { position, .. }
-            | AnchorValidationWarning::PerformanceIssue { position, .. } => *position,
-            AnchorValidationWarning::NamingConflict { .. } => Position::default(),
+            Self::UnusedAnchor { position, .. }
+            | Self::CircularReference { position, .. }
+            | Self::DeepNesting { position, .. }
+            | Self::PotentialMemoryIssue { position, .. }
+            | Self::PerformanceIssue { position, .. } => *position,
+            Self::NamingConflict { .. } => Position::default(),
         }
     }
 
     /// Get warning severity level
+    #[must_use] 
     pub fn severity(&self) -> WarningSeverity {
         match self {
-            AnchorValidationWarning::CircularReference { .. } => WarningSeverity::High,
-            AnchorValidationWarning::PotentialMemoryIssue {
+            Self::CircularReference { .. } => WarningSeverity::High,
+            Self::PotentialMemoryIssue {
                 estimated_size_bytes,
                 ..
             } => {
@@ -319,7 +325,7 @@ impl AnchorValidationWarning {
                     WarningSeverity::Low
                 }
             }
-            AnchorValidationWarning::PerformanceIssue {
+            Self::PerformanceIssue {
                 avg_resolution_time_ms,
                 ..
             } => {
@@ -331,7 +337,7 @@ impl AnchorValidationWarning {
                     WarningSeverity::Low
                 }
             }
-            AnchorValidationWarning::DeepNesting { depth, .. } => {
+            Self::DeepNesting { depth, .. } => {
                 if *depth > 20 {
                     WarningSeverity::High
                 } else if *depth > 10 {
@@ -340,8 +346,8 @@ impl AnchorValidationWarning {
                     WarningSeverity::Low
                 }
             }
-            AnchorValidationWarning::UnusedAnchor { .. }
-            | AnchorValidationWarning::NamingConflict { .. } => WarningSeverity::Low,
+            Self::UnusedAnchor { .. }
+            | Self::NamingConflict { .. } => WarningSeverity::Low,
         }
     }
 }
@@ -356,11 +362,12 @@ pub enum WarningSeverity {
 
 impl WarningSeverity {
     /// Get severity as string
-    pub fn as_str(&self) -> &'static str {
+    #[must_use] 
+    pub const fn as_str(&self) -> &'static str {
         match self {
-            WarningSeverity::Low => "LOW",
-            WarningSeverity::Medium => "MEDIUM",
-            WarningSeverity::High => "HIGH",
+            Self::Low => "LOW",
+            Self::Medium => "MEDIUM",
+            Self::High => "HIGH",
         }
     }
 }
@@ -370,6 +377,7 @@ pub struct AnchorValidator;
 
 impl AnchorValidator {
     /// Validate anchor registry and generate warnings
+    #[must_use] 
     pub fn validate_anchors<'input>(
         registry: &AnchorRegistry<'input>,
     ) -> Vec<AnchorValidationWarning> {
@@ -599,9 +607,7 @@ impl AnchorValidator {
                     + tagged_node.suffix.len()
                     + Self::estimate_node_size(&tagged_node.node)
             }
-            crate::parser::ast::Node::Null(null_node) => {
-                std::mem::size_of_val(null_node)
-            }
+            crate::parser::ast::Node::Null(null_node) => std::mem::size_of_val(null_node),
         }
     }
 }

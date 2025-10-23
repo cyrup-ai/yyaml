@@ -403,7 +403,7 @@ fn is_line_end<T: Iterator<Item = char>>(state: &mut ScannerState<T>) -> Result<
 
 /// Check if character is line ending
 #[inline]
-fn is_line_end_char(ch: char) -> bool {
+const fn is_line_end_char(ch: char) -> bool {
     matches!(ch, '\n' | '\r')
 }
 
@@ -426,7 +426,7 @@ fn ensure_line_end<T: Iterator<Item = char>>(
 
 /// Check if character is valid in tag prefixes
 #[inline]
-fn is_tag_prefix_char(ch: char) -> bool {
+const fn is_tag_prefix_char(ch: char) -> bool {
     // URI characters excluding % (handled separately)
     ch.is_ascii_alphanumeric()
         || matches!(
@@ -517,11 +517,13 @@ fn validate_tag_directive(handle: &str, prefix: &str, position: Marker) -> Resul
 }
 
 /// Check if directive is valid YAML 1.2 directive
-pub fn is_standard_directive(directive: &Directive) -> bool {
+#[must_use] 
+pub const fn is_standard_directive(directive: &Directive) -> bool {
     matches!(directive, Directive::Version { .. } | Directive::Tag { .. })
 }
 
 /// Get directive name as string
+#[must_use] 
 pub fn directive_name(directive: &Directive) -> &str {
     match directive {
         Directive::Version { .. } => "YAML",

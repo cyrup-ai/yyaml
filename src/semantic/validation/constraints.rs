@@ -64,6 +64,7 @@ impl<'input> Default for ConstraintChecker<'input> {
 impl<'input> ConstraintChecker<'input> {
     /// Create a new constraint checker with default settings
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             type_constraints: HashMap::new(),

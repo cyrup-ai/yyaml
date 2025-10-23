@@ -1,5 +1,5 @@
 use yyaml::events::TokenType;
-use yyaml::parser::{loader::YamlLoader, StateMachine};
+use yyaml::parser::{StateMachine, loader::YamlLoader};
 use yyaml::scanner::Scanner;
 
 #[test]

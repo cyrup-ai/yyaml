@@ -102,47 +102,47 @@ pub enum SemanticError {
 
 impl SemanticError {
     /// Get the position associated with this error
+    #[must_use] 
     pub fn position(&self) -> Position {
         match self {
-            SemanticError::UnresolvedAlias { position, .. } => *position,
-            SemanticError::CircularReference { position, .. } => *position,
-            SemanticError::DuplicateAnchor {
+            Self::UnresolvedAlias { position, .. } => *position,
+            Self::CircularReference { position, .. } => *position,
+            Self::DuplicateAnchor {
                 duplicate_position, ..
             } => *duplicate_position,
-            SemanticError::InvalidTagHandle { position, .. } => *position,
-            SemanticError::UnknownTag { position, .. } => *position,
-            SemanticError::TagResolutionFailed { position, .. } => *position,
-            SemanticError::ValidationDepthExceeded { position, .. } => *position,
-            SemanticError::UnknownTagHandle { position, .. } => *position,
-            SemanticError::CustomTagResolutionFailed { position, .. } => *position,
-            SemanticError::UnknownCustomTag { position, .. } => *position,
-            SemanticError::InvalidDocumentStructure { position, .. } => *position,
-            SemanticError::TypeMismatch { position, .. } => *position,
-            SemanticError::ValueValidationFailed { position, .. } => *position,
-            SemanticError::ReferenceTrackingError { position, .. } => *position,
-            SemanticError::AnchorRegistrationFailed { position, .. } => *position,
-            SemanticError::ValidationError { position, .. } => *position,
-            SemanticError::InternalError { position, .. } => *position,
-            SemanticError::ConflictingAnchor { first_position, .. } => *first_position,
-            SemanticError::ValidationFailure { position, .. } => *position,
-            SemanticError::MaxDepthExceeded { .. } => Position::default(),
+            Self::InvalidTagHandle { position, .. } => *position,
+            Self::UnknownTag { position, .. } => *position,
+            Self::TagResolutionFailed { position, .. } => *position,
+            Self::ValidationDepthExceeded { position, .. } => *position,
+            Self::UnknownTagHandle { position, .. } => *position,
+            Self::CustomTagResolutionFailed { position, .. } => *position,
+            Self::UnknownCustomTag { position, .. } => *position,
+            Self::InvalidDocumentStructure { position, .. } => *position,
+            Self::TypeMismatch { position, .. } => *position,
+            Self::ValueValidationFailed { position, .. } => *position,
+            Self::ReferenceTrackingError { position, .. } => *position,
+            Self::AnchorRegistrationFailed { position, .. } => *position,
+            Self::ValidationError { position, .. } => *position,
+            Self::InternalError { position, .. } => *position,
+            Self::ConflictingAnchor { first_position, .. } => *first_position,
+            Self::ValidationFailure { position, .. } => *position,
+            Self::MaxDepthExceeded { .. } => Position::default(),
         }
     }
 
     /// Get human-readable error message
+    #[must_use] 
     pub fn message(&self) -> String {
         match self {
-            SemanticError::UnresolvedAlias { alias_name, .. } => {
+            Self::UnresolvedAlias { alias_name, .. } => {
                 format!("Unresolved alias reference: '{alias_name}'")
             }
-            SemanticError::CircularReference {
+            Self::CircularReference {
                 alias_name, path, ..
             } => {
-                format!(
-                    "Circular reference detected for alias '{alias_name}' at path '{path}'"
-                )
+                format!("Circular reference detected for alias '{alias_name}' at path '{path}'")
             }
-            SemanticError::DuplicateAnchor {
+            Self::DuplicateAnchor {
                 anchor_name,
                 first_position,
                 ..
@@ -152,82 +152,79 @@ impl SemanticError {
                     anchor_name, first_position.line, first_position.column
                 )
             }
-            SemanticError::InvalidTagHandle { handle, .. } => {
+            Self::InvalidTagHandle { handle, .. } => {
                 format!("Invalid tag handle: '{handle}'")
             }
-            SemanticError::UnknownTag { tag, .. } => {
+            Self::UnknownTag { tag, .. } => {
                 format!("Unknown tag: '{tag}'")
             }
-            SemanticError::TagResolutionFailed { tag, reason, .. } => {
+            Self::TagResolutionFailed { tag, reason, .. } => {
                 format!("Failed to resolve tag '{tag}': {reason}")
             }
-            SemanticError::ValidationDepthExceeded {
+            Self::ValidationDepthExceeded {
                 max_depth,
                 current_depth,
                 ..
             } => {
-                format!(
-                    "Validation depth exceeded: {current_depth} > {max_depth} (maximum)"
-                )
+                format!("Validation depth exceeded: {current_depth} > {max_depth} (maximum)")
             }
-            SemanticError::UnknownTagHandle { handle, .. } => {
+            Self::UnknownTagHandle { handle, .. } => {
                 format!("Unknown tag handle: '{handle}'")
             }
-            SemanticError::CustomTagResolutionFailed { tag, error, .. } => {
+            Self::CustomTagResolutionFailed { tag, error, .. } => {
                 format!("Custom tag resolution failed for '{tag}': {error}")
             }
-            SemanticError::UnknownCustomTag { tag, .. } => {
+            Self::UnknownCustomTag { tag, .. } => {
                 format!("Unknown custom tag: '{tag}'")
             }
-            SemanticError::InvalidDocumentStructure { reason, .. } => {
+            Self::InvalidDocumentStructure { reason, .. } => {
                 format!("Invalid document structure: {reason}")
             }
-            SemanticError::TypeMismatch {
+            Self::TypeMismatch {
                 expected, actual, ..
             } => {
                 format!("Type mismatch: expected '{expected}', found '{actual}'")
             }
-            SemanticError::ValueValidationFailed {
+            Self::ValueValidationFailed {
                 value, constraint, ..
             } => {
                 format!("Value '{value}' failed validation: {constraint}")
             }
-            SemanticError::ReferenceTrackingError { reason, .. } => {
+            Self::ReferenceTrackingError { reason, .. } => {
                 format!("Reference tracking error: {reason}")
             }
-            SemanticError::AnchorRegistrationFailed {
+            Self::AnchorRegistrationFailed {
                 anchor_name,
                 reason,
                 ..
             } => {
                 format!("Failed to register anchor '{anchor_name}': {reason}")
             }
-            SemanticError::ValidationError { message, .. } => {
+            Self::ValidationError { message, .. } => {
                 format!("Validation error: {message}")
             }
-            SemanticError::InternalError { message, .. } => {
+            Self::InternalError { message, .. } => {
                 format!("Internal error: {message}")
             }
-            SemanticError::ConflictingAnchor { anchor_name, .. } => {
+            Self::ConflictingAnchor { anchor_name, .. } => {
                 format!("Conflicting anchor definition: '{anchor_name}'")
             }
-            SemanticError::ValidationFailure { message, rule, .. } => {
+            Self::ValidationFailure { message, rule, .. } => {
                 format!("Validation rule '{rule}' failed: {message}")
             }
-            SemanticError::MaxDepthExceeded {
+            Self::MaxDepthExceeded {
                 max_depth,
                 current_path,
             } => {
-                format!(
-                    "Maximum depth {max_depth} exceeded at path: {current_path:?}"
-                )
+                format!("Maximum depth {max_depth} exceeded at path: {current_path:?}")
             }
         }
     }
 
     /// Create an unresolved alias error
     #[inline]
-    pub fn unresolved_alias(alias_name: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn unresolved_alias(alias_name: String, position: Position) -> Self {
         Self::UnresolvedAlias {
             alias_name,
             position,
@@ -236,7 +233,8 @@ impl SemanticError {
 
     /// Create a circular reference error
     #[inline]
-    pub fn circular_reference(alias_name: String, path: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn circular_reference(alias_name: String, path: String, position: Position) -> Self {
         Self::CircularReference {
             alias_name,
             path,
@@ -246,7 +244,8 @@ impl SemanticError {
 
     /// Create a duplicate anchor error
     #[inline]
-    pub fn duplicate_anchor(
+    #[must_use] 
+    pub const fn duplicate_anchor(
         anchor_name: String,
         first_position: Position,
         duplicate_position: Position,
@@ -260,19 +259,22 @@ impl SemanticError {
 
     /// Create an invalid tag handle error
     #[inline]
-    pub fn invalid_tag_handle(handle: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn invalid_tag_handle(handle: String, position: Position) -> Self {
         Self::InvalidTagHandle { handle, position }
     }
 
     /// Create an unknown tag error
     #[inline]
-    pub fn unknown_tag(tag: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn unknown_tag(tag: String, position: Position) -> Self {
         Self::UnknownTag { tag, position }
     }
 
     /// Create a tag resolution failed error
     #[inline]
-    pub fn tag_resolution_failed(tag: String, reason: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn tag_resolution_failed(tag: String, reason: String, position: Position) -> Self {
         Self::TagResolutionFailed {
             tag,
             reason,
@@ -282,7 +284,8 @@ impl SemanticError {
 
     /// Create a validation depth exceeded error
     #[inline]
-    pub fn validation_depth_exceeded(
+    #[must_use] 
+    pub const fn validation_depth_exceeded(
         max_depth: usize,
         current_depth: usize,
         position: Position,
@@ -296,13 +299,15 @@ impl SemanticError {
 
     /// Create an unknown tag handle error
     #[inline]
-    pub fn unknown_tag_handle(handle: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn unknown_tag_handle(handle: String, position: Position) -> Self {
         Self::UnknownTagHandle { handle, position }
     }
 
     /// Create a custom tag resolution failed error
     #[inline]
-    pub fn custom_tag_resolution_failed(tag: String, error: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn custom_tag_resolution_failed(tag: String, error: String, position: Position) -> Self {
         Self::CustomTagResolutionFailed {
             tag,
             error,
@@ -312,19 +317,22 @@ impl SemanticError {
 
     /// Create an unknown custom tag error
     #[inline]
-    pub fn unknown_custom_tag(tag: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn unknown_custom_tag(tag: String, position: Position) -> Self {
         Self::UnknownCustomTag { tag, position }
     }
 
     /// Create an invalid document structure error
     #[inline]
-    pub fn invalid_document_structure(reason: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn invalid_document_structure(reason: String, position: Position) -> Self {
         Self::InvalidDocumentStructure { reason, position }
     }
 
     /// Create a type mismatch error
     #[inline]
-    pub fn type_mismatch(expected: String, actual: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn type_mismatch(expected: String, actual: String, position: Position) -> Self {
         Self::TypeMismatch {
             expected,
             actual,
@@ -334,7 +342,8 @@ impl SemanticError {
 
     /// Create a value validation failed error
     #[inline]
-    pub fn value_validation_failed(value: String, constraint: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn value_validation_failed(value: String, constraint: String, position: Position) -> Self {
         Self::ValueValidationFailed {
             value,
             constraint,
@@ -344,13 +353,15 @@ impl SemanticError {
 
     /// Create a reference tracking error
     #[inline]
-    pub fn reference_tracking_error(reason: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn reference_tracking_error(reason: String, position: Position) -> Self {
         Self::ReferenceTrackingError { reason, position }
     }
 
     /// Create an anchor registration failed error
     #[inline]
-    pub fn anchor_registration_failed(
+    #[must_use] 
+    pub const fn anchor_registration_failed(
         anchor_name: String,
         reason: String,
         position: Position,
@@ -364,7 +375,8 @@ impl SemanticError {
 
     /// Create a validation error
     #[inline]
-    pub fn validation_error(message: String, position: Position) -> Self {
+    #[must_use] 
+    pub const fn validation_error(message: String, position: Position) -> Self {
         Self::ValidationError { message, position }
     }
 }

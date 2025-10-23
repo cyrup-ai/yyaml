@@ -80,7 +80,11 @@ fn test_borrowed() {
         - 'single quoted'
         - \"double quoted\"
     "};
-    let expected = vec!["plain nonàscii".to_string(), "single quoted".to_string(), "double quoted".to_string()];
+    let expected = vec![
+        "plain nonàscii".to_string(),
+        "single quoted".to_string(),
+        "double quoted".to_string(),
+    ];
     test_de_no_value(yaml, &expected);
 }
 

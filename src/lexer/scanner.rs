@@ -28,6 +28,7 @@ pub struct Scanner<'input> {
 impl<'input> Scanner<'input> {
     /// Create a new scanner for the given input
     #[inline]
+    #[must_use] 
     pub fn new(input: &'input str) -> Self {
         let normalized = normalization::remove_bom(input);
         Self {
@@ -56,7 +57,7 @@ impl<'input> Scanner<'input> {
         if indent == 0 {
             return true;
         }
-        
+
         // If we have established indentation levels, check consistency
         if let Some(&min_indent) = self.indent_stack.iter().filter(|&&x| x > 0).min() {
             // YAML allows any multiple of the smallest established indentation
@@ -157,14 +158,14 @@ impl<'input> Scanner<'input> {
             '.' => self.scan_dot_or_document_end(position),
 
             // Flow collection delimiters
-            '[' => self.scan_single_char(TokenKind::FlowSequenceStart, position),
-            ']' => self.scan_single_char(TokenKind::FlowSequenceEnd, position),
-            '{' => self.scan_single_char(TokenKind::FlowMappingStart, position),
-            '}' => self.scan_single_char(TokenKind::FlowMappingEnd, position),
-            ',' => self.scan_single_char(TokenKind::FlowEntry, position),
+            '[' => Ok(self.scan_single_char(TokenKind::FlowSequenceStart, position)),
+            ']' => Ok(self.scan_single_char(TokenKind::FlowSequenceEnd, position)),
+            '{' => Ok(self.scan_single_char(TokenKind::FlowMappingStart, position)),
+            '}' => Ok(self.scan_single_char(TokenKind::FlowMappingEnd, position)),
+            ',' => Ok(self.scan_single_char(TokenKind::FlowEntry, position)),
 
             // Key-value indicators
-            '?' => self.scan_single_char(TokenKind::Key, position),
+            '?' => Ok(self.scan_single_char(TokenKind::Key, position)),
             ':' => self.scan_colon(position),
 
             // Anchors and aliases
@@ -186,7 +187,7 @@ impl<'input> Scanner<'input> {
             '>' => self.scan_folded_scalar(position),
 
             // Line breaks
-            '\n' | '\r' => self.scan_line_break(position),
+            '\n' | '\r' => Ok(self.scan_line_break(position)),
 
             // Plain scalars and everything else
             _ => self.scan_plain_scalar(position),
@@ -296,7 +297,7 @@ impl<'input> Scanner<'input> {
                 Ok(Token::new(TokenKind::BlockEntry, start_pos, 1))
             } else {
                 // Part of a plain scalar
-                self.scan_plain_scalar_from_dash(position, start_pos)
+                Ok(self.scan_plain_scalar_from_dash(position, start_pos))
             }
         }
     }
@@ -324,7 +325,7 @@ impl<'input> Scanner<'input> {
         &mut self,
         kind: TokenKind<'input>,
         position: &mut PositionTracker,
-    ) -> Result<Token<'input>, LexError> {
+    ) -> Token<'input> {
         let start_pos = position.current();
         self.consume_char(position);
 
@@ -341,7 +342,7 @@ impl<'input> Scanner<'input> {
             _ => {}
         }
 
-        Ok(Token::new(kind, start_pos, 1))
+        Token::new(kind, start_pos, 1)
     }
 
     /// Scan colon (value indicator)
@@ -354,7 +355,7 @@ impl<'input> Scanner<'input> {
             Ok(Token::new(TokenKind::Value, start_pos, 1))
         } else {
             // Part of a plain scalar
-            self.scan_plain_scalar_from_colon(position, start_pos)
+            Ok(self.scan_plain_scalar_from_colon(position, start_pos))
         }
     }
 
@@ -431,7 +432,7 @@ impl<'input> Scanner<'input> {
             (None, Cow::Borrowed(tag))
         } else {
             // Named tag or shorthand
-            self.scan_named_tag(position)?
+            self.scan_named_tag(position)
         };
 
         let length = position.current().byte_offset - start_pos.byte_offset;
@@ -475,7 +476,7 @@ impl<'input> Scanner<'input> {
     fn scan_named_tag(
         &mut self,
         position: &mut PositionTracker,
-    ) -> Result<(Option<Cow<'input, str>>, Cow<'input, str>), LexError> {
+    ) -> (Option<Cow<'input, str>>, Cow<'input, str>) {
         let start_offset = self.current_offset;
 
         // Scan tag characters
@@ -493,13 +494,13 @@ impl<'input> Scanner<'input> {
         if let Some(exclamation_pos) = tag_content.find('!') {
             let handle = &tag_content[..exclamation_pos + 1];
             let suffix = &tag_content[exclamation_pos + 1..];
-            Ok((Some(Cow::Borrowed(handle)), Cow::Borrowed(suffix)))
+            (Some(Cow::Borrowed(handle)), Cow::Borrowed(suffix))
         } else {
             // Simple tag or secondary tag
             if tag_content.is_empty() {
-                Ok((None, Cow::Borrowed("!")))
+                (None, Cow::Borrowed("!"))
             } else {
-                Ok((None, Cow::Borrowed(tag_content)))
+                (None, Cow::Borrowed(tag_content))
             }
         }
     }
@@ -542,7 +543,7 @@ impl<'input> Scanner<'input> {
             }
             _ => {
                 self.skip_spaces(position);
-                let value = self.scan_directive_value(position)?;
+                let value = self.scan_directive_value(position);
                 let length = position.current().byte_offset - start_pos.byte_offset;
 
                 Ok(Token::new(
@@ -635,7 +636,7 @@ impl<'input> Scanner<'input> {
     ) -> Result<(&'input str, &'input str), LexError> {
         let handle = self.scan_tag_handle(position)?;
         self.skip_spaces(position);
-        let prefix = self.scan_tag_prefix(position)?;
+        let prefix = self.scan_tag_prefix(position);
         Ok((handle, prefix))
     }
 
@@ -668,7 +669,7 @@ impl<'input> Scanner<'input> {
     }
 
     /// Scan tag prefix
-    fn scan_tag_prefix(&mut self, position: &mut PositionTracker) -> Result<&'input str, LexError> {
+    fn scan_tag_prefix(&mut self, position: &mut PositionTracker) -> &'input str {
         let start_offset = self.current_offset;
 
         while let Some(&ch) = self.chars.peek() {
@@ -680,14 +681,14 @@ impl<'input> Scanner<'input> {
         }
 
         let end_offset = self.current_offset;
-        Ok(&self.input[start_offset..end_offset])
+        &self.input[start_offset..end_offset]
     }
 
     /// Scan directive value
     fn scan_directive_value(
         &mut self,
         position: &mut PositionTracker,
-    ) -> Result<&'input str, LexError> {
+    ) -> &'input str {
         let start_offset = self.current_offset;
 
         while let Some(&ch) = self.chars.peek() {
@@ -698,7 +699,7 @@ impl<'input> Scanner<'input> {
         }
 
         let end_offset = self.current_offset;
-        Ok(&self.input[start_offset..end_offset])
+        &self.input[start_offset..end_offset]
     }
 
     /// Scan single-quoted string
@@ -808,11 +809,28 @@ impl<'input> Scanner<'input> {
         let start_pos = position.current();
         self.consume_char(position); // |
 
-        // TODO: Implement full literal scalar parsing with strip/keep/clip indicators
+        // Create scanner state from remaining characters
+        let remaining_chars: String = self.chars.clone().collect();
+        let mut scanner_state =
+            crate::scanner::state::ScannerState::from_lexer_input(remaining_chars.chars());
+
+        // Use existing scan_block_scalar function with literal=true
+        let content = crate::scanner::scalars::scan_block_scalar(&mut scanner_state, true)
+            .map_err(|_| LexError::new(LexErrorKind::UnterminatedString, start_pos))?;
+
+        // Advance lexer position to match scanner consumption
+        let remaining_input = scanner_state.into_remaining_input();
+        let consumed_chars = remaining_chars.len() - remaining_input.as_str().len();
+        for _ in 0..consumed_chars {
+            if self.chars.peek().is_some() {
+                self.consume_char(position);
+            }
+        }
+
         let length = position.current().byte_offset - start_pos.byte_offset;
         Ok(Token::new(
             TokenKind::Scalar {
-                value: Cow::Borrowed(""),
+                value: Cow::Owned(content),
                 style: ScalarStyle::Literal,
                 tag: None,
             },
@@ -829,11 +847,28 @@ impl<'input> Scanner<'input> {
         let start_pos = position.current();
         self.consume_char(position); // >
 
-        // TODO: Implement full folded scalar parsing with strip/keep/clip indicators
+        // Create scanner state from remaining characters
+        let remaining_chars: String = self.chars.clone().collect();
+        let mut scanner_state =
+            crate::scanner::state::ScannerState::from_lexer_input(remaining_chars.chars());
+
+        // Use existing scan_block_scalar function with literal=false
+        let content = crate::scanner::scalars::scan_block_scalar(&mut scanner_state, false)
+            .map_err(|_| LexError::new(LexErrorKind::UnterminatedString, start_pos))?;
+
+        // Advance lexer position to match scanner consumption
+        let remaining_input = scanner_state.into_remaining_input();
+        let consumed_chars = remaining_chars.len() - remaining_input.as_str().len();
+        for _ in 0..consumed_chars {
+            if self.chars.peek().is_some() {
+                self.consume_char(position);
+            }
+        }
+
         let length = position.current().byte_offset - start_pos.byte_offset;
         Ok(Token::new(
             TokenKind::Scalar {
-                value: Cow::Borrowed(""),
+                value: Cow::Owned(content),
                 style: ScalarStyle::Folded,
                 tag: None,
             },
@@ -846,7 +881,7 @@ impl<'input> Scanner<'input> {
     fn scan_line_break(
         &mut self,
         position: &mut PositionTracker,
-    ) -> Result<Token<'input>, LexError> {
+    ) -> Token<'input> {
         let start_pos = position.current();
 
         if self.check_char('\r') {
@@ -858,7 +893,7 @@ impl<'input> Scanner<'input> {
             self.consume_char(position); // \n
         }
 
-        Ok(Token::new(TokenKind::LineBreak, start_pos, 1))
+        Token::new(TokenKind::LineBreak, start_pos, 1)
     }
 
     /// Scan plain scalar
@@ -871,12 +906,13 @@ impl<'input> Scanner<'input> {
 
         // Check if first character can start a plain scalar
         if let Some(&ch) = self.chars.peek()
-            && !chars::can_start_plain_scalar(ch) {
-                return Err(LexError::new(
-                    LexErrorKind::UnexpectedCharacter(format!("unexpected character '{ch}'")),
-                    start_pos,
-                ));
-            }
+            && !chars::can_start_plain_scalar(ch)
+        {
+            return Err(LexError::new(
+                LexErrorKind::UnexpectedCharacter(format!("unexpected character '{ch}'")),
+                start_pos,
+            ));
+        }
 
         // Scan plain scalar content
         while let Some(&ch) = self.chars.peek() {
@@ -914,7 +950,7 @@ impl<'input> Scanner<'input> {
         &mut self,
         position: &mut PositionTracker,
         start_pos: Position,
-    ) -> Result<Token<'input>, LexError> {
+    ) -> Token<'input> {
         let start_offset = start_pos.byte_offset;
 
         // Continue scanning the rest of the plain scalar
@@ -930,7 +966,7 @@ impl<'input> Scanner<'input> {
         let value = &self.input[start_offset..end_offset];
         let length = end_offset - start_offset;
 
-        Ok(Token::new(
+        Token::new(
             TokenKind::Scalar {
                 value: Cow::Borrowed(value),
                 style: ScalarStyle::Plain,
@@ -938,7 +974,7 @@ impl<'input> Scanner<'input> {
             },
             start_pos,
             length,
-        ))
+        )
     }
 
     /// Scan plain scalar starting with colon
@@ -946,7 +982,7 @@ impl<'input> Scanner<'input> {
         &mut self,
         position: &mut PositionTracker,
         start_pos: Position,
-    ) -> Result<Token<'input>, LexError> {
+    ) -> Token<'input> {
         let start_offset = start_pos.byte_offset;
 
         // Continue scanning the rest of the plain scalar
@@ -962,7 +998,7 @@ impl<'input> Scanner<'input> {
         let value = &self.input[start_offset..end_offset];
         let length = end_offset - start_offset;
 
-        Ok(Token::new(
+        Token::new(
             TokenKind::Scalar {
                 value: Cow::Borrowed(value),
                 style: ScalarStyle::Plain,
@@ -970,7 +1006,7 @@ impl<'input> Scanner<'input> {
             },
             start_pos,
             length,
-        ))
+        )
     }
 
     /// Consume one character and update position

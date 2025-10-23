@@ -10,8 +10,9 @@ impl Default for YamlSerializer {
 }
 
 impl YamlSerializer {
-    pub fn new() -> Self {
-        YamlSerializer
+    #[must_use] 
+    pub const fn new() -> Self {
+        Self
     }
 }
 

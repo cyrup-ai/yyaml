@@ -6,7 +6,6 @@
 
 use indoc::indoc;
 use serde::{Deserialize, Serialize};
-use serde::de::IntoDeserializer;
 use yyaml::{Number, Value};
 
 #[test]

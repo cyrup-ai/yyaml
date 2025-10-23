@@ -3,7 +3,7 @@ use yyaml::YamlLoader;
 fn main() {
     let s = "key: value";
     println!("Trying to parse: {s:?}");
-    
+
     let result = YamlLoader::load_from_str(s);
     match result {
         Ok(docs) => {

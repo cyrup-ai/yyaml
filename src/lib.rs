@@ -33,7 +33,7 @@ pub use value::{Deserializer, Mapping, Number, Sequence, Value, from_value};
 pub use yaml::Yaml;
 
 /// Deserialize an instance of type T from a string of YAML text.
-/// 
+///
 /// This is the standard serde_yaml API function for drop-in compatibility.
 pub fn from_str<T>(s: &str) -> Result<T, Error>
 where
@@ -44,7 +44,9 @@ where
         return Err(Error::Custom("No YAML documents found".to_string()));
     }
     if docs.len() > 1 {
-        return Err(Error::Custom("Multiple YAML documents found, expected one".to_string()));
+        return Err(Error::Custom(
+            "Multiple YAML documents found, expected one".to_string(),
+        ));
     }
     let yaml = &docs[0];
     let value = Value::from_yaml(yaml);
@@ -70,22 +72,23 @@ impl Error {
     /// Blazing-fast constructor for repetition limit exceeded error.
     /// Zero-allocation construction for hot path error handling.
     #[inline(always)]
+    #[must_use] 
     pub const fn repetition_limit_exceeded() -> Self {
-        Error::RepetitionLimitExceeded
+        Self::RepetitionLimitExceeded
     }
 }
 
 impl serde::de::Error for Error {
     #[inline]
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
-        Error::Custom(msg.to_string())
+        Self::Custom(msg.to_string())
     }
 }
 
 impl serde::ser::Error for Error {
     #[inline]
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
-        Error::Custom(msg.to_string())
+        Self::Custom(msg.to_string())
     }
 }
 
@@ -220,26 +223,24 @@ nulltest: ~";
         let s = "[1, 2, 3]";
         let result = YamlLoader::load_from_str(s);
         match result {
-            Ok(docs) => {
-                match docs[0].as_vec() {
-                    Some(arr) => {
-                        assert_eq!(arr.len(), 3);
-                        match arr[0].as_i64() {
-                            Some(i) => assert_eq!(i, 1),
-                            None => panic!("Expected integer value for arr[0]"),
-                        }
-                        match arr[1].as_i64() {
-                            Some(i) => assert_eq!(i, 2),
-                            None => panic!("Expected integer value for arr[1]"),
-                        }
-                        match arr[2].as_i64() {
-                            Some(i) => assert_eq!(i, 3),
-                            None => panic!("Expected integer value for arr[2]"),
-                        }
+            Ok(docs) => match docs[0].as_vec() {
+                Some(arr) => {
+                    assert_eq!(arr.len(), 3);
+                    match arr[0].as_i64() {
+                        Some(i) => assert_eq!(i, 1),
+                        None => panic!("Expected integer value for arr[0]"),
                     }
-                    None => panic!("Expected vector value"),
+                    match arr[1].as_i64() {
+                        Some(i) => assert_eq!(i, 2),
+                        None => panic!("Expected integer value for arr[1]"),
+                    }
+                    match arr[2].as_i64() {
+                        Some(i) => assert_eq!(i, 3),
+                        None => panic!("Expected integer value for arr[2]"),
+                    }
                 }
-            }
+                None => panic!("Expected vector value"),
+            },
             Err(e) => {
                 panic!("Flow sequence parsing failed: {e}");
             }
@@ -272,8 +273,9 @@ nulltest: ~";
     #[test]
     fn test_fluent_ai_models_yaml_integration() {
         // Integration test: Download and parse real models.yaml from fluent-ai project
-        let models_yaml_url = "https://raw.githubusercontent.com/cyrup-ai/fluent-ai/main/provider/models.yaml";
-        
+        let models_yaml_url =
+            "https://raw.githubusercontent.com/cyrup-ai/fluent-ai/main/provider/models.yaml";
+
         // Download the real models.yaml file
         let rt = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
@@ -289,37 +291,33 @@ nulltest: ~";
                 Err(e) => panic!("Failed to read models.yaml content: {e}"),
             }
         });
-        
-        println!("Downloaded models.yaml: {} bytes", yaml_content.len());
-        
-        // Handle 404 errors gracefully - skip test if URL is not available  
+
+        // Handle 404 errors gracefully - skip test if URL is not available
         if yaml_content.contains("404") && yaml_content.len() < 50 {
-            println!("⚠️ Skipping test - URL returned 404 error");
             return;
         }
-        
+
         // Parse the real YAML content using yyaml
         let result = YamlLoader::load_from_str(&yaml_content);
         match result {
             Ok(docs) => {
                 assert!(!docs.is_empty(), "Expected at least one YAML document");
-                println!("Successfully parsed {} YAML document(s)", docs.len());
-                
-                // Inspect actual structure - MUST be an array  
+
+                // Inspect actual structure - MUST be an array
                 let root_doc = &docs[0];
-                println!("Root document type: {root_doc:?}");
-                
+
                 // CRITICAL: The YAML MUST be parsed as an array, not as an object
-                let providers = root_doc.as_vec().expect("YAML must be parsed as an array, not as an object with keys like '- provider'");
+                let providers = root_doc.as_vec().expect(
+                    "YAML must be parsed as an array, not as an object with keys like '- provider'",
+                );
                 assert!(!providers.is_empty(), "Expected at least one provider");
-                println!("Found {} provider(s) in models.yaml (array format)", providers.len());
-                
+
                 // Validate first provider has expected structure
                 let first_provider = &providers[0];
-                if let Some(provider_name) = first_provider["provider"].as_str() {
-                    println!("First provider: '{provider_name}'");
+                if first_provider["provider"].as_str().is_some() {
+                    // Provider name exists as expected
                 } else {
-                    println!("First provider structure: {first_provider:?}");
+                    // Structure validation
                 }
             }
             Err(e) => {
@@ -328,4 +326,3 @@ nulltest: ~";
         }
     }
 }
-

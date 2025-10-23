@@ -164,6 +164,7 @@ pub type TypeResolverFn = fn(&str) -> Option<YamlType>;
 impl YamlType {
     /// Create tag resolution failed error with zero allocation where possible
     #[inline]
+    #[must_use] 
     pub fn tag_resolution_failed_error(
         tag: &str,
         message: &'static str,
@@ -178,6 +179,7 @@ impl YamlType {
 
     /// Create unknown tag error with zero allocation where possible
     #[inline]
+    #[must_use] 
     pub fn unknown_tag_error(tag: &str, position: Position) -> SemanticError {
         SemanticError::UnknownTag {
             tag: tag.to_string(),
@@ -187,6 +189,7 @@ impl YamlType {
 
     /// Create unknown custom tag error with zero allocation where possible
     #[inline]
+    #[must_use] 
     pub fn unknown_custom_tag_error(tag: &str, position: Position) -> SemanticError {
         SemanticError::UnknownCustomTag {
             tag: tag.to_string(),
@@ -196,6 +199,7 @@ impl YamlType {
 
     /// Create unknown tag handle error with zero allocation where possible
     #[inline]
+    #[must_use] 
     pub fn unknown_tag_handle_error(handle: &str, position: Position) -> SemanticError {
         SemanticError::UnknownTagHandle {
             handle: handle.to_string(),
@@ -205,6 +209,7 @@ impl YamlType {
 
     /// Create custom tag resolution failed error with zero allocation where possible
     #[inline]
+    #[must_use] 
     pub fn custom_tag_resolution_failed_error(
         tag: &str,
         message: &str,
@@ -242,20 +247,21 @@ pub struct TagMetrics {
 impl Default for SchemaType {
     #[inline]
     fn default() -> Self {
-        SchemaType::Core
+        Self::Core
     }
 }
 
 impl Default for YamlType {
     #[inline]
     fn default() -> Self {
-        YamlType::Unknown
+        Self::Unknown
     }
 }
 
 impl<'input> ResolvedTag<'input> {
     /// Create a new resolved tag
     #[inline]
+    #[must_use] 
     pub fn new(
         full_tag: String,
         local_tag: Cow<'input, str>,
@@ -280,22 +286,24 @@ impl<'input> ResolvedTag<'input> {
 
     /// Mark this tag as accessed (for statistics)
     #[inline]
-    pub fn mark_accessed(&mut self) {
+    pub const fn mark_accessed(&mut self) {
         self.access_count += 1;
     }
 
     /// Check if this tag is frequently used
     #[inline]
-    pub fn is_frequent(&self) -> bool {
+    #[must_use] 
+    pub const fn is_frequent(&self) -> bool {
         self.access_count > 10
     }
 }
 
 impl TagValidationWarning {
     /// Get warning message for display
+    #[must_use] 
     pub fn message(&self) -> String {
         match self {
-            TagValidationWarning::DeprecatedTag {
+            Self::DeprecatedTag {
                 tag, replacement, ..
             } => {
                 if let Some(repl) = replacement {
@@ -304,7 +312,7 @@ impl TagValidationWarning {
                     format!("Tag '{tag}' is deprecated.")
                 }
             }
-            TagValidationWarning::UnknownTag {
+            Self::UnknownTag {
                 tag, suggestion, ..
             } => {
                 if let Some(sugg) = suggestion {
@@ -313,7 +321,7 @@ impl TagValidationWarning {
                     format!("Unknown tag '{tag}'.")
                 }
             }
-            TagValidationWarning::AmbiguousResolution {
+            Self::AmbiguousResolution {
                 tag, candidates, ..
             } => {
                 format!(
@@ -322,47 +330,45 @@ impl TagValidationWarning {
                     candidates.join(", ")
                 )
             }
-            TagValidationWarning::InvalidFormat {
+            Self::InvalidFormat {
                 tag,
                 expected_format,
                 ..
             } => {
-                format!(
-                    "Invalid tag format '{tag}'. Expected format: {expected_format}"
-                )
+                format!("Invalid tag format '{tag}'. Expected format: {expected_format}")
             }
-            TagValidationWarning::ConflictingDefinition {
+            Self::ConflictingDefinition {
                 tag,
                 existing_definition,
                 ..
             } => {
-                format!(
-                    "Conflicting definition for tag '{tag}'. Existing: {existing_definition}"
-                )
+                format!("Conflicting definition for tag '{tag}'. Existing: {existing_definition}")
             }
         }
     }
 
     /// Get warning position
-    pub fn position(&self) -> Position {
+    #[must_use] 
+    pub const fn position(&self) -> Position {
         match self {
-            TagValidationWarning::DeprecatedTag { position, .. }
-            | TagValidationWarning::UnknownTag { position, .. }
-            | TagValidationWarning::AmbiguousResolution { position, .. }
-            | TagValidationWarning::InvalidFormat { position, .. }
-            | TagValidationWarning::ConflictingDefinition { position, .. } => *position,
+            Self::DeprecatedTag { position, .. }
+            | Self::UnknownTag { position, .. }
+            | Self::AmbiguousResolution { position, .. }
+            | Self::InvalidFormat { position, .. }
+            | Self::ConflictingDefinition { position, .. } => *position,
         }
     }
 
     /// Get warning severity level
     #[inline]
-    pub fn severity(&self) -> WarningSeverity {
+    #[must_use] 
+    pub const fn severity(&self) -> WarningSeverity {
         match self {
-            TagValidationWarning::DeprecatedTag { .. } => WarningSeverity::Warning,
-            TagValidationWarning::UnknownTag { .. } => WarningSeverity::Error,
-            TagValidationWarning::AmbiguousResolution { .. } => WarningSeverity::Error,
-            TagValidationWarning::InvalidFormat { .. } => WarningSeverity::Error,
-            TagValidationWarning::ConflictingDefinition { .. } => WarningSeverity::Error,
+            Self::DeprecatedTag { .. } => WarningSeverity::Warning,
+            Self::UnknownTag { .. } => WarningSeverity::Error,
+            Self::AmbiguousResolution { .. } => WarningSeverity::Error,
+            Self::InvalidFormat { .. } => WarningSeverity::Error,
+            Self::ConflictingDefinition { .. } => WarningSeverity::Error,
         }
     }
 }
@@ -411,52 +417,56 @@ impl Default for TagMetrics {
 impl YamlType {
     /// Check if this is a scalar type
     #[inline]
-    pub fn is_scalar(&self) -> bool {
+    #[must_use] 
+    pub const fn is_scalar(&self) -> bool {
         matches!(
             self,
-            YamlType::Null
-                | YamlType::Bool
-                | YamlType::Int
-                | YamlType::Float
-                | YamlType::Str
-                | YamlType::Binary
-                | YamlType::Timestamp
+            Self::Null
+                | Self::Bool
+                | Self::Int
+                | Self::Float
+                | Self::Str
+                | Self::Binary
+                | Self::Timestamp
         )
     }
 
     /// Check if this is a collection type
     #[inline]
-    pub fn is_collection(&self) -> bool {
+    #[must_use] 
+    pub const fn is_collection(&self) -> bool {
         matches!(
             self,
-            YamlType::Seq | YamlType::Map | YamlType::Set | YamlType::Omap | YamlType::Pairs
+            Self::Seq | Self::Map | Self::Set | Self::Omap | Self::Pairs
         )
     }
 
     /// Check if this is a standard YAML 1.2 type
     #[inline]
-    pub fn is_standard(&self) -> bool {
-        !matches!(self, YamlType::Custom(_) | YamlType::Unknown)
+    #[must_use] 
+    pub const fn is_standard(&self) -> bool {
+        !matches!(self, Self::Custom(_) | Self::Unknown)
     }
 
     /// Get the standard tag URI for this type
-    pub fn standard_tag_uri(&self) -> Option<&'static str> {
+    #[must_use] 
+    pub const fn standard_tag_uri(&self) -> Option<&'static str> {
         match self {
-            YamlType::Null => Some("tag:yaml.org,2002:null"),
-            YamlType::Bool => Some("tag:yaml.org,2002:bool"),
-            YamlType::Int => Some("tag:yaml.org,2002:int"),
-            YamlType::Float => Some("tag:yaml.org,2002:float"),
-            YamlType::Str => Some("tag:yaml.org,2002:str"),
-            YamlType::Binary => Some("tag:yaml.org,2002:binary"),
-            YamlType::Timestamp => Some("tag:yaml.org,2002:timestamp"),
-            YamlType::Seq => Some("tag:yaml.org,2002:seq"),
-            YamlType::Map => Some("tag:yaml.org,2002:map"),
-            YamlType::Set => Some("tag:yaml.org,2002:set"),
-            YamlType::Omap => Some("tag:yaml.org,2002:omap"),
-            YamlType::Pairs => Some("tag:yaml.org,2002:pairs"),
-            YamlType::Merge => Some("tag:yaml.org,2002:merge"),
-            YamlType::Value => Some("tag:yaml.org,2002:value"),
-            YamlType::Custom(_) | YamlType::Unknown => None,
+            Self::Null => Some("tag:yaml.org,2002:null"),
+            Self::Bool => Some("tag:yaml.org,2002:bool"),
+            Self::Int => Some("tag:yaml.org,2002:int"),
+            Self::Float => Some("tag:yaml.org,2002:float"),
+            Self::Str => Some("tag:yaml.org,2002:str"),
+            Self::Binary => Some("tag:yaml.org,2002:binary"),
+            Self::Timestamp => Some("tag:yaml.org,2002:timestamp"),
+            Self::Seq => Some("tag:yaml.org,2002:seq"),
+            Self::Map => Some("tag:yaml.org,2002:map"),
+            Self::Set => Some("tag:yaml.org,2002:set"),
+            Self::Omap => Some("tag:yaml.org,2002:omap"),
+            Self::Pairs => Some("tag:yaml.org,2002:pairs"),
+            Self::Merge => Some("tag:yaml.org,2002:merge"),
+            Self::Value => Some("tag:yaml.org,2002:value"),
+            Self::Custom(_) | Self::Unknown => None,
         }
     }
 }

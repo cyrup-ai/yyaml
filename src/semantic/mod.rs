@@ -40,16 +40,19 @@ pub use validation::{
 };
 
 /// Default semantic analyzer instance with standard configuration
+#[must_use] 
 pub fn default_analyzer<'input>() -> SemanticAnalyzer<'input> {
     SemanticAnalyzer::new()
 }
 
 /// Create semantic analyzer optimized for speed
+#[must_use] 
 pub fn fast_analyzer<'input>() -> SemanticAnalyzer<'input> {
     SemanticAnalyzer::with_config(SemanticConfig::fast())
 }
 
 /// Create semantic analyzer optimized for strict validation
+#[must_use] 
 pub fn strict_analyzer<'input>() -> SemanticAnalyzer<'input> {
     SemanticAnalyzer::with_config(SemanticConfig::strict())
 }
@@ -74,8 +77,8 @@ pub fn analyze_document<'input>(
 mod tests {
     use super::*;
     use crate::lexer::Position;
-    use crate::parser::ast::{Document, Node, ScalarNode, Stream};
     use crate::lexer::ScalarStyle;
+    use crate::parser::ast::{Document, Node, ScalarNode, Stream};
 
     #[test]
     fn test_default_analyzer_creation() {

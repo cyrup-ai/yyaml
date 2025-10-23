@@ -4,6 +4,7 @@
 //! character classification, and buffer management with zero-allocation design.
 
 use crate::error::{Marker, ScanError};
+use crate::parser::character_productions::CharacterProductions;
 use crate::scanner::state::ScannerState;
 
 /// Skip whitespace and comments efficiently
@@ -13,8 +14,14 @@ pub fn skip_whitespace_and_comments<T: Iterator<Item = char>>(
 ) -> Result<(), ScanError> {
     loop {
         match state.peek_char() {
-            Ok(' ') | Ok('\t') => {
+            Ok(' ') => {
                 state.consume_char()?;
+            }
+            Ok('\t') => {
+                return Err(ScanError::new(
+                    state.mark(),
+                    "tabs are not allowed in YAML, use spaces for indentation",
+                ));
             }
             Ok('\n') | Ok('\r') => {
                 consume_line_break(state)?;
@@ -33,8 +40,19 @@ pub fn skip_whitespace_and_comments<T: Iterator<Item = char>>(
 pub fn skip_whitespace<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<(), ScanError> {
-    while matches!(state.peek_char(), Ok(' ') | Ok('\t')) {
-        state.consume_char()?;
+    loop {
+        match state.peek_char() {
+            Ok(' ') => {
+                state.consume_char()?;
+            }
+            Ok('\t') => {
+                return Err(ScanError::new(
+                    state.mark(),
+                    "tabs are not allowed in YAML, use spaces for indentation",
+                ));
+            }
+            _ => break,
+        }
     }
     Ok(())
 }
@@ -101,58 +119,39 @@ pub fn skip_to_next_line<T: Iterator<Item = char>>(
     Ok(())
 }
 
-/// Check if character is YAML whitespace
+/// Check if character is YAML whitespace - delegates to consolidated API
 #[inline]
-pub fn is_whitespace(ch: char) -> bool {
-    matches!(ch, ' ' | '\t')
+#[must_use] 
+pub const fn is_whitespace(ch: char) -> bool {
+    CharacterProductions::is_white(ch)
 }
 
-/// Check if character is line break
+/// Check if character is line break - delegates to consolidated API
 #[inline]
-pub fn is_line_break(ch: char) -> bool {
-    matches!(ch, '\n' | '\r')
+#[must_use] 
+pub const fn is_line_break(ch: char) -> bool {
+    CharacterProductions::is_break(ch)
 }
 
-/// Check if character is blank (whitespace or line break)
+/// Check if character is blank (whitespace or line break) - delegates to consolidated API
 #[inline]
-pub fn is_blank(ch: char) -> bool {
-    is_whitespace(ch) || is_line_break(ch)
+#[must_use] 
+pub const fn is_blank(ch: char) -> bool {
+    CharacterProductions::is_blank(ch)
 }
 
-/// Check if character can start a plain scalar
+/// Check if character can start a plain scalar - delegates to consolidated API
 #[inline]
-pub fn can_start_plain_scalar(ch: char) -> bool {
-    !matches!(
-        ch,
-        // Flow indicators
-        ',' | '[' | ']' | '{' | '}' |
-        // Key/value indicators
-        ':' | '?' |
-        // Anchor/alias indicators
-        '&' | '*' |
-        // Tag indicator
-        '!' |
-        // Comment indicator
-        '#' |
-        // Block scalar indicators
-        '|' | '>' |
-        // Quoted scalar indicators
-        '\'' | '"' |
-        // Document markers (context-dependent)
-        '-' | '.' |
-        // Directive indicator
-        '%' |
-        // Reserved indicators
-        '@' | '`' |
-        // Whitespace
-        ' ' | '\t' | '\n' | '\r'
-    )
+#[must_use] 
+pub const fn can_start_plain_scalar(ch: char) -> bool {
+    CharacterProductions::can_start_plain_scalar(ch)
 }
 
-/// Check if character can continue a plain scalar
+/// Check if character can continue a plain scalar - enhanced with flow context
 #[inline]
-pub fn can_continue_plain_scalar(ch: char, in_flow: bool) -> bool {
-    if is_blank(ch) {
+#[must_use] 
+pub const fn can_continue_plain_scalar(ch: char, in_flow: bool) -> bool {
+    if CharacterProductions::is_blank(ch) {
         return false;
     }
 
@@ -169,30 +168,25 @@ pub fn can_continue_plain_scalar(ch: char, in_flow: bool) -> bool {
 
 /// Check if character needs escaping in double-quoted strings
 #[inline]
-pub fn needs_escaping_in_double_quoted(ch: char) -> bool {
+#[must_use] 
+pub const fn needs_escaping_in_double_quoted(ch: char) -> bool {
     matches!(
         ch,
         '"' | '\\' | '\0'..='\x1F' | '\x7F' | '\u{85}' | '\u{A0}' | '\u{2028}' | '\u{2029}'
     )
 }
 
-/// Check if character is printable YAML character
+/// Check if character is printable YAML character - delegates to consolidated API
 #[inline]
+#[must_use] 
 pub fn is_printable(ch: char) -> bool {
-    match ch {
-        '\t' | '\n' | '\r' => true,
-        ch if (' '..='\u{7E}').contains(&ch) => true,
-        '\u{85}' => true,
-        ch if ('\u{A0}'..='\u{D7FF}').contains(&ch) => true,
-        ch if ('\u{E000}'..='\u{FFFD}').contains(&ch) => true,
-        ch if ('\u{10000}'..='\u{10FFFF}').contains(&ch) => true,
-        _ => false,
-    }
+    CharacterProductions::is_printable(ch)
 }
 
 /// Check if character is valid YAML identifier character
 #[inline]
-pub fn is_yaml_identifier_char(ch: char) -> bool {
+#[must_use] 
+pub const fn is_yaml_identifier_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-')
 }
 
@@ -283,9 +277,7 @@ pub fn expect_string<T: Iterator<Item = char>>(
             Ok(ch) => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!(
-                        "expected '{expected}' in {context} at position {i}, found '{ch}'"
-                    ),
+                    &format!("expected '{expected}' in {context} at position {i}, found '{ch}'"),
                 ));
             }
             Err(_) => {
@@ -317,6 +309,7 @@ pub fn at_end<T: Iterator<Item = char>>(state: &mut ScannerState<T>) -> bool {
 }
 
 /// Get current position info as string
+#[must_use] 
 pub fn position_info(marker: Marker) -> String {
     format!("line {}, column {}", marker.line, marker.col + 1)
 }
@@ -340,6 +333,7 @@ pub fn validate_char_in_set(
 }
 
 /// Normalize line endings to LF
+#[must_use] 
 pub fn normalize_line_endings(input: &str) -> String {
     if !input.contains('\r') {
         return input.to_string();
@@ -365,11 +359,13 @@ pub fn normalize_line_endings(input: &str) -> String {
 
 /// Count UTF-8 byte length of string slice
 #[inline]
-pub fn byte_length(s: &str) -> usize {
+#[must_use] 
+pub const fn byte_length(s: &str) -> usize {
     s.len()
 }
 
 /// Count Unicode grapheme clusters (user-perceived characters)
+#[must_use] 
 pub fn grapheme_count(s: &str) -> usize {
     // Simplified grapheme counting - in production would use unicode-segmentation crate
     s.chars().count()
@@ -384,6 +380,7 @@ pub struct StringBuilder {
 impl StringBuilder {
     /// Create new string builder with capacity hint
     #[inline]
+    #[must_use] 
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             buffer: String::with_capacity(capacity),
@@ -405,13 +402,15 @@ impl StringBuilder {
 
     /// Get current length
     #[inline]
-    pub fn len(&self) -> usize {
+    #[must_use] 
+    pub const fn len(&self) -> usize {
         self.buffer.len()
     }
 
     /// Check if empty
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.buffer.is_empty()
     }
 
@@ -423,12 +422,14 @@ impl StringBuilder {
 
     /// Convert to final string
     #[inline]
+    #[must_use] 
     pub fn into_string(self) -> String {
         self.buffer
     }
 
     /// Get string slice view
     #[inline]
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.buffer
     }

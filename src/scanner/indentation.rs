@@ -44,6 +44,7 @@ pub enum BlockType {
 impl IndentationTracker {
     /// Create new indentation tracker
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             levels: Vec::with_capacity(16),
@@ -62,18 +63,21 @@ impl IndentationTracker {
 
     /// Get current indentation level
     #[inline]
-    pub fn current_level(&self) -> i32 {
+    #[must_use] 
+    pub const fn current_level(&self) -> i32 {
         self.current_base
     }
 
     /// Check if at root level
     #[inline]
-    pub fn at_root_level(&self) -> bool {
+    #[must_use] 
+    pub const fn at_root_level(&self) -> bool {
         self.levels.is_empty()
     }
 
     /// Get current block type
     #[inline]
+    #[must_use] 
     pub fn current_block_type(&self) -> BlockType {
         self.levels
             .last()
@@ -136,6 +140,7 @@ impl IndentationTracker {
 
     /// Check if simple key is allowed at current level
     #[inline]
+    #[must_use] 
     pub fn simple_key_allowed(&self) -> bool {
         self.levels
             .last()
@@ -153,7 +158,8 @@ impl IndentationTracker {
 
     /// Check if column is valid for current context
     #[inline]
-    pub fn is_valid_column(&self, column: i32, block_type: BlockType) -> bool {
+    #[must_use] 
+    pub const fn is_valid_column(&self, column: i32, block_type: BlockType) -> bool {
         match block_type {
             BlockType::Sequence | BlockType::Mapping => {
                 // Block collections must be more indented than parent
@@ -172,13 +178,15 @@ impl IndentationTracker {
 
     /// Get depth of nesting
     #[inline]
-    pub fn depth(&self) -> usize {
+    #[must_use] 
+    pub const fn depth(&self) -> usize {
         self.levels.len()
     }
 
     /// Get minimum required indentation for new block
     #[inline]
-    pub fn min_indent_for_block(&self, block_type: BlockType) -> i32 {
+    #[must_use] 
+    pub const fn min_indent_for_block(&self, block_type: BlockType) -> i32 {
         match block_type {
             BlockType::Root => 0,
             BlockType::Sequence | BlockType::Mapping => self.current_base + 1,
@@ -199,7 +207,7 @@ pub fn count_leading_whitespace<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<(usize, bool), ScanError> {
     let mut count = 0;
-    let mut has_tabs = false;
+    let has_tabs = false;
 
     while let Ok(ch) = state.peek_char() {
         match ch {
@@ -208,10 +216,11 @@ pub fn count_leading_whitespace<T: Iterator<Item = char>>(
                 count += 1;
             }
             '\t' => {
-                state.consume_char()?;
-                has_tabs = true;
-                // Tab counts as moving to next 8-column boundary
-                count = (count + 8) & !7;
+                // YAML 1.2 spec: Only spaces are allowed for indentation
+                return Err(ScanError::new(
+                    state.mark(),
+                    "tabs are not allowed in YAML indentation, use spaces only",
+                ));
             }
             _ => break,
         }
@@ -318,7 +327,8 @@ pub fn validate_indentation_consistency(
 
 /// Calculate effective indentation considering tab stops
 #[inline]
-pub fn effective_indentation(spaces: usize, has_tabs: bool, _tab_width: usize) -> usize {
+#[must_use] 
+pub const fn effective_indentation(spaces: usize, has_tabs: bool, _tab_width: usize) -> usize {
     if has_tabs {
         // This is approximation - actual calculation depends on where tabs occur
         spaces

@@ -22,6 +22,7 @@ pub struct YamlLexer<'input> {
 impl<'input> YamlLexer<'input> {
     /// Create a new lexer for the given input
     #[inline]
+    #[must_use] 
     pub fn new(input: &'input str) -> Self {
         Self {
             scanner: Scanner::new(input),
@@ -43,7 +44,8 @@ impl<'input> YamlLexer<'input> {
 
     /// Get the current position in the input
     #[inline]
-    pub fn position(&self) -> Position {
+    #[must_use] 
+    pub const fn position(&self) -> Position {
         self.position.current()
     }
 
@@ -54,7 +56,8 @@ impl<'input> YamlLexer<'input> {
     }
 
     /// Create an iterator over all tokens
-    pub fn tokens(self) -> TokenIterator<'input> {
+    #[must_use] 
+    pub const fn tokens(self) -> TokenIterator<'input> {
         TokenIterator::new(self)
     }
 }
@@ -67,7 +70,7 @@ pub struct TokenIterator<'input> {
 
 impl<'input> TokenIterator<'input> {
     #[inline]
-    fn new(lexer: YamlLexer<'input>) -> Self {
+    const fn new(lexer: YamlLexer<'input>) -> Self {
         Self {
             lexer,
             finished: false,
@@ -107,7 +110,8 @@ pub struct LexError {
 
 impl LexError {
     #[inline]
-    pub fn new(kind: LexErrorKind, position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(kind: LexErrorKind, position: Position) -> Self {
         Self { kind, position }
     }
 }
@@ -145,19 +149,19 @@ pub enum LexErrorKind {
 impl std::fmt::Display for LexErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LexErrorKind::UnexpectedCharacter(msg) => write!(f, "unexpected character: {msg}"),
-            LexErrorKind::InvalidEscape(msg) => write!(f, "invalid escape sequence: {msg}"),
-            LexErrorKind::UnterminatedString => write!(f, "unterminated string"),
-            LexErrorKind::InvalidUnicode => write!(f, "invalid unicode sequence"),
-            LexErrorKind::InvalidUnicodeEscape => write!(f, "invalid unicode escape"),
-            LexErrorKind::InvalidNumber => write!(f, "invalid number format"),
-            LexErrorKind::InvalidTag(msg) => write!(f, "invalid tag: {msg}"),
-            LexErrorKind::InvalidAnchor(msg) => write!(f, "invalid anchor: {msg}"),
-            LexErrorKind::InvalidAlias(msg) => write!(f, "invalid alias: {msg}"),
-            LexErrorKind::InvalidDirective(msg) => write!(f, "invalid directive: {msg}"),
-            LexErrorKind::InvalidIndentation(msg) => write!(f, "invalid indentation: {msg}"),
-            LexErrorKind::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
-            LexErrorKind::EmptyScalar => write!(f, "empty scalar"),
+            Self::UnexpectedCharacter(msg) => write!(f, "unexpected character: {msg}"),
+            Self::InvalidEscape(msg) => write!(f, "invalid escape sequence: {msg}"),
+            Self::UnterminatedString => write!(f, "unterminated string"),
+            Self::InvalidUnicode => write!(f, "invalid unicode sequence"),
+            Self::InvalidUnicodeEscape => write!(f, "invalid unicode escape"),
+            Self::InvalidNumber => write!(f, "invalid number format"),
+            Self::InvalidTag(msg) => write!(f, "invalid tag: {msg}"),
+            Self::InvalidAnchor(msg) => write!(f, "invalid anchor: {msg}"),
+            Self::InvalidAlias(msg) => write!(f, "invalid alias: {msg}"),
+            Self::InvalidDirective(msg) => write!(f, "invalid directive: {msg}"),
+            Self::InvalidIndentation(msg) => write!(f, "invalid indentation: {msg}"),
+            Self::UnexpectedEndOfInput => write!(f, "unexpected end of input"),
+            Self::EmptyScalar => write!(f, "empty scalar"),
         }
     }
 }

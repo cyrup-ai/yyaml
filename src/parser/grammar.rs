@@ -3,7 +3,8 @@
 //! This module provides comprehensive grammar rules, production definitions,
 //! and parsing utilities for YAML 1.2 specification compliance.
 
-use crate::lexer::{Position, TokenKind, LexError};
+use crate::error::{Marker, ScanError};
+use crate::lexer::{Position, TokenKind};
 
 /// Parse error types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,94 +88,115 @@ pub enum Production {
     // ADD parametric productions (grouped by category):
 
     // Indentation productions [YAML 1.2 spec productions 63-74]
-    SIndent(i32),                           // s-indent(n)
-    SIndentLt(i32),                         // s-indent(<n)
-    SIndentLe(i32),                         // s-indent(≤n)
+    SIndent(i32),   // s-indent(n)
+    SIndentLt(i32), // s-indent(<n)
+    SIndentLe(i32), // s-indent(≤n)
 
     // Line prefix productions [76-79]
-    SLinePrefix(i32, Context),              // s-line-prefix(n,c)
-    SBlockLinePrefix(i32),                  // s-block-line-prefix(n)
-    SFlowLinePrefix(i32),                   // s-flow-line-prefix(n)
+    SLinePrefix(i32, Context), // s-line-prefix(n,c)
+    SBlockLinePrefix(i32),     // s-block-line-prefix(n)
+    SFlowLinePrefix(i32),      // s-flow-line-prefix(n)
 
     // Separation productions [80-81]
-    SSeparate(i32, Context),                // s-separate(n,c)
-    SSeparateLines(i32),                    // s-separate-lines(n)
+    SSeparate(i32, Context), // s-separate(n,c)
+    SSeparateLines(i32),     // s-separate-lines(n)
 
     // Empty productions [70-73]
-    LEmpty(i32, Context),                   // l-empty(n,c)
-    BLTrimmed(i32, Context),                // b-l-trimmed(n,c)
-    BLFolded(i32, Context),                 // b-l-folded(n,c)
+    LEmpty(i32, Context),    // l-empty(n,c)
+    BLTrimmed(i32, Context), // b-l-trimmed(n,c)
+    BLFolded(i32, Context),  // b-l-folded(n,c)
 
     // Block scalar productions [162-182]
-    CLBlockScalar(i32, ChompingMode),       // c-l-block-scalar(n,t)
-    CLLiteral(i32),                         // c-l+literal(n)
-    CLFolded(i32),                          // c-l+folded(n)
+    CLBlockScalar(i32, ChompingMode), // c-l-block-scalar(n,t)
+    CLLiteral(i32),                   // c-l+literal(n)
+    CLFolded(i32),                    // c-l+folded(n)
 
     // Flow scalar productions [126-135]
-    NSPlainFirst(Context),                  // ns-plain-first(c)
-    NSPlainSafe(Context),                   // ns-plain-safe(c)
-    NSPlainChar(Context),                   // ns-plain-char(c)
+    NSPlainFirst(Context), // ns-plain-first(c)
+    NSPlainSafe(Context),  // ns-plain-safe(c)
+    NSPlainChar(Context),  // ns-plain-char(c)
 
     // Block collection productions [183-201]
-    LBlockSequence(i32),                    // l+block-sequence(n)
-    LBlockMapping(i32),                     // l+block-mapping(n)
-    NSLBlockMapEntry(i32),                  // ns-l-block-map-entry(n)
-    NSLCompactMapping(i32),                 // ns-l-compact-mapping(n)
+    LBlockSequence(i32),    // l+block-sequence(n)
+    LBlockMapping(i32),     // l+block-mapping(n)
+    NSLBlockMapEntry(i32),  // ns-l-block-map-entry(n)
+    NSLCompactMapping(i32), // ns-l-compact-mapping(n)
 
-    // Flow collection productions [137-150]
-    CFlowSequence(i32, Context),            // c-flow-sequence(n,c)
-    CFlowMapping(i32, Context),             // c-flow-mapping(n,c)
-    NSFlowPair(i32, Context),               // ns-flow-pair(n,c)
+    // Additional block collection productions
+    CLBlockMapExplicitEntry(i32), // c-l-block-map-explicit-entry(n)
+    CLBlockMapImplicitEntry(i32), // c-l-block-map-implicit-entry(n)
+    NSLBlockMapExplicitValue(i32), // ns-l-block-map-explicit-value(n)
+
+    // Document productions
+    LDocumentPrefix, // l-document-prefix
+    CDirectivesEnd, // c-directives-end
+    CDocumentEnd, // c-document-end
+    LDocumentSuffix, // l-document-suffix
+
+    // Directive productions
+    NSReservedDirective, // ns-reserved-directive
+
+    // Additional block scalar
+    CBBlockHeader(i32, ChompingMode), // c-b-block-header(m,t)
 }
 
 impl Production {
     /// Check if this production matches with given parameters
+    #[must_use] 
     pub fn matches(&self, indent: i32, context: Context) -> bool {
         match self {
-            Production::SIndent(n) => indent == *n,
-            Production::SIndentLt(n) => indent < *n,
-            Production::SIndentLe(n) => indent <= *n,
-            Production::SLinePrefix(n, c) => indent == *n && context == *c,
-            Production::SSeparate(n, c) => indent == *n && context == *c,
-            Production::LBlockSequence(n) => indent >= *n,
-            Production::LBlockMapping(n) => indent >= *n,
-            Production::NSPlainFirst(c) | Production::NSPlainSafe(c) | Production::NSPlainChar(c) => {
-                context == *c
-            }
-            Production::CFlowSequence(n, c) | Production::CFlowMapping(n, c) => {
-                indent >= *n && context == *c
-            }
+            Self::SIndent(n) => indent == *n,
+            Self::SIndentLt(n) => indent < *n,
+            Self::SIndentLe(n) => indent <= *n,
+            Self::SLinePrefix(n, c) => indent == *n && context == *c,
+            Self::SSeparate(n, c) => indent == *n && context == *c,
+            Self::LBlockSequence(n) => indent >= *n,
+            Self::LBlockMapping(n) => indent >= *n,
+            Self::NSPlainFirst(c)
+            | Self::NSPlainSafe(c)
+            | Self::NSPlainChar(c) => context == *c,
+            Self::CLBlockMapExplicitEntry(n) => indent >= *n,
+            Self::CLBlockMapImplicitEntry(n) => indent >= *n,
+            Self::NSLBlockMapExplicitValue(n) => indent >= *n,
+            Self::CBBlockHeader(m, _) => indent == *m,
             // Non-parametric productions always match
             _ => true,
         }
     }
 
     /// Get the minimum indentation required by this production
+    #[must_use] 
     pub fn min_indent(&self) -> Option<i32> {
         match self {
-            Production::SIndent(n) => Some(*n),
-            Production::SIndentLt(n) => Some(0),  // Any indent less than n
-            Production::SIndentLe(n) => Some(0),  // Any indent <= n
-            Production::SBlockLinePrefix(n) => Some(*n),
-            Production::LBlockSequence(n) => Some(n + 1),  // Entries at n+1
-            Production::LBlockMapping(n) => Some(n + 1),   // Keys at n+1
-            Production::CLBlockScalar(n, _) => Some(*n),
-            Production::CLLiteral(n) => Some(*n),
-            Production::CLFolded(n) => Some(*n),
+            Self::SIndent(n) => Some(*n),
+            Self::SIndentLt(_n) => Some(0), // Any indent less than n
+            Self::SIndentLe(_n) => Some(0), // Any indent <= n
+            Self::SBlockLinePrefix(n) => Some(*n),
+            Self::LBlockSequence(n) => Some(n + 1), // Entries at n+1
+            Self::LBlockMapping(n) => Some(n + 1),  // Keys at n+1
+            Self::CLBlockMapExplicitEntry(n) => Some(*n),
+            Self::CLBlockMapImplicitEntry(n) => Some(*n),
+            Self::NSLBlockMapExplicitValue(n) => Some(*n),
+            Self::CBBlockHeader(m, _) => Some(*m),
             _ => None,
         }
     }
 
     /// Check if production requires specific context
-    pub fn required_context(&self) -> Option<Context> {
+    #[must_use] 
+    pub const fn required_context(&self) -> Option<Context> {
         match self {
-            Production::SLinePrefix(_, c) | Production::SSeparate(_, c)
-            | Production::LEmpty(_, c) | Production::BLTrimmed(_, c)
-            | Production::BLFolded(_, c) => Some(*c),
-            Production::NSPlainFirst(c) | Production::NSPlainSafe(c)
-            | Production::NSPlainChar(c) => Some(*c),
-            Production::CFlowSequence(_, c) | Production::CFlowMapping(_, c)
-            | Production::NSFlowPair(_, c) => Some(*c),
+            Self::SLinePrefix(_, c)
+            | Self::SSeparate(_, c)
+            | Self::LEmpty(_, c)
+            | Self::BLTrimmed(_, c)
+            | Self::BLFolded(_, c) => Some(*c),
+            Self::NSPlainFirst(c)
+            | Self::NSPlainSafe(c)
+            | Self::NSPlainChar(c) => Some(*c),
+            Self::CFlowSequence(_, c)
+            | Self::CFlowMapping(_, c)
+            | Self::NSFlowPair(_, c) => Some(*c),
             _ => None,
         }
     }
@@ -183,20 +205,20 @@ impl Production {
 /// YAML 1.2 parsing contexts for parametric productions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Context {
-    BlockIn,   // BLOCK-IN
-    BlockOut,  // BLOCK-OUT
-    BlockKey,  // BLOCK-KEY
-    FlowIn,    // FLOW-IN
-    FlowOut,   // FLOW-OUT
-    FlowKey,   // FLOW-KEY
+    BlockIn,  // BLOCK-IN
+    BlockOut, // BLOCK-OUT
+    BlockKey, // BLOCK-KEY
+    FlowIn,   // FLOW-IN
+    FlowOut,  // FLOW-OUT
+    FlowKey,  // FLOW-KEY
 }
 
 /// Block scalar chomping modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChompingMode {
-    Strip,  // Remove all trailing newlines
-    Clip,   // Keep first trailing newline only
-    Keep,   // Keep all trailing newlines
+    Strip, // Remove all trailing newlines
+    Clip,  // Keep first trailing newline only
+    Keep,  // Keep all trailing newlines
 }
 
 /// Context information for grammar-driven parsing
@@ -224,35 +246,44 @@ pub struct Grammar;
 impl Grammar {
     /// Check if token can start a document
     #[inline]
-    pub fn can_start_document(token: &TokenKind) -> bool {
-        matches!(token, TokenKind::DocumentStart
-            | TokenKind::YamlDirective { .. }
-            | TokenKind::TagDirective { .. }
-            | TokenKind::ReservedDirective { .. }
-            | TokenKind::Scalar { .. }
-            | TokenKind::FlowSequenceStart
-            | TokenKind::FlowMappingStart
-            | TokenKind::BlockEntry
-            | TokenKind::Anchor(_)
-            | TokenKind::Alias(_)
-            | TokenKind::Tag { .. })
+    #[must_use] 
+    pub const fn can_start_document(token: &TokenKind) -> bool {
+        matches!(
+            token,
+            TokenKind::DocumentStart
+                | TokenKind::YamlDirective { .. }
+                | TokenKind::TagDirective { .. }
+                | TokenKind::ReservedDirective { .. }
+                | TokenKind::Scalar { .. }
+                | TokenKind::FlowSequenceStart
+                | TokenKind::FlowMappingStart
+                | TokenKind::BlockEntry
+                | TokenKind::Anchor(_)
+                | TokenKind::Alias(_)
+                | TokenKind::Tag { .. }
+        )
     }
 
     /// Check if token can start a node
     #[inline]
-    pub fn can_start_node(token: &TokenKind) -> bool {
-        matches!(token, TokenKind::Scalar { .. }
-            | TokenKind::FlowSequenceStart
-            | TokenKind::FlowMappingStart
-            | TokenKind::BlockEntry
-            | TokenKind::Anchor(_)
-            | TokenKind::Alias(_)
-            | TokenKind::Tag { .. })
+    #[must_use] 
+    pub const fn can_start_node(token: &TokenKind) -> bool {
+        matches!(
+            token,
+            TokenKind::Scalar { .. }
+                | TokenKind::FlowSequenceStart
+                | TokenKind::FlowMappingStart
+                | TokenKind::BlockEntry
+                | TokenKind::Anchor(_)
+                | TokenKind::Alias(_)
+                | TokenKind::Tag { .. }
+        )
     }
 
     /// Check if token can start a flow collection
     #[inline]
-    pub fn can_start_flow_collection(token: &TokenKind) -> bool {
+    #[must_use] 
+    pub const fn can_start_flow_collection(token: &TokenKind) -> bool {
         matches!(
             token,
             TokenKind::FlowSequenceStart | TokenKind::FlowMappingStart
@@ -261,24 +292,28 @@ impl Grammar {
 
     /// Check if token can start a block collection
     #[inline]
-    pub fn can_start_block_collection(token: &TokenKind) -> bool {
+    #[must_use] 
+    pub const fn can_start_block_collection(token: &TokenKind) -> bool {
         matches!(token, TokenKind::BlockEntry | TokenKind::Key)
     }
 
     /// Check if token is a scalar
     #[inline]
-    pub fn is_scalar(token: &TokenKind) -> bool {
+    #[must_use] 
+    pub const fn is_scalar(token: &TokenKind) -> bool {
         matches!(token, TokenKind::Scalar { .. })
     }
 
     /// Check if token is a property (anchor or tag)
     #[inline]
-    pub fn is_property(token: &TokenKind) -> bool {
+    #[must_use] 
+    pub const fn is_property(token: &TokenKind) -> bool {
         matches!(token, TokenKind::Anchor(_) | TokenKind::Tag { .. })
     }
 
     /// Check if token can continue a plain scalar in given context
-    pub fn can_continue_plain_scalar(token: &TokenKind, context: &ParseContext) -> bool {
+    #[must_use] 
+    pub const fn can_continue_plain_scalar(token: &TokenKind, context: &ParseContext) -> bool {
         match context {
             ParseContext::FlowIn(_) | ParseContext::FlowKey | ParseContext::FlowValue => {
                 // In flow context, plain scalars are more restricted
@@ -314,13 +349,15 @@ impl Grammar {
     }
 
     /// Determine if a mapping key-value pair is implicit (no explicit value indicator)
-    pub fn is_implicit_mapping_value(context: &ParseContext) -> bool {
+    #[must_use] 
+    pub const fn is_implicit_mapping_value(context: &ParseContext) -> bool {
         matches!(context, ParseContext::BlockIn(_))
     }
 
     /// Check if indentation is valid for block context
     #[inline]
-    pub fn is_valid_block_indentation(
+    #[must_use] 
+    pub const fn is_valid_block_indentation(
         current_indent: usize,
         context_indent: usize,
         strict: bool,
@@ -470,17 +507,20 @@ impl Grammar {
 
     /// Check if context allows simple keys
     #[inline]
-    pub fn allows_simple_keys(context: &ParseContext) -> bool {
+    #[must_use] 
+    pub const fn allows_simple_keys(context: &ParseContext) -> bool {
         matches!(context, ParseContext::FlowIn(_) | ParseContext::BlockIn(_))
     }
 
     /// Check if context requires explicit key indicators
     #[inline]
-    pub fn requires_explicit_key(context: &ParseContext) -> bool {
+    #[must_use] 
+    pub const fn requires_explicit_key(context: &ParseContext) -> bool {
         matches!(context, ParseContext::FlowIn(_))
     }
 
     /// Determine next context after parsing a production
+    #[must_use] 
     pub fn next_context(
         current: &ParseContext,
         production: Production,
@@ -520,6 +560,7 @@ impl Grammar {
     }
 
     /// Check if production is valid in current parametric context
+    #[must_use] 
     pub fn is_valid_parametric_production(
         production: &Production,
         context: &ParametricContext,
@@ -528,9 +569,8 @@ impl Grammar {
     }
 
     /// Get applicable productions for current parametric context
-    pub fn applicable_parametric_productions(
-        context: &ParametricContext,
-    ) -> Vec<Production> {
+    #[must_use] 
+    pub fn applicable_parametric_productions(context: &ParametricContext) -> Vec<Production> {
         let mut productions = Vec::new();
         let indent = context.current_indent();
 
@@ -556,15 +596,17 @@ impl Grammar {
     }
 
     /// Convert between parametric context and existing parse context for compatibility
+    #[must_use] 
     pub fn parametric_to_parse_context(parametric: &ParametricContext) -> ParseContext {
         parametric.to_parse_context()
     }
 
     /// Determine next parametric context after parsing a production
-    pub fn next_parametric_context(
+    #[must_use] 
+    pub const fn next_parametric_context(
         current: &ParametricContext,
         production: Production,
-        new_indent: Option<i32>,
+        _new_indent: Option<i32>,
     ) -> Context {
         match (current.current_context, production) {
             (Context::BlockOut, Production::Document) => Context::BlockIn,
@@ -599,6 +641,7 @@ impl Default for ContextStack {
 impl ContextStack {
     /// Create new context stack starting with document context
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             stack: vec![ParseContext::Document],
@@ -607,6 +650,7 @@ impl ContextStack {
 
     /// Get current context
     #[inline]
+    #[must_use] 
     pub fn current(&self) -> &ParseContext {
         self.stack.last().unwrap_or(&ParseContext::Document)
     }
@@ -628,12 +672,14 @@ impl ContextStack {
 
     /// Get nesting depth
     #[inline]
-    pub fn depth(&self) -> usize {
+    #[must_use] 
+    pub const fn depth(&self) -> usize {
         self.stack.len()
     }
 
     /// Check if we're in a flow context
     #[inline]
+    #[must_use] 
     pub fn in_flow_context(&self) -> bool {
         matches!(
             self.current(),
@@ -643,6 +689,7 @@ impl ContextStack {
 
     /// Check if we're in a block context
     #[inline]
+    #[must_use] 
     pub fn in_block_context(&self) -> bool {
         matches!(
             self.current(),
@@ -651,6 +698,7 @@ impl ContextStack {
     }
 
     /// Get current indentation level (for block contexts)
+    #[must_use] 
     pub fn current_indent(&self) -> Option<usize> {
         match self.current() {
             ParseContext::BlockIn(indent) => Some(*indent),
@@ -659,6 +707,7 @@ impl ContextStack {
     }
 
     /// Get current flow level (for flow contexts)
+    #[must_use] 
     pub fn current_flow_level(&self) -> Option<usize> {
         match self.current() {
             ParseContext::FlowIn(level) => Some(*level),
@@ -676,9 +725,13 @@ pub struct ParametricContext {
     pub chomping_mode: Option<ChompingMode>,
     // REUSE existing indentation system - DO NOT DUPLICATE
     pub indentation: crate::parser::indentation::IndentationStateMachine,
+    // ADD: Track recursion depth
+    pub recursion_depth: usize,
+    pub max_depth: usize,
 }
 
 impl ParametricContext {
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             context_stack: vec![Context::BlockOut], // Document level starts BLOCK-OUT
@@ -686,6 +739,8 @@ impl ParametricContext {
             chomping_mode: None,
             // REUSE existing IndentationStateMachine from parser/indentation.rs
             indentation: crate::parser::indentation::IndentationStateMachine::new(),
+            recursion_depth: 0,
+            max_depth: 100, // Reasonable default
         }
     }
 
@@ -706,26 +761,29 @@ impl ParametricContext {
     }
 
     /// Get current indentation from existing system
+    #[must_use] 
     pub fn current_indent(&self) -> i32 {
         self.indentation.current_indent() as i32
     }
 
     /// Calculate n+m indentation for block collections per YAML 1.2 spec
-    pub fn calculate_block_indent(&self, base: i32, offset: i32) -> i32 {
+    #[must_use] 
+    pub const fn calculate_block_indent(&self, base: i32, offset: i32) -> i32 {
         base + offset
     }
 
     /// Set chomping mode for block scalars
-    pub fn set_chomping_mode(&mut self, mode: ChompingMode) {
+    pub const fn set_chomping_mode(&mut self, mode: ChompingMode) {
         self.chomping_mode = Some(mode);
     }
 
     /// Clear chomping mode after processing block scalar
-    pub fn clear_chomping_mode(&mut self) {
+    pub const fn clear_chomping_mode(&mut self) {
         self.chomping_mode = None;
     }
 
     /// Convert YAML 1.2 Context to existing ParseContext for backward compatibility
+    #[must_use] 
     pub fn to_parse_context(&self) -> ParseContext {
         match self.current_context {
             Context::BlockIn => ParseContext::BlockIn(self.current_indent() as usize),
@@ -734,6 +792,24 @@ impl ParametricContext {
             Context::FlowIn => ParseContext::FlowIn(self.context_stack.len()),
             Context::FlowOut => ParseContext::FlowValue,
             Context::FlowKey => ParseContext::FlowKey,
+        }
+    }
+
+    pub fn increment_depth(&mut self) -> Result<(), ScanError> {
+        self.recursion_depth += 1;
+        if self.recursion_depth > self.max_depth {
+            Err(ScanError::new(
+                Marker::default(),
+                "maximum recursion depth exceeded",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub const fn decrement_depth(&mut self) {
+        if self.recursion_depth > 0 {
+            self.recursion_depth -= 1;
         }
     }
 }
@@ -749,7 +825,8 @@ pub struct ProductionHints;
 
 impl ProductionHints {
     /// Get performance hints for production
-    pub fn get_hints(production: Production) -> ProductionOptimization {
+    #[must_use] 
+    pub const fn get_hints(production: Production) -> ProductionOptimization {
         match production {
             Production::PlainScalar => ProductionOptimization {
                 can_inline: true,
@@ -820,6 +897,7 @@ impl Indicators {
 
     /// Check if character is a YAML indicator
     #[inline]
+    #[must_use] 
     pub fn is_indicator(ch: char) -> bool {
         Self::STRUCTURE.contains(&ch)
             || Self::QUOTED.contains(&ch)
@@ -831,13 +909,15 @@ impl Indicators {
 
     /// Check if character is a flow indicator
     #[inline]
-    pub fn is_flow_indicator(ch: char) -> bool {
+    #[must_use] 
+    pub const fn is_flow_indicator(ch: char) -> bool {
         matches!(ch, ',' | '[' | ']' | '{' | '}')
     }
 
     /// Check if character is a block indicator
     #[inline]
-    pub fn is_block_indicator(ch: char) -> bool {
+    #[must_use] 
+    pub const fn is_block_indicator(ch: char) -> bool {
         matches!(ch, '-' | '?' | ':')
     }
 }

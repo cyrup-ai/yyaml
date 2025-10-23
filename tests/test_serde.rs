@@ -11,7 +11,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::iter;
-use yyaml::{Mapping, Number, Sequence, Value};
+use yyaml::{Mapping, Number, Value};
 
 fn test_serde<T>(thing: &T, yaml: &str)
 where

@@ -1,4 +1,3 @@
-
 fn main() {
     env_logger::builder()
         .filter_level(log::LevelFilter::Debug)
@@ -37,7 +36,7 @@ fn main() {
             if let Some(doc) = docs.first() {
                 println!("First document: {doc:?}");
             }
-        },
+        }
         Err(e) => {
             println!("❌ YAML parsing failed: {e:?}");
             std::process::exit(1);

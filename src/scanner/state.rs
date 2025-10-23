@@ -21,7 +21,7 @@ pub enum QuotedContext {
 impl Default for QuotedContext {
     #[inline]
     fn default() -> Self {
-        QuotedContext::None
+        Self::None
     }
 }
 
@@ -103,7 +103,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Get current position marker
     #[inline]
-    pub fn mark(&self) -> Marker {
+    pub const fn mark(&self) -> Marker {
         self.mark
     }
 
@@ -115,37 +115,37 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Check if stream start was produced
     #[inline]
-    pub fn stream_started(&self) -> bool {
+    pub const fn stream_started(&self) -> bool {
         self.stream_start_produced
     }
 
     /// Check if stream end was produced
     #[inline]
-    pub fn stream_ended(&self) -> bool {
+    pub const fn stream_ended(&self) -> bool {
         self.stream_end_produced
     }
 
     /// Mark stream as started
     #[inline]
-    pub fn mark_stream_started(&mut self) {
+    pub const fn mark_stream_started(&mut self) {
         self.stream_start_produced = true;
     }
 
     /// Mark stream as ended
     #[inline]
-    pub fn mark_stream_ended(&mut self) {
+    pub const fn mark_stream_ended(&mut self) {
         self.stream_end_produced = true;
     }
 
     /// Check if we're in flow context
     #[inline]
-    pub fn in_flow_context(&self) -> bool {
+    pub const fn in_flow_context(&self) -> bool {
         self.flow_level > 0
     }
 
     /// Enter flow context (for [ ] or { })
     #[inline]
-    pub fn enter_flow_context(&mut self) {
+    pub const fn enter_flow_context(&mut self) {
         self.flow_level += 1;
         self.simple_key_allowed = true;
     }
@@ -162,25 +162,25 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Get current flow level
     #[inline]
-    pub fn flow_level(&self) -> usize {
+    pub const fn flow_level(&self) -> usize {
         self.flow_level
     }
 
     /// Check if simple key is allowed
     #[inline]
-    pub fn simple_key_allowed(&self) -> bool {
+    pub const fn simple_key_allowed(&self) -> bool {
         self.simple_key_allowed
     }
 
     /// Set simple key allowed flag
     #[inline]
-    pub fn set_simple_key_allowed(&mut self, allowed: bool) {
+    pub const fn set_simple_key_allowed(&mut self, allowed: bool) {
         self.simple_key_allowed = allowed;
     }
 
     /// Get current indentation
     #[inline]
-    pub fn indent(&self) -> i32 {
+    pub const fn indent(&self) -> i32 {
         self.indent
     }
 
@@ -205,7 +205,7 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Check if has cached token
     #[inline]
-    pub fn has_cached_token(&self) -> bool {
+    pub const fn has_cached_token(&self) -> bool {
         self.cached_token.is_some()
     }
 
@@ -217,13 +217,13 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Peek at cached token
     #[inline]
-    pub fn peek_cached_token(&self) -> Option<&Token> {
+    pub const fn peek_cached_token(&self) -> Option<&Token> {
         self.cached_token.as_ref()
     }
 
     /// Take cached token
     #[inline]
-    pub fn take_cached_token(&mut self) -> Option<Token> {
+    pub const fn take_cached_token(&mut self) -> Option<Token> {
         self.cached_token.take()
     }
 
@@ -235,13 +235,13 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Get current quoted context for BOM filtering
     #[inline]
-    pub fn quoted_context(&self) -> QuotedContext {
+    pub const fn quoted_context(&self) -> QuotedContext {
         self.quoted_context
     }
 
     /// Set quoted context for BOM filtering (used by quoted string scanners)
     #[inline]
-    pub fn set_quoted_context(&mut self, context: QuotedContext) {
+    pub const fn set_quoted_context(&mut self, context: QuotedContext) {
         self.quoted_context = context;
     }
 
@@ -381,14 +381,24 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 
     /// Check if at beginning of line
     #[inline]
-    pub fn at_line_start(&self) -> bool {
+    pub const fn at_line_start(&self) -> bool {
         self.mark.col == 0
     }
 
     /// Get current column position
     #[inline]
-    pub fn column(&self) -> usize {
+    pub const fn column(&self) -> usize {
         self.mark.col
+    }
+
+    /// Create scanner state from lexer iterator for block scalar processing
+    pub fn from_lexer_input(input: T) -> Self {
+        Self::new(input)
+    }
+
+    /// Extract remaining input after block scalar processing
+    pub fn into_remaining_input(self) -> T {
+        self.source
     }
 }
 
@@ -396,7 +406,8 @@ impl<T: Iterator<Item = char>> ScannerState<T> {
 impl Marker {
     /// Create default marker at start of stream
     #[inline]
-    pub fn new() -> Self {
+    #[must_use] 
+    pub const fn new() -> Self {
         Self {
             index: 0,
             line: 1,
@@ -406,7 +417,8 @@ impl Marker {
 
     /// Create marker at specific position
     #[inline]
-    pub fn at(index: usize, line: usize, col: usize) -> Self {
+    #[must_use] 
+    pub const fn at(index: usize, line: usize, col: usize) -> Self {
         Self { index, line, col }
     }
 }

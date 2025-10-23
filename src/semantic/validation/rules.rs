@@ -43,6 +43,7 @@ impl<'input> Default for ValidationRuleSet<'input> {
 impl<'input> ValidationRuleSet<'input> {
     /// Create a new empty rule set
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             structural_rules: Vec::new(),
@@ -85,6 +86,4 @@ impl<'input> ValidationRuleSet<'input> {
             .chain(self.constraint_rules.iter())
             .chain(self.custom_rules.iter())
     }
-
-
 }

@@ -19,15 +19,15 @@ pub enum EmitError {
 
 impl From<fmt::Error> for EmitError {
     fn from(e: fmt::Error) -> Self {
-        EmitError::FmtError(e)
+        Self::FmtError(e)
     }
 }
 
 impl fmt::Display for EmitError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EmitError::FmtError(e) => write!(f, "format error: {e}"),
-            EmitError::BadHashmapKey => write!(f, "bad hashmap key"),
+            Self::FmtError(e) => write!(f, "format error: {e}"),
+            Self::BadHashmapKey => write!(f, "bad hashmap key"),
         }
     }
 }

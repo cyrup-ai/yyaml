@@ -39,13 +39,13 @@ pub enum FixImpact {
 impl std::fmt::Display for FixType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FixType::ReplaceValue => write!(f, "Replace Value"),
-            FixType::AddMissingKey => write!(f, "Add Missing Key"),
-            FixType::RemoveDuplicateKey => write!(f, "Remove Duplicate Key"),
-            FixType::CorrectIndentation => write!(f, "Correct Indentation"),
-            FixType::ChangeType => write!(f, "Change Type"),
-            FixType::ReorderKeys => write!(f, "Reorder Keys"),
-            FixType::RefactorStructure => write!(f, "Refactor Structure"),
+            Self::ReplaceValue => write!(f, "Replace Value"),
+            Self::AddMissingKey => write!(f, "Add Missing Key"),
+            Self::RemoveDuplicateKey => write!(f, "Remove Duplicate Key"),
+            Self::CorrectIndentation => write!(f, "Correct Indentation"),
+            Self::ChangeType => write!(f, "Change Type"),
+            Self::ReorderKeys => write!(f, "Reorder Keys"),
+            Self::RefactorStructure => write!(f, "Refactor Structure"),
         }
     }
 }
@@ -53,10 +53,10 @@ impl std::fmt::Display for FixType {
 impl std::fmt::Display for FixImpact {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FixImpact::NoDataChange => write!(f, "No Data Change"),
-            FixImpact::MinorDataChange => write!(f, "Minor Data Change"),
-            FixImpact::MajorDataChange => write!(f, "Major Data Change"),
-            FixImpact::StructuralChange => write!(f, "Structural Change"),
+            Self::NoDataChange => write!(f, "No Data Change"),
+            Self::MinorDataChange => write!(f, "Minor Data Change"),
+            Self::MajorDataChange => write!(f, "Major Data Change"),
+            Self::StructuralChange => write!(f, "Structural Change"),
         }
     }
 }

@@ -27,8 +27,9 @@ pub struct ScanError {
 }
 
 impl ScanError {
+    #[must_use]
     pub fn new(mark: Marker, info: &str) -> Self {
-        ScanError {
+        Self {
             mark,
             info: info.to_owned(),
         }

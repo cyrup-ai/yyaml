@@ -57,6 +57,7 @@ impl<'input> Default for StructureAnalyzer<'input> {
 impl<'input> StructureAnalyzer<'input> {
     /// Create a new structure analyzer
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             complexity_metrics: ComplexityMetrics::default(),
@@ -92,20 +93,23 @@ impl<'input> StructureAnalyzer<'input> {
         // Detect patterns
         for detector in &self.pattern_detectors {
             if let Some(pattern_match) = detector.detect(node, context)
-                && let Some(hint) = pattern_match.optimization_hint {
-                    self.optimization_hints.push(hint);
-                }
+                && let Some(hint) = pattern_match.optimization_hint
+            {
+                self.optimization_hints.push(hint);
+            }
         }
     }
 
     /// Get current complexity score
     #[inline]
+    #[must_use] 
     pub fn complexity_score(&self) -> f32 {
         self.complexity_metrics.calculate_complexity_score()
     }
 
     /// Get optimization hints
     #[inline]
+    #[must_use] 
     pub fn get_optimization_hints(&self) -> &[OptimizationHint] {
         &self.optimization_hints
     }

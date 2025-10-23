@@ -34,17 +34,21 @@ fn main() {
       supports_function_calling: true
       supports_vision: false
       require_max_tokens: false"#;
-    
+
     println!("Testing YAML parsing with yyaml::from_str...");
-    
+
     // Test with the custom yyaml crate
     match yyaml::from_str::<Vec<ProviderInfo>>(yaml_content) {
         Ok(providers) => {
             println!("✅ SUCCESS: Parsed {} providers", providers.len());
             for provider in providers {
-                println!("  Provider: {}, Models: {}", provider.provider, provider.models.len());
+                println!(
+                    "  Provider: {}, Models: {}",
+                    provider.provider,
+                    provider.models.len()
+                );
             }
-        },
+        }
         Err(e) => {
             println!("❌ ERROR: {e}");
         }

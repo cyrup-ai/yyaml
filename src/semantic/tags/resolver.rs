@@ -34,6 +34,7 @@ pub struct TagResolver<'input> {
 
 impl<'input> TagResolver<'input> {
     /// Create new tag resolver with default YAML 1.2 schemas
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             tag_registry: TagRegistry::new(),
@@ -47,6 +48,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Create resolver with specified capacities for optimization
+    #[must_use] 
     pub fn with_capacity(tag_capacity: usize, resolver_capacity: usize) -> Self {
         Self {
             tag_registry: TagRegistry::with_capacity(tag_capacity, 16),
@@ -60,6 +62,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Create resolver with specific configuration
+    #[must_use] 
     pub fn with_config(config: &crate::semantic::SemanticConfig<'input>) -> Self {
         let mut resolver = Self::new();
         if let Some((major, minor)) = config.yaml_version {
@@ -233,22 +236,25 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Get tag registry for external access
-    pub fn get_registry(&self) -> &TagRegistry<'input> {
+    #[must_use] 
+    pub const fn get_registry(&self) -> &TagRegistry<'input> {
         &self.tag_registry
     }
 
     /// Get mutable registry access
-    pub fn get_registry_mut(&mut self) -> &mut TagRegistry<'input> {
+    pub const fn get_registry_mut(&mut self) -> &mut TagRegistry<'input> {
         &mut self.tag_registry
     }
 
     /// Get resolution count
-    pub fn resolution_count(&self) -> usize {
+    #[must_use] 
+    pub const fn resolution_count(&self) -> usize {
         self.resolution_count
     }
 
     /// Get resolved tag count (alias for resolution_count for semantic analyzer compatibility)
-    pub fn resolved_count(&self) -> usize {
+    #[must_use] 
+    pub const fn resolved_count(&self) -> usize {
         self.resolution_count
     }
 
@@ -261,6 +267,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Validate tag resolution consistency
+    #[must_use] 
     pub fn validate_tag_consistency(&self) -> Vec<TagValidationWarning> {
         let mut warnings = self.validation_warnings.clone();
 
@@ -286,6 +293,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Check if tag is deprecated
+    #[must_use] 
     pub fn is_deprecated_tag(&self, tag: &str) -> bool {
         // Known deprecated tags from YAML 1.1 -> 1.2 transition
         matches!(
@@ -298,11 +306,13 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Check if tag is standard YAML tag
+    #[must_use] 
     pub fn is_standard_tag(&self, tag: &str) -> bool {
         tag.starts_with("tag:yaml.org,2002:")
     }
 
     /// Check if tag is registered custom tag
+    #[must_use] 
     pub fn is_custom_tag(&self, tag: &str) -> bool {
         self.custom_resolvers
             .values()
@@ -310,22 +320,25 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Get tag resolution statistics
+    #[must_use] 
     pub fn get_tag_statistics(&self) -> TagStatistics {
         self.tag_registry.get_statistics()
     }
 
     /// Get performance metrics
-    pub fn get_performance_metrics(&self) -> &TagMetrics {
+    #[must_use] 
+    pub const fn get_performance_metrics(&self) -> &TagMetrics {
         &self.performance_metrics
     }
 
     /// Get validation warnings
+    #[must_use] 
     pub fn get_validation_warnings(&self) -> &[TagValidationWarning] {
         &self.validation_warnings
     }
 
     /// Set YAML version and determine appropriate schema
-    pub fn set_yaml_version(&mut self, major: u32, minor: u32) {
+    pub const fn set_yaml_version(&mut self, major: u32, minor: u32) {
         // YAML 1.2 uses Core schema by default
         // YAML 1.1 had some differences but we target 1.2 compliance
         let schema_type = match (major, minor) {
@@ -337,14 +350,15 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Set schema type for resolution
-    pub fn set_schema_type(&mut self, schema_type: SchemaType) {
+    pub const fn set_schema_type(&mut self, schema_type: SchemaType) {
         self.tag_registry.set_schema_type(schema_type);
         self.schema_processor.set_schema(schema_type);
         self.performance_metrics.schema_switches += 1;
     }
 
     /// Get current schema type
-    pub fn get_schema_type(&self) -> SchemaType {
+    #[must_use] 
+    pub const fn get_schema_type(&self) -> SchemaType {
         self.tag_registry.schema_type()
     }
 
@@ -355,6 +369,7 @@ impl<'input> TagResolver<'input> {
     }
 
     /// Get comprehensive resolver statistics
+    #[must_use] 
     pub fn get_comprehensive_stats(&self) -> ResolverStatistics {
         let registry_stats = self.tag_registry.get_statistics();
         let uptime = self.creation_time.elapsed();
@@ -452,7 +467,11 @@ mod tests {
         let resolver = TagResolver::new();
         let context = AnalysisContext::new();
 
-        match resolver.construct_full_tag(&Some(Cow::Borrowed("!!")), &Cow::Borrowed("str"), &context) {
+        match resolver.construct_full_tag(
+            &Some(Cow::Borrowed("!!")),
+            &Cow::Borrowed("str"),
+            &context,
+        ) {
             Ok(full_tag) => {
                 assert_eq!(full_tag, "tag:yaml.org,2002:str");
             }

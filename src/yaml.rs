@@ -29,43 +29,43 @@ impl Hash for Yaml {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Yaml::Real(s) => {
+            Self::Real(s) => {
                 0.hash(state);
                 s.hash(state);
             }
-            Yaml::Integer(i) => {
+            Self::Integer(i) => {
                 1.hash(state);
                 i.hash(state);
             }
-            Yaml::String(s) => {
+            Self::String(s) => {
                 2.hash(state);
                 s.hash(state);
             }
-            Yaml::Boolean(b) => {
+            Self::Boolean(b) => {
                 3.hash(state);
                 b.hash(state);
             }
-            Yaml::Array(a) => {
+            Self::Array(a) => {
                 4.hash(state);
                 a.hash(state);
             }
-            Yaml::Hash(h) => {
+            Self::Hash(h) => {
                 5.hash(state);
                 h.hash(state);
             }
-            Yaml::Alias(i) => {
+            Self::Alias(i) => {
                 6.hash(state);
                 i.hash(state);
             }
-            Yaml::Tagged(tag, value) => {
+            Self::Tagged(tag, value) => {
                 7.hash(state);
                 tag.hash(state);
                 value.hash(state);
             }
-            Yaml::Null => {
+            Self::Null => {
                 8.hash(state);
             }
-            Yaml::BadValue => {
+            Self::BadValue => {
                 9.hash(state);
             }
         }
@@ -78,142 +78,164 @@ static BAD_VALUE: Yaml = Yaml::BadValue;
 /// Accessors for Yaml
 impl Yaml {
     #[inline(always)]
-    pub fn as_bool(&self) -> Option<bool> {
+    #[must_use] 
+    pub const fn as_bool(&self) -> Option<bool> {
         match *self {
-            Yaml::Boolean(b) => Some(b),
+            Self::Boolean(b) => Some(b),
             _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn as_i64(&self) -> Option<i64> {
+    #[must_use] 
+    pub const fn as_i64(&self) -> Option<i64> {
         match *self {
-            Yaml::Integer(i) => Some(i),
+            Self::Integer(i) => Some(i),
             _ => None,
         }
     }
 
     #[inline]
+    #[must_use] 
     pub fn as_f64(&self) -> Option<f64> {
         match *self {
-            Yaml::Real(ref s) => parse_f64(s),
+            Self::Real(ref s) => parse_f64(s),
             _ => None,
         }
     }
 
     #[inline(always)]
+    #[must_use] 
     pub fn as_str(&self) -> Option<&str> {
         match *self {
-            Yaml::String(ref s) => Some(s),
+            Self::String(ref s) => Some(s),
             _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn as_vec(&self) -> Option<&[Yaml]> {
+    #[must_use] 
+    pub fn as_vec(&self) -> Option<&[Self]> {
         match *self {
-            Yaml::Array(ref v) => Some(v),
+            Self::Array(ref v) => Some(v),
             _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn as_hash(&self) -> Option<&LinkedHashMap<Yaml, Yaml>> {
+    #[must_use] 
+    pub const fn as_hash(&self) -> Option<&LinkedHashMap<Self, Self>> {
         match *self {
-            Yaml::Hash(ref h) => Some(h),
+            Self::Hash(ref h) => Some(h),
             _ => None,
         }
     }
 
     #[inline(always)]
-    pub fn is_null(&self) -> bool {
-        matches!(*self, Yaml::Null)
+    #[must_use] 
+    pub const fn is_null(&self) -> bool {
+        matches!(*self, Self::Null)
     }
 
     #[inline(always)]
-    pub fn is_badvalue(&self) -> bool {
-        matches!(*self, Yaml::BadValue)
+    #[must_use] 
+    pub const fn is_badvalue(&self) -> bool {
+        matches!(*self, Self::BadValue)
     }
 
     /// Parse a string into a Yaml value with automatic type detection
     #[inline]
-    pub fn parse_str(v: &str) -> Yaml {
+    #[must_use] 
+    pub fn parse_str(v: &str) -> Self {
         // Handle hexadecimal numbers (0x, +0x, -0x)
         if let Some(stripped) = v.strip_prefix("0x")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_hexdigit())
-            && let Ok(i) = i64::from_str_radix(stripped, 16) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 16)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("+0x")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_hexdigit())
-            && let Ok(i) = i64::from_str_radix(stripped, 16) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 16)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("-0x")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_hexdigit())
-            && let Ok(i) = i64::from_str_radix(stripped, 16) {
-                return Yaml::Integer(-i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 16)
+        {
+            return Self::Integer(-i);
+        }
         // Handle octal numbers (0o, +0o, -0o)
         if let Some(stripped) = v.strip_prefix("0o")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_digit() && c < '8')
-            && let Ok(i) = i64::from_str_radix(stripped, 8) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 8)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("+0o")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_digit() && c < '8')
-            && let Ok(i) = i64::from_str_radix(stripped, 8) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 8)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("-0o")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c.is_ascii_digit() && c < '8')
-            && let Ok(i) = i64::from_str_radix(stripped, 8) {
-                return Yaml::Integer(-i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 8)
+        {
+            return Self::Integer(-i);
+        }
         // Handle binary numbers (0b, +0b, -0b)
         if let Some(stripped) = v.strip_prefix("0b")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c == '0' || c == '1')
-            && let Ok(i) = i64::from_str_radix(stripped, 2) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 2)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("+0b")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c == '0' || c == '1')
-            && let Ok(i) = i64::from_str_radix(stripped, 2) {
-                return Yaml::Integer(i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 2)
+        {
+            return Self::Integer(i);
+        }
         if let Some(stripped) = v.strip_prefix("-0b")
             && !stripped.is_empty()
             && stripped.chars().all(|c| c == '0' || c == '1')
-            && let Ok(i) = i64::from_str_radix(stripped, 2) {
-                return Yaml::Integer(-i);
-            }
+            && let Ok(i) = i64::from_str_radix(stripped, 2)
+        {
+            return Self::Integer(-i);
+        }
         if let Some(stripped) = v.strip_prefix('+')
             && let Ok(i) = stripped.parse::<i64>()
-            && !has_invalid_leading_zeros(v) 
-            && !has_invalid_sign_prefix(v) {
-                return Yaml::Integer(i);
-            }
+            && !has_invalid_leading_zeros(v)
+            && !has_invalid_sign_prefix(v)
+        {
+            return Self::Integer(i);
+        }
         match v {
-            "~" | "null" => Yaml::Null,
-            "true" => Yaml::Boolean(true),
-            "false" => Yaml::Boolean(false),
-            _ if v.parse::<i64>().is_ok() && !has_invalid_leading_zeros(v) && !has_invalid_sign_prefix(v) => {
+            "~" | "null" => Self::Null,
+            "true" => Self::Boolean(true),
+            "false" => Self::Boolean(false),
+            _ if v.parse::<i64>().is_ok()
+                && !has_invalid_leading_zeros(v)
+                && !has_invalid_sign_prefix(v) =>
+            {
                 if let Ok(i) = v.parse::<i64>() {
-                    Yaml::Integer(i)
+                    Self::Integer(i)
                 } else {
-                    Yaml::String(v.into())
+                    Self::String(v.into())
                 }
-            },
-            _ if parse_f64(v).is_some() => Yaml::Real(v.into()),
-            _ => Yaml::String(v.into()),
+            }
+            _ if parse_f64(v).is_some() => Self::Real(v.into()),
+            _ => Self::String(v.into()),
         }
     }
 }
@@ -231,17 +253,20 @@ fn has_invalid_leading_zeros(v: &str) -> bool {
     if v == "0" || v == "+0" || v == "-0" {
         return false;
     }
-    
+
     // Check for leading zeros in positive numbers
     if v.starts_with('0') && v.len() > 1 && v.chars().nth(1).unwrap().is_ascii_digit() {
         return true;
     }
-    
+
     // Check for leading zeros in signed numbers
-    if (v.starts_with("+0") || v.starts_with("-0")) && v.len() > 2 && v.chars().nth(2).unwrap().is_ascii_digit() {
+    if (v.starts_with("+0") || v.starts_with("-0"))
+        && v.len() > 2
+        && v.chars().nth(2).unwrap().is_ascii_digit()
+    {
         return true;
     }
-    
+
     false
 }
 
@@ -264,10 +289,10 @@ pub fn parse_f64(v: &str) -> Option<f64> {
 
 /// Indexing by &str
 impl std::ops::Index<&str> for Yaml {
-    type Output = Yaml;
+    type Output = Self;
     #[inline]
-    fn index(&self, idx: &str) -> &Yaml {
-        let key = Yaml::String(idx.to_owned());
+    fn index(&self, idx: &str) -> &Self {
+        let key = Self::String(idx.to_owned());
         match self.as_hash() {
             Some(h) => h.get(&key).unwrap_or(&BAD_VALUE),
             None => &BAD_VALUE,
@@ -277,13 +302,13 @@ impl std::ops::Index<&str> for Yaml {
 
 /// Indexing by usize
 impl std::ops::Index<usize> for Yaml {
-    type Output = Yaml;
+    type Output = Self;
     #[inline]
-    fn index(&self, idx: usize) -> &Yaml {
+    fn index(&self, idx: usize) -> &Self {
         if let Some(v) = self.as_vec() {
             v.get(idx).unwrap_or(&BAD_VALUE)
         } else if let Some(h) = self.as_hash() {
-            let key = Yaml::Integer(idx as i64);
+            let key = Self::Integer(idx as i64);
             h.get(&key).unwrap_or(&BAD_VALUE)
         } else {
             &BAD_VALUE

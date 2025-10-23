@@ -14,17 +14,20 @@ pub struct Stream<'input> {
 
 impl<'input> Stream<'input> {
     #[inline]
-    pub fn new(documents: Vec<Document<'input>>) -> Self {
+    #[must_use] 
+    pub const fn new(documents: Vec<Document<'input>>) -> Self {
         Self { documents }
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.documents.is_empty()
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    #[must_use] 
+    pub const fn len(&self) -> usize {
         self.documents.len()
     }
 
@@ -45,7 +48,8 @@ pub struct Document<'input> {
 
 impl<'input> Document<'input> {
     #[inline]
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         content: Option<Node<'input>>,
         has_explicit_start: bool,
         has_explicit_end: bool,
@@ -60,7 +64,8 @@ impl<'input> Document<'input> {
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.content.is_none()
     }
 }
@@ -86,7 +91,8 @@ pub enum Node<'input> {
 
 impl<'input> Node<'input> {
     /// Get the position of this node
-    pub fn position(&self) -> Position {
+    #[must_use] 
+    pub const fn position(&self) -> Position {
         match self {
             Node::Scalar(n) => n.position,
             Node::Sequence(n) => n.position,
@@ -100,30 +106,35 @@ impl<'input> Node<'input> {
 
     /// Check if this node is a scalar
     #[inline]
-    pub fn is_scalar(&self) -> bool {
+    #[must_use] 
+    pub const fn is_scalar(&self) -> bool {
         matches!(self, Node::Scalar(_))
     }
 
     /// Check if this node is a sequence
     #[inline]
-    pub fn is_sequence(&self) -> bool {
+    #[must_use] 
+    pub const fn is_sequence(&self) -> bool {
         matches!(self, Node::Sequence(_))
     }
 
     /// Check if this node is a mapping
     #[inline]
-    pub fn is_mapping(&self) -> bool {
+    #[must_use] 
+    pub const fn is_mapping(&self) -> bool {
         matches!(self, Node::Mapping(_))
     }
 
     /// Check if this node is null
     #[inline]
-    pub fn is_null(&self) -> bool {
+    #[must_use] 
+    pub const fn is_null(&self) -> bool {
         matches!(self, Node::Null(_))
     }
 
     /// Get scalar value if this is a scalar node
-    pub fn as_scalar(&self) -> Option<&ScalarNode<'input>> {
+    #[must_use] 
+    pub const fn as_scalar(&self) -> Option<&ScalarNode<'input>> {
         match self {
             Node::Scalar(scalar) => Some(scalar),
             _ => None,
@@ -131,7 +142,8 @@ impl<'input> Node<'input> {
     }
 
     /// Get sequence if this is a sequence node
-    pub fn as_sequence(&self) -> Option<&SequenceNode<'input>> {
+    #[must_use] 
+    pub const fn as_sequence(&self) -> Option<&SequenceNode<'input>> {
         match self {
             Node::Sequence(seq) => Some(seq),
             _ => None,
@@ -139,7 +151,8 @@ impl<'input> Node<'input> {
     }
 
     /// Get mapping if this is a mapping node
-    pub fn as_mapping(&self) -> Option<&MappingNode<'input>> {
+    #[must_use] 
+    pub const fn as_mapping(&self) -> Option<&MappingNode<'input>> {
         match self {
             Node::Mapping(map) => Some(map),
             _ => None,
@@ -158,7 +171,8 @@ pub struct ScalarNode<'input> {
 
 impl<'input> ScalarNode<'input> {
     #[inline]
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         value: Cow<'input, str>,
         style: ScalarStyle,
         tag: Option<Cow<'input, str>>,
@@ -174,21 +188,25 @@ impl<'input> ScalarNode<'input> {
 
     /// Get the string value
     #[inline]
+    #[must_use] 
     pub fn as_str(&self) -> &str {
         &self.value
     }
 
     /// Parse as integer
+    #[must_use] 
     pub fn as_int(&self) -> Option<i64> {
         self.value.parse().ok()
     }
 
     /// Parse as float
+    #[must_use] 
     pub fn as_float(&self) -> Option<f64> {
         self.value.parse().ok()
     }
 
     /// Parse as boolean
+    #[must_use] 
     pub fn as_bool(&self) -> Option<bool> {
         match self.value.as_ref() {
             "true" | "True" | "TRUE" | "yes" | "Yes" | "YES" | "on" | "On" | "ON" => Some(true),
@@ -198,6 +216,7 @@ impl<'input> ScalarNode<'input> {
     }
 
     /// Check if this represents a null value
+    #[must_use] 
     pub fn is_null(&self) -> bool {
         matches!(self.value.as_ref(), "null" | "Null" | "NULL" | "~" | "")
     }
@@ -213,7 +232,8 @@ pub struct SequenceNode<'input> {
 
 impl<'input> SequenceNode<'input> {
     #[inline]
-    pub fn new(items: Vec<Node<'input>>, style: SequenceStyle, position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(items: Vec<Node<'input>>, style: SequenceStyle, position: Position) -> Self {
         Self {
             items,
             style,
@@ -222,12 +242,14 @@ impl<'input> SequenceNode<'input> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    #[must_use] 
+    pub const fn len(&self) -> usize {
         self.items.len()
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
@@ -237,6 +259,7 @@ impl<'input> SequenceNode<'input> {
     }
 
     #[inline]
+    #[must_use] 
     pub fn get(&self, index: usize) -> Option<&Node<'input>> {
         self.items.get(index)
     }
@@ -264,7 +287,8 @@ pub struct MappingNode<'input> {
 
 impl<'input> MappingNode<'input> {
     #[inline]
-    pub fn new(pairs: Vec<MappingPair<'input>>, style: MappingStyle, position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(pairs: Vec<MappingPair<'input>>, style: MappingStyle, position: Position) -> Self {
         Self {
             pairs,
             style,
@@ -273,12 +297,14 @@ impl<'input> MappingNode<'input> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
+    #[must_use] 
+    pub const fn len(&self) -> usize {
         self.pairs.len()
     }
 
     #[inline]
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.pairs.is_empty()
     }
 
@@ -288,6 +314,7 @@ impl<'input> MappingNode<'input> {
     }
 
     /// Find value by key (string comparison)
+    #[must_use] 
     pub fn get(&self, key: &str) -> Option<&Node<'input>> {
         for pair in &self.pairs {
             if let Some(scalar) = pair.key.as_scalar()
@@ -300,6 +327,7 @@ impl<'input> MappingNode<'input> {
     }
 
     /// Get all keys as strings (if they are scalars)
+    #[must_use] 
     pub fn keys(&self) -> Vec<&str> {
         self.pairs
             .iter()
@@ -328,7 +356,8 @@ pub struct MappingPair<'input> {
 
 impl<'input> MappingPair<'input> {
     #[inline]
-    pub fn new(key: Node<'input>, value: Node<'input>) -> Self {
+    #[must_use] 
+    pub const fn new(key: Node<'input>, value: Node<'input>) -> Self {
         Self { key, value }
     }
 }
@@ -343,7 +372,8 @@ pub struct AnchorNode<'input> {
 
 impl<'input> AnchorNode<'input> {
     #[inline]
-    pub fn new(name: Cow<'input, str>, node: Box<Node<'input>>, position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(name: Cow<'input, str>, node: Box<Node<'input>>, position: Position) -> Self {
         Self {
             name,
             node,
@@ -361,7 +391,8 @@ pub struct AliasNode<'input> {
 
 impl<'input> AliasNode<'input> {
     #[inline]
-    pub fn new(name: Cow<'input, str>, position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(name: Cow<'input, str>, position: Position) -> Self {
         Self { name, position }
     }
 }
@@ -377,7 +408,8 @@ pub struct TaggedNode<'input> {
 
 impl<'input> TaggedNode<'input> {
     #[inline]
-    pub fn new(
+    #[must_use] 
+    pub const fn new(
         handle: Option<Cow<'input, str>>,
         suffix: Cow<'input, str>,
         node: Box<Node<'input>>,
@@ -392,6 +424,7 @@ impl<'input> TaggedNode<'input> {
     }
 
     /// Get the full tag name
+    #[must_use] 
     pub fn tag_name(&self) -> String {
         match &self.handle {
             Some(handle) => format!("{}{}", handle, self.suffix),
@@ -408,7 +441,8 @@ pub struct NullNode {
 
 impl NullNode {
     #[inline]
-    pub fn new(position: Position) -> Self {
+    #[must_use] 
+    pub const fn new(position: Position) -> Self {
         Self { position }
     }
 }
@@ -488,6 +522,7 @@ pub mod utils {
     use super::*;
 
     /// Collect all anchor names in a document
+    #[must_use] 
     pub fn collect_anchors<'input>(node: &'input Node<'input>) -> Vec<&'input str> {
         let mut anchors = Vec::new();
         collect_anchors_recursive(node, &mut anchors);
@@ -522,6 +557,7 @@ pub mod utils {
     }
 
     /// Collect all alias names in a document
+    #[must_use] 
     pub fn collect_aliases<'input>(node: &'input Node<'input>) -> Vec<&'input str> {
         let mut aliases = Vec::new();
         collect_aliases_recursive(node, &mut aliases);

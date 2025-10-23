@@ -16,7 +16,8 @@ pub struct Token<'input> {
 
 impl<'input> Token<'input> {
     #[inline]
-    pub fn new(kind: TokenKind<'input>, position: Position, length: usize) -> Self {
+    #[must_use] 
+    pub const fn new(kind: TokenKind<'input>, position: Position, length: usize) -> Self {
         Self {
             kind,
             position,
@@ -26,7 +27,8 @@ impl<'input> Token<'input> {
 
     /// Get the end position of this token
     #[inline]
-    pub fn end_position(&self) -> Position {
+    #[must_use] 
+    pub const fn end_position(&self) -> Position {
         Position::new(
             self.position.line,
             self.position.column + self.length,
@@ -123,7 +125,8 @@ pub enum ScalarStyle {
 impl<'input> TokenKind<'input> {
     /// Check if this token can start a value
     #[inline]
-    pub fn can_start_value(&self) -> bool {
+    #[must_use] 
+    pub const fn can_start_value(&self) -> bool {
         matches!(
             self,
             TokenKind::Scalar { .. }
@@ -137,13 +140,15 @@ impl<'input> TokenKind<'input> {
 
     /// Check if this token ends a flow context
     #[inline]
-    pub fn ends_flow(&self) -> bool {
+    #[must_use] 
+    pub const fn ends_flow(&self) -> bool {
         matches!(self, TokenKind::FlowSequenceEnd | TokenKind::FlowMappingEnd)
     }
 
     /// Check if this token is structural (affects parsing state)
     #[inline]
-    pub fn is_structural(&self) -> bool {
+    #[must_use] 
+    pub const fn is_structural(&self) -> bool {
         matches!(
             self,
             TokenKind::StreamStart
@@ -166,7 +171,8 @@ impl<'input> TokenKind<'input> {
 
     /// Check if this token is content (carries actual data)
     #[inline]
-    pub fn is_content(&self) -> bool {
+    #[must_use] 
+    pub const fn is_content(&self) -> bool {
         matches!(
             self,
             TokenKind::Scalar { .. }
@@ -178,7 +184,8 @@ impl<'input> TokenKind<'input> {
 
     /// Check if this token is formatting/whitespace
     #[inline]
-    pub fn is_formatting(&self) -> bool {
+    #[must_use] 
+    pub const fn is_formatting(&self) -> bool {
         matches!(
             self,
             TokenKind::Whitespace(_) | TokenKind::LineBreak | TokenKind::Comment(_)
@@ -186,7 +193,8 @@ impl<'input> TokenKind<'input> {
     }
 
     /// Get the display name for this token type
-    pub fn type_name(&self) -> &'static str {
+    #[must_use] 
+    pub const fn type_name(&self) -> &'static str {
         match self {
             TokenKind::StreamStart => "stream-start",
             TokenKind::StreamEnd => "stream-end",
@@ -221,11 +229,11 @@ impl<'input> TokenKind<'input> {
 impl std::fmt::Display for ScalarStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ScalarStyle::Plain => write!(f, "plain"),
-            ScalarStyle::SingleQuoted => write!(f, "single-quoted"),
-            ScalarStyle::DoubleQuoted => write!(f, "double-quoted"),
-            ScalarStyle::Literal => write!(f, "literal"),
-            ScalarStyle::Folded => write!(f, "folded"),
+            Self::Plain => write!(f, "plain"),
+            Self::SingleQuoted => write!(f, "single-quoted"),
+            Self::DoubleQuoted => write!(f, "double-quoted"),
+            Self::Literal => write!(f, "literal"),
+            Self::Folded => write!(f, "folded"),
         }
     }
 }
@@ -234,7 +242,8 @@ impl std::fmt::Display for ScalarStyle {
 impl<'input> TokenKind<'input> {
     /// Get the precedence of this token for parsing decisions
     #[inline]
-    pub fn precedence(&self) -> u8 {
+    #[must_use] 
+    pub const fn precedence(&self) -> u8 {
         match self {
             TokenKind::StreamStart | TokenKind::StreamEnd => 0,
             TokenKind::DocumentStart | TokenKind::DocumentEnd => 1,

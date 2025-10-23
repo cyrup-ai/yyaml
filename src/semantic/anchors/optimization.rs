@@ -12,6 +12,7 @@ pub struct AnchorOptimizations;
 
 impl AnchorOptimizations {
     /// Calculate optimal cache size based on document characteristics
+    #[must_use] 
     pub fn calculate_optimal_cache_size(
         anchor_count: usize,
         estimated_alias_count: usize,
@@ -27,6 +28,7 @@ impl AnchorOptimizations {
     }
 
     /// Estimate memory usage for anchor registry
+    #[must_use] 
     pub fn estimate_memory_usage(registry: &AnchorRegistry) -> MemoryUsageEstimate {
         let mut total_bytes = std::mem::size_of::<AnchorRegistry>();
         let mut node_bytes = 0;
@@ -58,6 +60,7 @@ impl AnchorOptimizations {
     }
 
     /// Suggest optimizations based on anchor usage patterns
+    #[must_use] 
     pub fn suggest_optimizations(statistics: &AnchorStatistics) -> Vec<OptimizationSuggestion> {
         let mut suggestions = Vec::new();
 
@@ -137,7 +140,7 @@ impl AnchorOptimizations {
     }
 
     /// Estimate cache memory usage based on anchor count
-    fn estimate_cache_memory_usage(anchor_count: usize) -> usize {
+    const fn estimate_cache_memory_usage(anchor_count: usize) -> usize {
         // Estimate based on typical cache entry size
         let avg_entry_size = 256; // Estimated average cached node size
         let cache_overhead = 64; // HashMap overhead per entry
@@ -146,6 +149,7 @@ impl AnchorOptimizations {
     }
 
     /// Generate optimization report
+    #[must_use] 
     pub fn generate_optimization_report(
         registry: &AnchorRegistry,
         statistics: &AnchorStatistics,
@@ -165,6 +169,7 @@ impl AnchorOptimizations {
     }
 
     /// Analyze anchor complexity and suggest simplifications
+    #[must_use] 
     pub fn analyze_complexity(registry: &AnchorRegistry) -> ComplexityAnalysis {
         let mut max_depth = 0;
         let mut total_depth = 0;
@@ -235,6 +240,7 @@ impl AnchorOptimizations {
     }
 
     /// Generate cache tuning recommendations
+    #[must_use] 
     pub fn cache_tuning_recommendations(
         statistics: &AnchorStatistics,
     ) -> CacheTuningRecommendations {
@@ -317,6 +323,7 @@ pub struct MemoryUsageEstimate {
 
 impl MemoryUsageEstimate {
     /// Get memory usage breakdown as percentages
+    #[must_use] 
     pub fn breakdown_percentages(&self) -> MemoryBreakdown {
         let total = self.total_bytes as f64;
 
@@ -329,7 +336,8 @@ impl MemoryUsageEstimate {
     }
 
     /// Check if memory usage is within acceptable limits
-    pub fn is_within_limits(&self, max_bytes: usize) -> bool {
+    #[must_use] 
+    pub const fn is_within_limits(&self, max_bytes: usize) -> bool {
         self.total_bytes <= max_bytes
     }
 }
@@ -356,38 +364,40 @@ pub enum OptimizationSuggestion {
 
 impl OptimizationSuggestion {
     /// Get suggestion description
-    pub fn description(&self) -> &'static str {
+    #[must_use] 
+    pub const fn description(&self) -> &'static str {
         match self {
-            OptimizationSuggestion::IncreaseCacheSize => {
+            Self::IncreaseCacheSize => {
                 "Consider increasing cache size to improve hit rate"
             }
-            OptimizationSuggestion::OptimizeMemoryUsage => {
+            Self::OptimizeMemoryUsage => {
                 "Memory usage is high, consider optimizing node storage"
             }
-            OptimizationSuggestion::OptimizeResolutionAlgorithm => {
+            Self::OptimizeResolutionAlgorithm => {
                 "Resolution times are slow, consider algorithm improvements"
             }
-            OptimizationSuggestion::ImproveCircularReferenceDetection => {
+            Self::ImproveCircularReferenceDetection => {
                 "Circular references detected, improve detection efficiency"
             }
-            OptimizationSuggestion::RemoveUnusedAnchors => {
+            Self::RemoveUnusedAnchors => {
                 "Many anchors are unused, consider removing them"
             }
-            OptimizationSuggestion::ReduceNestingDepth => {
+            Self::ReduceNestingDepth => {
                 "Deep nesting detected, consider flattening structure"
             }
         }
     }
 
     /// Get priority level
-    pub fn priority(&self) -> Priority {
+    #[must_use] 
+    pub const fn priority(&self) -> Priority {
         match self {
-            OptimizationSuggestion::ImproveCircularReferenceDetection => Priority::High,
-            OptimizationSuggestion::OptimizeResolutionAlgorithm => Priority::High,
-            OptimizationSuggestion::OptimizeMemoryUsage => Priority::Medium,
-            OptimizationSuggestion::IncreaseCacheSize => Priority::Medium,
-            OptimizationSuggestion::ReduceNestingDepth => Priority::Medium,
-            OptimizationSuggestion::RemoveUnusedAnchors => Priority::Low,
+            Self::ImproveCircularReferenceDetection => Priority::High,
+            Self::OptimizeResolutionAlgorithm => Priority::High,
+            Self::OptimizeMemoryUsage => Priority::Medium,
+            Self::IncreaseCacheSize => Priority::Medium,
+            Self::ReduceNestingDepth => Priority::Medium,
+            Self::RemoveUnusedAnchors => Priority::Low,
         }
     }
 }
@@ -421,6 +431,7 @@ pub struct EfficiencyMetrics {
 
 impl EfficiencyMetrics {
     /// Calculate efficiency metrics from statistics
+    #[must_use] 
     pub fn calculate(statistics: &AnchorStatistics) -> Self {
         let memory_efficiency = if statistics.memory_usage_bytes > 0 {
             (statistics.total_anchors as f64 * 1024.0) / statistics.memory_usage_bytes as f64

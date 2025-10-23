@@ -10,19 +10,22 @@ pub struct LinkedHashMap<K: PartialEq + Eq, V> {
 }
 
 impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
-    pub fn new() -> Self {
-        LinkedHashMap {
+    #[must_use] 
+    pub const fn new() -> Self {
+        Self {
             map: BTreeMap::new(),
             order: Vec::new(),
             next_id: 0,
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[must_use] 
+    pub const fn is_empty(&self) -> bool {
         self.order.is_empty()
     }
 
-    pub fn len(&self) -> usize {
+    #[must_use] 
+    pub const fn len(&self) -> usize {
         self.order.len()
     }
 
@@ -32,7 +35,9 @@ impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
         Q: PartialEq + ?Sized,
     {
         for id in &self.order {
-            if let Some((k, v)) = self.map.get(id) && k.borrow() == key {
+            if let Some((k, v)) = self.map.get(id)
+                && k.borrow() == key
+            {
                 return Some(v);
             }
         }
@@ -42,7 +47,9 @@ impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
     pub fn insert(&mut self, key: K, value: V) -> Option<V> {
         // check if key exists
         for id in &self.order {
-            if let Some((k, old_v)) = self.map.get_mut(id) && k == &key {
+            if let Some((k, old_v)) = self.map.get_mut(id)
+                && k == &key
+            {
                 let old = std::mem::replace(old_v, value);
                 return Some(old);
             }
@@ -96,6 +103,7 @@ impl<'a, K: PartialEq + Eq, V> Iterator for Iter<'a, K, V> {
 
 impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
     #[inline]
+    #[must_use] 
     pub fn iter(&self) -> Iter<'_, K, V> {
         Iter {
             map: &self.map,
@@ -104,8 +112,9 @@ impl<K: PartialEq + Eq, V> LinkedHashMap<K, V> {
     }
 
     #[inline]
+    #[must_use] 
     pub fn with_capacity(capacity: usize) -> Self {
-        LinkedHashMap {
+        Self {
             map: BTreeMap::new(),
             order: Vec::with_capacity(capacity),
             next_id: 0,
@@ -119,7 +128,7 @@ impl<K: PartialEq + Eq, V> std::iter::FromIterator<(K, V)> for LinkedHashMap<K, 
     fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
         let iter = iter.into_iter();
         let (lower, _) = iter.size_hint();
-        let mut map = LinkedHashMap::with_capacity(lower);
+        let mut map = Self::with_capacity(lower);
 
         for (key, value) in iter {
             map.insert(key, value);

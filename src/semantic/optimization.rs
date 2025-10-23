@@ -10,6 +10,7 @@ pub struct SemanticOptimizations;
 
 impl SemanticOptimizations {
     /// Estimate optimal buffer sizes for semantic analysis
+    #[must_use] 
     pub fn estimate_buffer_sizes(stream: &Stream) -> BufferSizeHints {
         let total_nodes = stream
             .documents
@@ -30,6 +31,7 @@ impl SemanticOptimizations {
     }
 
     /// Estimate node count in document
+    #[must_use] 
     pub fn estimate_node_count(document: &Document) -> usize {
         document
             .content
@@ -68,6 +70,7 @@ impl SemanticOptimizations {
     }
 
     /// Check if document requires complex analysis
+    #[must_use] 
     pub fn requires_complex_analysis(document: &Document) -> bool {
         document
             .content
@@ -121,6 +124,7 @@ impl SemanticOptimizations {
     }
 
     /// Estimate memory requirements for semantic analysis
+    #[must_use] 
     pub fn estimate_memory_requirements(stream: &Stream) -> MemoryEstimate {
         let hints = Self::estimate_buffer_sizes(stream);
 
@@ -140,6 +144,7 @@ impl SemanticOptimizations {
     }
 
     /// Determine if parallel processing would be beneficial
+    #[must_use] 
     pub fn should_use_parallel_processing(stream: &Stream) -> bool {
         let total_nodes = stream
             .documents
@@ -153,6 +158,7 @@ impl SemanticOptimizations {
     }
 
     /// Get optimization level based on document complexity
+    #[must_use] 
     pub fn get_optimization_level(document: &Document) -> OptimizationLevel {
         let node_count = Self::estimate_node_count(document);
         let has_complex = Self::requires_complex_analysis(document);
@@ -167,6 +173,7 @@ impl SemanticOptimizations {
     }
 
     /// Pre-allocate collections with optimal capacity
+    #[must_use] 
     pub fn pre_allocate_collections(hints: &BufferSizeHints) -> CollectionCapacities {
         // Add 25% buffer to avoid frequent reallocations
         let buffer_factor = 1.25;
@@ -261,7 +268,8 @@ impl Default for PerformanceConfig {
 
 impl PerformanceConfig {
     /// Create configuration optimized for speed
-    pub fn for_speed() -> Self {
+    #[must_use] 
+    pub const fn for_speed() -> Self {
         Self {
             optimization_level: OptimizationLevel::Maximum,
             enable_parallel_processing: true,
@@ -276,7 +284,8 @@ impl PerformanceConfig {
     }
 
     /// Create configuration optimized for memory usage
-    pub fn for_memory() -> Self {
+    #[must_use] 
+    pub const fn for_memory() -> Self {
         Self {
             optimization_level: OptimizationLevel::Basic,
             enable_parallel_processing: false,
@@ -291,6 +300,7 @@ impl PerformanceConfig {
     }
 
     /// Create balanced configuration for general use
+    #[must_use] 
     pub fn balanced() -> Self {
         Self::default()
     }

@@ -28,11 +28,13 @@ pub struct SemanticAnalyzer<'input> {
 impl<'input> SemanticAnalyzer<'input> {
     /// Create new semantic analyzer with optimized configuration
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self::with_config(SemanticConfig::default())
     }
 
     /// Create semantic analyzer with custom configuration
+    #[must_use] 
     pub fn with_config(config: SemanticConfig<'input>) -> Self {
         let context = AnalysisContext::from_config(&config);
 
@@ -129,7 +131,6 @@ impl<'input> SemanticAnalyzer<'input> {
         Ok(document)
     }
 
-
     /// Recursively collect anchors from AST nodes with zero-allocation optimization
     #[allow(dead_code)] // May be used for future semantic analysis extensions
     #[inline]
@@ -145,7 +146,7 @@ impl<'input> SemanticAnalyzer<'input> {
         if let Node::Anchor(anchor_node) = node {
             let anchor_name = anchor_node.name.as_ref();
             let anchor_position = node.position();
-            
+
             // Track anchor with minimal allocation
             let anchor_id = self.reference_tracker.track_anchor(
                 std::borrow::Cow::Borrowed(anchor_name),
@@ -180,7 +181,7 @@ impl<'input> SemanticAnalyzer<'input> {
                         Node::Scalar(key_scalar) => key_scalar.value.as_ref(),
                         _ => "<complex_key>",
                     };
-                    
+
                     path.push(key_str.to_string());
                     self.collect_anchors_from_node_optimized(&pair.key, path)?;
                     self.collect_anchors_from_node_optimized(&pair.value, path)?;
@@ -192,7 +193,7 @@ impl<'input> SemanticAnalyzer<'input> {
                 self.collect_anchors_from_node_optimized(&anchor_node.node, path)?;
             }
             Node::Tagged(tagged_node) => {
-                // Process wrapped node recursively  
+                // Process wrapped node recursively
                 self.collect_anchors_from_node_optimized(&tagged_node.node, path)?;
             }
             Node::Scalar(_) | Node::Alias(_) | Node::Null(_) => {
@@ -202,7 +203,6 @@ impl<'input> SemanticAnalyzer<'input> {
 
         Ok(())
     }
-
 
     /// Collect anchors from owned document for single-pass processing
     fn collect_anchors_from_owned_document(
@@ -230,7 +230,7 @@ impl<'input> SemanticAnalyzer<'input> {
     }
 
     /// Recursively collect anchors from AST nodes for owned documents
-    #[inline] 
+    #[inline]
     fn collect_anchors_from_node_owned(
         &mut self,
         node: &Node<'input>,
@@ -238,7 +238,7 @@ impl<'input> SemanticAnalyzer<'input> {
     ) -> Result<(), SemanticError> {
         // For owned processing, we collect anchor names but don't store node references
         // This approach avoids lifetime issues while still gathering necessary metadata
-        
+
         // Update position for precise error tracking
         self.analysis_context.set_position(node.position());
 
@@ -246,10 +246,11 @@ impl<'input> SemanticAnalyzer<'input> {
         if let Node::Anchor(anchor_node) = node {
             let anchor_name = anchor_node.name.as_ref();
             let anchor_position = node.position();
-            
+
             // Store anchor name for later resolution (clone to avoid lifetime issues)
             let owned_anchor_name = anchor_name.to_string();
-            self.analysis_context.register_anchor_metadata(owned_anchor_name, anchor_position);
+            self.analysis_context
+                .register_anchor_metadata(owned_anchor_name, anchor_position);
         }
 
         // Process child nodes with optimal memory usage
@@ -270,7 +271,7 @@ impl<'input> SemanticAnalyzer<'input> {
                         Node::Scalar(key_scalar) => key_scalar.value.as_ref(),
                         _ => "<complex_key>",
                     };
-                    
+
                     path.push(key_str.to_string());
                     self.collect_anchors_from_node_owned(&pair.key, path)?;
                     self.collect_anchors_from_node_owned(&pair.value, path)?;
@@ -282,7 +283,7 @@ impl<'input> SemanticAnalyzer<'input> {
                 self.collect_anchors_from_node_owned(&anchor_node.node, path)?;
             }
             Node::Tagged(tagged_node) => {
-                // Process wrapped node recursively  
+                // Process wrapped node recursively
                 self.collect_anchors_from_node_owned(&tagged_node.node, path)?;
             }
             Node::Scalar(_) | Node::Alias(_) | Node::Null(_) => {
@@ -295,10 +296,7 @@ impl<'input> SemanticAnalyzer<'input> {
 
     /// Recursively resolve tags in AST nodes for owned documents
     #[inline]
-    fn resolve_tags_in_node_owned(
-        &mut self,
-        node: &Node<'input>,
-    ) -> Result<(), SemanticError> {
+    fn resolve_tags_in_node_owned(&mut self, node: &Node<'input>) -> Result<(), SemanticError> {
         // Update position for precise error tracking
         self.analysis_context.set_position(node.position());
 
@@ -308,7 +306,8 @@ impl<'input> SemanticAnalyzer<'input> {
             let owned_handle = tagged_node.handle.as_ref().map(|h| h.to_string());
             let owned_suffix = tagged_node.suffix.to_string();
             let tag_position = node.position();
-            self.analysis_context.register_tag_metadata(owned_handle, owned_suffix, tag_position);
+            self.analysis_context
+                .register_tag_metadata(owned_handle, owned_suffix, tag_position);
         }
 
         // Process child nodes efficiently
@@ -343,10 +342,7 @@ impl<'input> SemanticAnalyzer<'input> {
     /// Recursively resolve tags in AST nodes with blazing-fast performance
     #[allow(dead_code)] // May be used for future semantic analysis extensions
     #[inline]
-    fn resolve_tags_in_node_optimized(
-        &mut self,
-        node: &Node<'input>,
-    ) -> Result<(), SemanticError> {
+    fn resolve_tags_in_node_optimized(&mut self, node: &Node<'input>) -> Result<(), SemanticError> {
         // Update position for precise error tracking
         self.analysis_context.set_position(node.position());
 
@@ -496,11 +492,13 @@ impl<'input> SemanticAnalyzer<'input> {
 
     /// Get current analysis context
     #[inline]
-    pub fn context(&self) -> &AnalysisContext<'input> {
+    #[must_use] 
+    pub const fn context(&self) -> &AnalysisContext<'input> {
         &self.analysis_context
     }
 
     /// Get analysis metrics
+    #[must_use] 
     pub fn metrics(&self) -> AnalysisMetrics {
         AnalysisMetrics {
             processing_time: std::time::Duration::default(),

@@ -51,11 +51,11 @@ pub struct ValidationWarningContext<'input> {
 impl std::fmt::Display for WarningSeverity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WarningSeverity::Info => write!(f, "INFO"),
-            WarningSeverity::Low => write!(f, "LOW"),
-            WarningSeverity::Medium => write!(f, "MEDIUM"),
-            WarningSeverity::High => write!(f, "HIGH"),
-            WarningSeverity::Critical => write!(f, "CRITICAL"),
+            Self::Info => write!(f, "INFO"),
+            Self::Low => write!(f, "LOW"),
+            Self::Medium => write!(f, "MEDIUM"),
+            Self::High => write!(f, "HIGH"),
+            Self::Critical => write!(f, "CRITICAL"),
         }
     }
 }
@@ -63,13 +63,13 @@ impl std::fmt::Display for WarningSeverity {
 impl std::fmt::Display for WarningType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WarningType::StructuralIssue => write!(f, "Structural Issue"),
-            WarningType::SemanticInconsistency => write!(f, "Semantic Inconsistency"),
-            WarningType::PerformanceImpact => write!(f, "Performance Impact"),
-            WarningType::CompatibilityIssue => write!(f, "Compatibility Issue"),
-            WarningType::StyleViolation => write!(f, "Style Violation"),
-            WarningType::SecurityConcern => write!(f, "Security Concern"),
-            WarningType::DataIntegrity => write!(f, "Data Integrity"),
+            Self::StructuralIssue => write!(f, "Structural Issue"),
+            Self::SemanticInconsistency => write!(f, "Semantic Inconsistency"),
+            Self::PerformanceImpact => write!(f, "Performance Impact"),
+            Self::CompatibilityIssue => write!(f, "Compatibility Issue"),
+            Self::StyleViolation => write!(f, "Style Violation"),
+            Self::SecurityConcern => write!(f, "Security Concern"),
+            Self::DataIntegrity => write!(f, "Data Integrity"),
         }
     }
 }

@@ -4,6 +4,8 @@
 //! plain, quoted, and block scalars with proper escape handling.
 
 use crate::error::ScanError;
+use crate::parser::character_productions::CharacterProductions;
+use crate::parser::grammar::ChompingMode;
 use crate::scanner::ScannerConfig;
 use crate::scanner::state::ScannerState;
 
@@ -17,10 +19,12 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
     let mut spaces = String::new();
     let start_col = state.column();
     let in_flow = state.in_flow_context();
+    log::debug!("scan_plain_scalar: in_flow={}, flow_level={}, start_col={}", in_flow, state.flow_level(), start_col);
 
     while let Ok(ch) = state.peek_char() {
         // Flow context indicators
         if in_flow && matches!(ch, ',' | '[' | ']' | '{' | '}') {
+            log::debug!("scan_plain_scalar: stopping at flow indicator '{}' in flow context", ch);
             break;
         }
 
@@ -46,9 +50,15 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
         }
 
         // Whitespace handling
-        if matches!(ch, ' ' | '\t') {
+        if ch == ' ' {
             spaces.push(state.consume_char()?);
             continue;
+        }
+        if ch == '\t' {
+            return Err(ScanError::new(
+                state.mark(),
+                "tabs are not allowed in YAML, use spaces for indentation",
+            ));
         }
 
         // Line breaks
@@ -67,9 +77,14 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
                 let mut next_col = 0;
                 let mut temp_chars = Vec::new();
                 while let Ok(ch) = state.peek_char() {
-                    if matches!(ch, ' ' | '\t') {
+                    if ch == ' ' {
                         temp_chars.push(state.consume_char()?);
                         next_col += 1;
+                    } else if ch == '\t' {
+                        return Err(ScanError::new(
+                            state.mark(),
+                            "tabs are not allowed in YAML, use spaces for indentation",
+                        ));
                     } else {
                         break;
                     }
@@ -95,9 +110,10 @@ pub fn scan_plain_scalar<T: Iterator<Item = char>>(
 
         // Document markers
         if (ch == '-' || ch == '.')
-            && (state.check_document_start()? || state.check_document_end()?) {
-                break;
-            }
+            && (state.check_document_start()? || state.check_document_end()?)
+        {
+            break;
+        }
 
         // Regular character
         if !spaces.is_empty() {
@@ -142,8 +158,19 @@ pub fn scan_single_quoted<T: Iterator<Item = char>>(
                 // Fold newlines to spaces
                 state.consume_char()?;
                 // Skip leading whitespace on next line
-                while matches!(state.peek_char(), Ok(' ') | Ok('\t')) {
-                    state.consume_char()?;
+                loop {
+                    match state.peek_char() {
+                        Ok(' ') => {
+                            state.consume_char()?;
+                        }
+                        Ok('\t') => {
+                            return Err(ScanError::new(
+                                state.mark(),
+                                "tabs are not allowed in YAML, use spaces for indentation",
+                            ));
+                        }
+                        _ => break,
+                    }
                 }
                 if !result.is_empty() && !result.ends_with(' ') {
                     result.push(' ');
@@ -172,15 +199,26 @@ pub fn scan_double_quoted<T: Iterator<Item = char>>(
             }
             '\\' => {
                 state.consume_char()?;
-                let escaped = process_escape_sequence(state)?;
+                let escaped = process_escape_sequence_consolidated(state)?;
                 result.push(escaped);
             }
             '\n' | '\r' => {
                 // Fold newlines to spaces
                 state.consume_char()?;
                 // Skip leading whitespace on next line
-                while matches!(state.peek_char(), Ok(' ') | Ok('\t')) {
-                    state.consume_char()?;
+                loop {
+                    match state.peek_char() {
+                        Ok(' ') => {
+                            state.consume_char()?;
+                        }
+                        Ok('\t') => {
+                            return Err(ScanError::new(
+                                state.mark(),
+                                "tabs are not allowed in YAML, use spaces for indentation",
+                            ));
+                        }
+                        _ => break,
+                    }
                 }
                 if !result.is_empty() && !result.ends_with(' ') {
                     result.push(' ');
@@ -193,12 +231,15 @@ pub fn scan_double_quoted<T: Iterator<Item = char>>(
     }
 }
 
-/// Process escape sequence in double-quoted strings
+/// Process escape sequence using consolidated character productions API - zero allocation
 #[inline]
-fn process_escape_sequence<T: Iterator<Item = char>>(
+fn process_escape_sequence_consolidated<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<char, ScanError> {
-    match state.consume_char()? {
+    let escape_char = state.consume_char()?;
+
+    // Direct character processing without string allocation
+    match escape_char {
         '0' => Ok('\0'),
         'a' => Ok('\x07'),
         'b' => Ok('\x08'),
@@ -216,51 +257,84 @@ fn process_escape_sequence<T: Iterator<Item = char>>(
         '_' => Ok('\u{00A0}'), // NBSP (Non-breaking space)
         'L' => Ok('\u{2028}'), // Line Separator
         'P' => Ok('\u{2029}'), // Paragraph Separator
-        'x' => read_hex_escape(state, 2),
-        'u' => read_hex_escape(state, 4),
-        'U' => read_hex_escape(state, 8),
-        '\n' | '\r' => {
-            // Escaped newline - skip whitespace on next line
-            while matches!(state.peek_char(), Ok(' ') | Ok('\t')) {
-                state.consume_char()?;
+        'x' => {
+            // Read 2 hex digits directly without iterator adapter
+            let mut hex_chars = ['\0'; 2];
+            for hex_char in &mut hex_chars {
+                *hex_char = state.consume_char()?;
             }
-            Ok(' ') // Fold to space
+            let hex_value =
+                CharacterProductions::parse_hex_chars(&hex_chars).map_err(|escape_error| {
+                    ScanError::new(
+                        state.mark(),
+                        &format!("invalid hex escape: {}", escape_error),
+                    )
+                })?;
+            Ok(char::from(hex_value as u8))
+        }
+        'u' => {
+            // Read 4 hex digits directly without iterator adapter
+            let mut hex_chars = ['\0'; 4];
+            for hex_char in &mut hex_chars {
+                *hex_char = state.consume_char()?;
+            }
+            let hex_value =
+                CharacterProductions::parse_hex_chars(&hex_chars).map_err(|escape_error| {
+                    ScanError::new(
+                        state.mark(),
+                        &format!("invalid unicode escape: {}", escape_error),
+                    )
+                })?;
+            char::from_u32(hex_value).ok_or_else(|| {
+                ScanError::new(
+                    state.mark(),
+                    &format!("invalid Unicode code point U+{:04X}", hex_value),
+                )
+            })
+        }
+        'U' => {
+            // Read 8 hex digits directly without iterator adapter
+            let mut hex_chars = ['\0'; 8];
+            for hex_char in &mut hex_chars {
+                *hex_char = state.consume_char()?;
+            }
+            let hex_value =
+                CharacterProductions::parse_hex_chars(&hex_chars).map_err(|escape_error| {
+                    ScanError::new(
+                        state.mark(),
+                        &format!("invalid unicode escape: {}", escape_error),
+                    )
+                })?;
+            char::from_u32(hex_value).ok_or_else(|| {
+                ScanError::new(
+                    state.mark(),
+                    &format!("invalid Unicode code point U+{:08X}", hex_value),
+                )
+            })
+        }
+        '\n' | '\r' => {
+            // Handle escaped line breaks - skip whitespace and fold to space
+            loop {
+                match state.peek_char() {
+                    Ok(' ') => {
+                        state.consume_char()?;
+                    }
+                    Ok('\t') => {
+                        return Err(ScanError::new(
+                            state.mark(),
+                            "tabs are not allowed in YAML, use spaces for indentation",
+                        ));
+                    }
+                    _ => break,
+                }
+            }
+            Ok(' ')
         }
         ch => Err(ScanError::new(
             state.mark(),
             &format!("invalid escape sequence '\\{ch}'"),
         )),
     }
-}
-
-/// Read hexadecimal escape sequence
-#[inline]
-fn read_hex_escape<T: Iterator<Item = char>>(
-    state: &mut ScannerState<T>,
-    digits: usize,
-) -> Result<char, ScanError> {
-    let mut value = 0u32;
-
-    for _i in 0..digits {
-        match state.consume_char()? {
-            ch @ '0'..='9' => value = value * 16 + (ch as u32 - '0' as u32),
-            ch @ 'a'..='f' => value = value * 16 + (ch as u32 - 'a' as u32 + 10),
-            ch @ 'A'..='F' => value = value * 16 + (ch as u32 - 'A' as u32 + 10),
-            ch => {
-                return Err(ScanError::new(
-                    state.mark(),
-                    &format!("invalid hex digit '{ch}' in escape sequence"),
-                ));
-            }
-        }
-    }
-
-    char::from_u32(value).ok_or_else(|| {
-        ScanError::new(
-            state.mark(),
-            &format!("invalid Unicode code point U+{value:04X}"),
-        )
-    })
 }
 
 /// Scan block scalar (literal | or folded >)
@@ -290,10 +364,9 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
 
     loop {
         // Check for document markers
-        if state.at_line_start()
-            && (state.check_document_start()? || state.check_document_end()?) {
-                break;
-            }
+        if state.at_line_start() && (state.check_document_start()? || state.check_document_end()?) {
+            break;
+        }
 
         // Read indentation
         let line_indent = count_indentation(state)?;
@@ -303,13 +376,20 @@ pub fn scan_block_scalar<T: Iterator<Item = char>>(
             break;
         }
 
-        // Check for blank line
-        if matches!(state.peek_char(), Ok('\n') | Ok('\r') | Err(_)) {
-            trailing_breaks.push('\n');
-            if state.peek_char().is_ok() {
+        // Check for blank line or EOF
+        match state.peek_char() {
+            Ok('\n') | Ok('\r') => {
+                trailing_breaks.push('\n');
                 consume_line_break(state)?;
+                continue;
             }
-            continue;
+            Err(_) => {
+                // EOF - terminate the scalar
+                break;
+            }
+            Ok(_) => {
+                // Regular character, continue processing
+            }
         }
 
         // Add any accumulated breaks
@@ -428,32 +508,39 @@ fn skip_to_next_line<T: Iterator<Item = char>>(
     Ok(())
 }
 
-/// Detect indentation of block scalar content
+/// Detect indentation of block scalar content without consuming characters
 #[inline]
 fn detect_block_scalar_indent<T: Iterator<Item = char>>(
     state: &mut ScannerState<T>,
 ) -> Result<usize, ScanError> {
     let mut min_indent = usize::MAX;
+    let mut pos = 0;
 
-    // Look ahead to find first non-empty line
-    let _saved_mark = state.mark();
-    let mut _chars_consumed: Vec<char> = Vec::new();
-
+    // Look ahead to find first non-empty line without consuming characters
     loop {
-        let indent = count_indentation(state)?;
+        // Count indentation at current position without consuming
+        let indent = peek_indentation_at_position(state, pos);
+        pos += indent;
 
         // Check if line is non-empty
-        match state.peek_char() {
-            Ok('\n') | Ok('\r') => {
-                // Empty line, continue
-                consume_line_break(state)?;
+        match state.peek_char_at(pos) {
+            Some('\n') => {
+                // Empty line, skip to next line
+                pos += 1; // Skip the newline
             }
-            Ok(_) => {
+            Some('\r') => {
+                // Handle \r\n or just \r
+                pos += 1; // Skip the \r
+                if let Some('\n') = state.peek_char_at(pos) {
+                    pos += 1; // Skip the \n if present
+                }
+            }
+            Some(_) => {
                 // Non-empty line found
                 min_indent = indent;
                 break;
             }
-            Err(_) => {
+            None => {
                 // EOF
                 break;
             }
@@ -465,6 +552,23 @@ fn detect_block_scalar_indent<T: Iterator<Item = char>>(
     }
 
     Ok(min_indent)
+}
+
+/// Count indentation at a specific position without consuming characters
+#[inline]
+fn peek_indentation_at_position<T: Iterator<Item = char>>(
+    state: &mut ScannerState<T>,
+    start_pos: usize,
+) -> usize {
+    let mut count = 0;
+    let mut pos = start_pos;
+
+    while let Some(' ') = state.peek_char_at(pos) {
+        count += 1;
+        pos += 1;
+    }
+
+    count
 }
 
 /// Count indentation at current position
@@ -503,4 +607,66 @@ fn consume_line_break<T: Iterator<Item = char>>(
         }
     }
     Ok(())
+}
+
+/// Apply block scalar folding logic - extracted for reuse by structural productions
+#[must_use] 
+pub fn apply_block_scalar_folding(
+    lines: &[String],
+    chomping: ChompingMode,
+    literal_style: bool,
+) -> String {
+    let mut result = String::new();
+    let mut trailing_breaks = String::new();
+    let mut first_line = true;
+
+    for line in lines {
+        if line.trim().is_empty() {
+            // Empty line
+            trailing_breaks.push('\n');
+            continue;
+        }
+
+        // Add any accumulated breaks
+        if !trailing_breaks.is_empty() {
+            if literal_style || trailing_breaks.len() > 1 {
+                // In literal mode or multiple breaks, preserve them
+                result.push_str(&trailing_breaks);
+            } else if !result.is_empty() {
+                // In folded mode with single break, convert to space
+                result.push(' ');
+            }
+            trailing_breaks.clear();
+        }
+
+        // Add line content
+        if !first_line && literal_style {
+            result.push('\n');
+        } else if !first_line && !literal_style && !result.is_empty() {
+            result.push(' ');
+        }
+        first_line = false;
+
+        result.push_str(line.trim_end());
+    }
+
+    // Apply chomping indicator
+    match chomping {
+        ChompingMode::Strip => {
+            // Remove all trailing newlines
+            result.truncate(result.trim_end_matches('\n').len());
+        }
+        ChompingMode::Keep => {
+            // Keep one trailing newline
+            if !trailing_breaks.is_empty() {
+                result.push('\n');
+            }
+        }
+        ChompingMode::Clip => {
+            // Keep all trailing newlines
+            result.push_str(&trailing_breaks);
+        }
+    }
+
+    result
 }

@@ -142,28 +142,30 @@ pub enum AnchorValidationWarning {
 
 impl AnchorValidationWarning {
     /// Get warning message
+    #[must_use] 
     pub fn message(&self) -> String {
         match self {
-            AnchorValidationWarning::UnusedAnchor { anchor_name, .. } => {
+            Self::UnusedAnchor { anchor_name, .. } => {
                 format!("unused anchor: '{anchor_name}'")
             }
-            AnchorValidationWarning::DeeplyNestedAnchor {
+            Self::DeeplyNestedAnchor {
                 anchor_name, depth, ..
             } => {
                 format!("deeply nested anchor '{anchor_name}' at depth {depth}")
             }
-            AnchorValidationWarning::PotentialCircularStructure { anchor_name, .. } => {
+            Self::PotentialCircularStructure { anchor_name, .. } => {
                 format!("potential circular structure in anchor '{anchor_name}'")
             }
         }
     }
 
     /// Get warning position
-    pub fn position(&self) -> Position {
+    #[must_use] 
+    pub const fn position(&self) -> Position {
         match self {
-            AnchorValidationWarning::UnusedAnchor { position, .. } => *position,
-            AnchorValidationWarning::DeeplyNestedAnchor { position, .. } => *position,
-            AnchorValidationWarning::PotentialCircularStructure { position, .. } => *position,
+            Self::UnusedAnchor { position, .. } => *position,
+            Self::DeeplyNestedAnchor { position, .. } => *position,
+            Self::PotentialCircularStructure { position, .. } => *position,
         }
     }
 }

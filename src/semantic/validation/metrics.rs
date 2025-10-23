@@ -20,6 +20,7 @@ pub struct ComplexityMetrics {
 impl ComplexityMetrics {
     /// Calculate a complexity score based on the metrics
     #[inline]
+    #[must_use] 
     pub fn calculate_complexity_score(&self) -> f32 {
         let base_score = (self.total_nodes as f32).log2();
         let depth_factor = (self.max_depth as f32) * 0.5;
@@ -31,6 +32,7 @@ impl ComplexityMetrics {
 
     /// Check if document is considered complex
     #[inline]
+    #[must_use] 
     pub fn is_complex(&self) -> bool {
         self.calculate_complexity_score() > 10.0
             || self.max_depth > 10
@@ -74,12 +76,12 @@ pub enum OptimizationDifficulty {
 impl std::fmt::Display for OptimizationType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OptimizationType::RefactorDeepNesting => write!(f, "Refactor Deep Nesting"),
-            OptimizationType::UseAnchorsForDuplication => write!(f, "Use Anchors for Duplication"),
-            OptimizationType::SplitLargeCollections => write!(f, "Split Large Collections"),
-            OptimizationType::SimplifyComplexMappings => write!(f, "Simplify Complex Mappings"),
-            OptimizationType::ConsolidateScalars => write!(f, "Consolidate Scalars"),
-            OptimizationType::RemoveRedundancy => write!(f, "Remove Redundancy"),
+            Self::RefactorDeepNesting => write!(f, "Refactor Deep Nesting"),
+            Self::UseAnchorsForDuplication => write!(f, "Use Anchors for Duplication"),
+            Self::SplitLargeCollections => write!(f, "Split Large Collections"),
+            Self::SimplifyComplexMappings => write!(f, "Simplify Complex Mappings"),
+            Self::ConsolidateScalars => write!(f, "Consolidate Scalars"),
+            Self::RemoveRedundancy => write!(f, "Remove Redundancy"),
         }
     }
 }
@@ -87,11 +89,11 @@ impl std::fmt::Display for OptimizationType {
 impl std::fmt::Display for OptimizationDifficulty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            OptimizationDifficulty::Trivial => write!(f, "Trivial"),
-            OptimizationDifficulty::Easy => write!(f, "Easy"),
-            OptimizationDifficulty::Medium => write!(f, "Medium"),
-            OptimizationDifficulty::Hard => write!(f, "Hard"),
-            OptimizationDifficulty::Complex => write!(f, "Complex"),
+            Self::Trivial => write!(f, "Trivial"),
+            Self::Easy => write!(f, "Easy"),
+            Self::Medium => write!(f, "Medium"),
+            Self::Hard => write!(f, "Hard"),
+            Self::Complex => write!(f, "Complex"),
         }
     }
 }

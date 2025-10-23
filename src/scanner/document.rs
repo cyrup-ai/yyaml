@@ -37,9 +37,7 @@ pub fn scan_document_start<T: Iterator<Item = char>>(
             ch => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!(
-                        "expected '-' at position {i} in document start marker, found '{ch}'"
-                    ),
+                    &format!("expected '-' at position {i} in document start marker, found '{ch}'"),
                 ));
             }
         }
@@ -73,9 +71,7 @@ pub fn scan_document_end<T: Iterator<Item = char>>(
             ch => {
                 return Err(ScanError::new(
                     state.mark(),
-                    &format!(
-                        "expected '.' at position {i} in document end marker, found '{ch}'"
-                    ),
+                    &format!("expected '.' at position {i} in document end marker, found '{ch}'"),
                 ));
             }
         }
@@ -89,7 +85,7 @@ pub fn scan_document_end<T: Iterator<Item = char>>(
 
 /// Check if current context is valid for document markers
 #[inline]
-fn is_valid_marker_context<T: Iterator<Item = char>>(
+const fn is_valid_marker_context<T: Iterator<Item = char>>(
     state: &ScannerState<T>,
 ) -> Result<bool, ScanError> {
     // Document markers are valid:
@@ -239,7 +235,8 @@ pub fn validate_document_marker_context<T: Iterator<Item = char>>(
 
 /// Get marker character for document marker type
 #[inline]
-pub fn marker_character(marker_type: DocumentMarker) -> char {
+#[must_use] 
+pub const fn marker_character(marker_type: DocumentMarker) -> char {
     match marker_type {
         DocumentMarker::Start => '-',
         DocumentMarker::End => '.',
@@ -248,7 +245,8 @@ pub fn marker_character(marker_type: DocumentMarker) -> char {
 
 /// Get marker string for document marker type
 #[inline]
-pub fn marker_string(marker_type: DocumentMarker) -> &'static str {
+#[must_use] 
+pub const fn marker_string(marker_type: DocumentMarker) -> &'static str {
     match marker_type {
         DocumentMarker::Start => "---",
         DocumentMarker::End => "...",
@@ -256,6 +254,7 @@ pub fn marker_string(marker_type: DocumentMarker) -> &'static str {
 }
 
 /// Create formatted error message for document marker
+#[must_use] 
 pub fn format_marker_error(marker_type: DocumentMarker, context: &str) -> String {
     let marker_str = marker_string(marker_type);
     let marker_name = match marker_type {

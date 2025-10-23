@@ -33,6 +33,7 @@ pub struct ReferenceTracker<'input> {
 impl<'input> ReferenceTracker<'input> {
     /// Create new reference tracker with optimized settings
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             graph: ReferenceGraph::new(),
@@ -52,6 +53,7 @@ impl<'input> ReferenceTracker<'input> {
     }
 
     /// Create tracker with specific configuration
+    #[must_use] 
     pub fn with_config(config: &crate::semantic::SemanticConfig<'_>) -> Self {
         let mut tracker = Self::new();
 
@@ -184,9 +186,10 @@ impl<'input> ReferenceTracker<'input> {
                     target,
                     ..
                 } = &node.node_type
-                    && let Some(&target_id) = self.anchor_registry.get(target) {
-                        unresolved_aliases.push((alias_id, target_id));
-                    }
+                && let Some(&target_id) = self.anchor_registry.get(target)
+            {
+                unresolved_aliases.push((alias_id, target_id));
+            }
         }
 
         // Resolve aliases and create edges
@@ -205,9 +208,9 @@ impl<'input> ReferenceTracker<'input> {
                 && let ReferenceNodeType::Alias {
                     resolved_target, ..
                 } = &mut node.node_type
-                {
-                    *resolved_target = Some(target_id);
-                }
+            {
+                *resolved_target = Some(target_id);
+            }
 
             resolved_count += 1;
         }
@@ -307,20 +310,24 @@ impl<'input> ReferenceTracker<'input> {
 
     /// Check if reference exists
     #[inline]
+    #[must_use] 
     pub fn has_anchor(&self, name: &str) -> bool {
         self.anchor_registry.contains_key(name)
     }
 
     #[inline]
+    #[must_use] 
     pub fn has_alias(&self, name: &str) -> bool {
         self.alias_registry.contains_key(name)
     }
 
     /// Get reference by name
+    #[must_use] 
     pub fn get_anchor(&self, name: &str) -> Option<ReferenceId> {
         self.anchor_registry.get(name).copied()
     }
 
+    #[must_use] 
     pub fn get_alias(&self, name: &str) -> Option<ReferenceId> {
         self.alias_registry.get(name).copied()
     }
@@ -335,20 +342,21 @@ impl<'input> ReferenceTracker<'input> {
 
     /// Get node by ID
     #[inline]
+    #[must_use] 
     pub fn get_node(&self, node_id: ReferenceId) -> Option<&ReferenceNode<'input>> {
         self.graph.get_node(node_id)
     }
 
     /// Enable or disable tracking
     #[inline]
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub const fn set_enabled(&mut self, enabled: bool) {
         self.context.is_enabled = enabled;
         self.statistics_collector.set_enabled(enabled);
     }
 
     /// Set maximum tracking depth
     #[inline]
-    pub fn set_max_depth(&mut self, max_depth: usize) {
+    pub const fn set_max_depth(&mut self, max_depth: usize) {
         self.context.max_depth = max_depth;
         self.cycle_detector.set_max_depth(max_depth);
     }
@@ -368,31 +376,36 @@ impl<'input> ReferenceTracker<'input> {
 
     /// Get current tracking context
     #[inline]
-    pub fn get_context(&self) -> &TrackingContext {
+    #[must_use] 
+    pub const fn get_context(&self) -> &TrackingContext {
         &self.context
     }
 
     /// Check if tracker is in optimized state
     #[inline]
-    pub fn is_optimized(&self) -> bool {
+    #[must_use] 
+    pub const fn is_optimized(&self) -> bool {
         self.is_optimized
     }
 
     /// Get graph reference for advanced operations
     #[inline]
-    pub fn get_graph(&self) -> &ReferenceGraph<'input> {
+    #[must_use] 
+    pub const fn get_graph(&self) -> &ReferenceGraph<'input> {
         &self.graph
     }
 
     /// Get memory manager reference
     #[inline]
-    pub fn get_memory_manager(&self) -> &MemoryManager<'input> {
+    #[must_use] 
+    pub const fn get_memory_manager(&self) -> &MemoryManager<'input> {
         &self.memory_manager
     }
 
     /// Get statistics collector reference
     #[inline]
-    pub fn get_statistics_collector(&self) -> &StatisticsCollector {
+    #[must_use] 
+    pub const fn get_statistics_collector(&self) -> &StatisticsCollector {
         &self.statistics_collector
     }
 
@@ -459,25 +472,29 @@ impl<'input> ReferenceTracker<'input> {
 
     /// Get total number of tracked references
     #[inline]
+    #[must_use] 
     pub fn total_references(&self) -> usize {
         self.anchor_registry.len() + self.alias_registry.len()
     }
 
     /// Get number of anchors
     #[inline]
+    #[must_use] 
     pub fn anchor_count(&self) -> usize {
         self.anchor_registry.len()
     }
 
     /// Get number of aliases
     #[inline]
+    #[must_use] 
     pub fn alias_count(&self) -> usize {
         self.alias_registry.len()
     }
 
     /// Check if tracking is enabled
     #[inline]
-    pub fn is_enabled(&self) -> bool {
+    #[must_use] 
+    pub const fn is_enabled(&self) -> bool {
         self.context.is_enabled
     }
     /// Validate all references - ensures all aliases can be resolved
@@ -490,12 +507,14 @@ impl<'input> ReferenceTracker<'input> {
                     resolved_target,
                     ..
                 } = &node.node_type
-                    && resolved_target.is_none() && !self.anchor_registry.contains_key(target) {
-                        return Err(SemanticError::UnresolvedAlias {
-                            alias_name: alias_name.to_string(),
-                            position: node.position,
-                        });
-                    }
+                && resolved_target.is_none()
+                && !self.anchor_registry.contains_key(target)
+            {
+                return Err(SemanticError::UnresolvedAlias {
+                    alias_name: alias_name.to_string(),
+                    position: node.position,
+                });
+            }
         }
 
         // Validate internal consistency
@@ -518,8 +537,8 @@ impl<'input> Default for ReferenceTracker<'input> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ast::{Node, ScalarNode};
     use crate::lexer::ScalarStyle;
+    use crate::parser::ast::{Node, ScalarNode};
 
     fn create_test_node() -> Node<'static> {
         Node::Scalar(ScalarNode {
@@ -556,7 +575,7 @@ mod tests {
 
         // First create an anchor
         match tracker.track_anchor(Cow::Borrowed("anchor"), &node, Position::default()) {
-            Ok(_) => {}, // Anchor tracking successful
+            Ok(_) => {} // Anchor tracking successful
             Err(_) => panic!("Expected successful anchor tracking"),
         }
 
@@ -579,7 +598,7 @@ mod tests {
 
         // Track first anchor
         match tracker.track_anchor(Cow::Borrowed("duplicate"), &node, Position::default()) {
-            Ok(_) => {}, // Anchor tracking successful
+            Ok(_) => {} // Anchor tracking successful
             Err(_) => panic!("Expected successful anchor tracking"),
         }
 
@@ -599,7 +618,7 @@ mod tests {
         let node = create_test_node();
 
         match tracker.track_anchor(Cow::Borrowed("test"), &node, Position::default()) {
-            Ok(_) => {}, // Anchor tracking successful
+            Ok(_) => {} // Anchor tracking successful
             Err(_) => panic!("Expected successful anchor tracking"),
         }
 

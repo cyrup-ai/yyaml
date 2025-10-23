@@ -76,6 +76,7 @@ pub struct MonitoringData {
 impl StatisticsCollector {
     /// Create new statistics collector with optimized settings
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             reference_stats: ReferenceStatistics::default(),
@@ -118,6 +119,7 @@ impl StatisticsCollector {
     }
 
     /// Generate comprehensive report
+    #[must_use] 
     pub fn generate_report(&self) -> StatisticsReport {
         let uptime = self.collection_start_time.elapsed();
 
@@ -197,7 +199,7 @@ impl StatisticsCollector {
     }
 
     /// Update general performance metrics
-    fn update_performance_metrics(&mut self, _collection_duration: Duration) {
+    const fn update_performance_metrics(&mut self, _collection_duration: Duration) {
         // This would be called after each statistics collection
         // Updates general metrics like cache hit rate, etc.
 
@@ -308,13 +310,13 @@ impl StatisticsCollector {
 
     /// Enable or disable statistics collection
     #[inline]
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub const fn set_enabled(&mut self, enabled: bool) {
         self.is_enabled = enabled;
     }
 
     /// Set collection interval
     #[inline]
-    pub fn set_collection_interval(&mut self, interval: Duration) {
+    pub const fn set_collection_interval(&mut self, interval: Duration) {
         self.collection_interval = interval;
     }
 
@@ -330,6 +332,7 @@ impl StatisticsCollector {
 
     /// Check if collection is due
     #[inline]
+    #[must_use] 
     pub fn is_collection_due(&self) -> bool {
         self.last_collection_time
             .elapsed()
@@ -339,17 +342,20 @@ impl StatisticsCollector {
 
     /// Get current statistics
     #[inline]
-    pub fn get_reference_stats(&self) -> &ReferenceStatistics {
+    #[must_use] 
+    pub const fn get_reference_stats(&self) -> &ReferenceStatistics {
         &self.reference_stats
     }
 
     #[inline]
-    pub fn get_graph_stats(&self) -> &GraphStatistics {
+    #[must_use] 
+    pub const fn get_graph_stats(&self) -> &GraphStatistics {
         &self.graph_stats
     }
 
     #[inline]
-    pub fn get_performance_metrics(&self) -> &PerformanceMetrics {
+    #[must_use] 
+    pub const fn get_performance_metrics(&self) -> &PerformanceMetrics {
         &self.performance_metrics
     }
 }
@@ -460,11 +466,11 @@ impl Default for StatisticsCollector {
 impl std::fmt::Display for HealthStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HealthStatus::Excellent => write!(f, "Excellent"),
-            HealthStatus::Good => write!(f, "Good"),
-            HealthStatus::Fair => write!(f, "Fair"),
-            HealthStatus::Poor => write!(f, "Poor"),
-            HealthStatus::Critical => write!(f, "Critical"),
+            Self::Excellent => write!(f, "Excellent"),
+            Self::Good => write!(f, "Good"),
+            Self::Fair => write!(f, "Fair"),
+            Self::Poor => write!(f, "Poor"),
+            Self::Critical => write!(f, "Critical"),
         }
     }
 }
@@ -472,11 +478,11 @@ impl std::fmt::Display for HealthStatus {
 impl std::fmt::Display for RecommendationCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RecommendationCategory::Memory => write!(f, "Memory"),
-            RecommendationCategory::Performance => write!(f, "Performance"),
-            RecommendationCategory::Architecture => write!(f, "Architecture"),
-            RecommendationCategory::Reliability => write!(f, "Reliability"),
-            RecommendationCategory::Maintainability => write!(f, "Maintainability"),
+            Self::Memory => write!(f, "Memory"),
+            Self::Performance => write!(f, "Performance"),
+            Self::Architecture => write!(f, "Architecture"),
+            Self::Reliability => write!(f, "Reliability"),
+            Self::Maintainability => write!(f, "Maintainability"),
         }
     }
 }

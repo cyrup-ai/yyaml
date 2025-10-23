@@ -74,6 +74,7 @@ pub enum SemanticWarning {
 
 impl<'input> SemanticResult<'input> {
     /// Create a new semantic result
+    #[must_use] 
     pub fn new(documents: Vec<Document<'input>>) -> Self {
         Self {
             documents,
@@ -83,7 +84,8 @@ impl<'input> SemanticResult<'input> {
     }
 
     /// Create semantic result with metrics
-    pub fn with_metrics(documents: Vec<Document<'input>>, metrics: AnalysisMetrics) -> Self {
+    #[must_use] 
+    pub const fn with_metrics(documents: Vec<Document<'input>>, metrics: AnalysisMetrics) -> Self {
         Self {
             documents,
             metrics,
@@ -97,17 +99,20 @@ impl<'input> SemanticResult<'input> {
     }
 
     /// Get the primary document (first document in the result)
+    #[must_use] 
     pub fn primary_document(&self) -> Option<&Document<'input>> {
         self.documents.first()
     }
 
     /// Check if processing completed successfully (no warnings)
-    pub fn is_clean(&self) -> bool {
+    #[must_use] 
+    pub const fn is_clean(&self) -> bool {
         self.warnings.is_empty()
     }
 
     /// Get processing summary
-    pub fn summary(&self) -> ProcessingSummary {
+    #[must_use] 
+    pub const fn summary(&self) -> ProcessingSummary {
         ProcessingSummary {
             documents_count: self.documents.len(),
             warnings_count: self.warnings.len(),
@@ -134,6 +139,7 @@ pub struct ProcessingSummary {
 
 impl AnalysisMetrics {
     /// Create new metrics with processing time
+    #[must_use] 
     pub fn with_time(processing_time: Duration) -> Self {
         Self {
             processing_time,
@@ -142,31 +148,32 @@ impl AnalysisMetrics {
     }
 
     /// Record anchor resolution
-    pub fn record_anchor_resolution(&mut self) {
+    pub const fn record_anchor_resolution(&mut self) {
         self.anchors_resolved += 1;
     }
 
     /// Record alias resolution
-    pub fn record_alias_resolution(&mut self) {
+    pub const fn record_alias_resolution(&mut self) {
         self.aliases_resolved += 1;
     }
 
     /// Record tag resolution
-    pub fn record_tag_resolution(&mut self) {
+    pub const fn record_tag_resolution(&mut self) {
         self.tags_resolved += 1;
     }
 
     /// Record cycle detection
-    pub fn record_cycle_detection(&mut self) {
+    pub const fn record_cycle_detection(&mut self) {
         self.cycles_detected += 1;
     }
 
     /// Update document count
-    pub fn set_documents_processed(&mut self, count: usize) {
+    pub const fn set_documents_processed(&mut self, count: usize) {
         self.documents_processed = count;
     }
 
     /// Calculate processing rate (nodes per second)
+    #[must_use] 
     pub fn processing_rate(&self) -> f64 {
         if self.processing_time.as_secs_f64() > 0.0 {
             let total_operations =
@@ -178,6 +185,7 @@ impl AnalysisMetrics {
     }
 
     /// Check if metrics indicate efficient processing
+    #[must_use] 
     pub fn is_efficient(&self) -> bool {
         // Consider processing efficient if:
         // - No cycles detected
@@ -188,22 +196,24 @@ impl AnalysisMetrics {
 
 impl SemanticWarning {
     /// Get the position associated with this warning
-    pub fn position(&self) -> crate::lexer::Position {
+    #[must_use] 
+    pub const fn position(&self) -> crate::lexer::Position {
         match self {
-            SemanticWarning::UnusedAnchor { position, .. } => *position,
-            SemanticWarning::DeprecatedTag { position, .. } => *position,
-            SemanticWarning::InefficiencyWarning { position, .. } => *position,
-            SemanticWarning::CustomValidationWarning { position, .. } => *position,
+            Self::UnusedAnchor { position, .. } => *position,
+            Self::DeprecatedTag { position, .. } => *position,
+            Self::InefficiencyWarning { position, .. } => *position,
+            Self::CustomValidationWarning { position, .. } => *position,
         }
     }
 
     /// Get human-readable warning message
+    #[must_use] 
     pub fn message(&self) -> String {
         match self {
-            SemanticWarning::UnusedAnchor { anchor_name, .. } => {
+            Self::UnusedAnchor { anchor_name, .. } => {
                 format!("Unused anchor definition: '{anchor_name}'")
             }
-            SemanticWarning::DeprecatedTag {
+            Self::DeprecatedTag {
                 tag,
                 suggested_replacement,
                 ..
@@ -214,14 +224,14 @@ impl SemanticWarning {
                     format!("Deprecated tag '{tag}'")
                 }
             }
-            SemanticWarning::InefficiencyWarning {
+            Self::InefficiencyWarning {
                 description,
                 suggestion,
                 ..
             } => {
                 format!("{description} (Suggestion: {suggestion})")
             }
-            SemanticWarning::CustomValidationWarning {
+            Self::CustomValidationWarning {
                 validator_name,
                 message,
                 ..
@@ -232,7 +242,8 @@ impl SemanticWarning {
     }
 
     /// Create an unused anchor warning
-    pub fn unused_anchor(anchor_name: String, position: crate::lexer::Position) -> Self {
+    #[must_use] 
+    pub const fn unused_anchor(anchor_name: String, position: crate::lexer::Position) -> Self {
         Self::UnusedAnchor {
             anchor_name,
             position,
@@ -240,7 +251,8 @@ impl SemanticWarning {
     }
 
     /// Create a deprecated tag warning
-    pub fn deprecated_tag(
+    #[must_use] 
+    pub const fn deprecated_tag(
         tag: String,
         suggested_replacement: Option<String>,
         position: crate::lexer::Position,
@@ -253,7 +265,8 @@ impl SemanticWarning {
     }
 
     /// Create an inefficiency warning
-    pub fn inefficiency_warning(
+    #[must_use] 
+    pub const fn inefficiency_warning(
         description: String,
         suggestion: String,
         position: crate::lexer::Position,
@@ -266,7 +279,8 @@ impl SemanticWarning {
     }
 
     /// Create a custom validation warning
-    pub fn custom_validation_warning(
+    #[must_use] 
+    pub const fn custom_validation_warning(
         validator_name: String,
         message: String,
         position: crate::lexer::Position,

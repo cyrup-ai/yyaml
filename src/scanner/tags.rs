@@ -193,13 +193,13 @@ fn read_hex_digit<T: Iterator<Item = char>>(
 
 /// Check if character is valid in tag handles
 #[inline]
-fn is_tag_handle_char(ch: char) -> bool {
+const fn is_tag_handle_char(ch: char) -> bool {
     matches!(ch, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-')
 }
 
 /// Check if character is valid in tag suffixes
 #[inline]
-fn is_tag_char(ch: char) -> bool {
+const fn is_tag_char(ch: char) -> bool {
     // YAML 1.2 tag characters
     match ch {
         // URI characters
@@ -216,7 +216,7 @@ fn is_tag_char(ch: char) -> bool {
 
 /// Check if character is valid in URIs
 #[inline]
-fn is_uri_char(ch: char) -> bool {
+const fn is_uri_char(ch: char) -> bool {
     // RFC 3986 URI characters
     match ch {
         // Unreserved characters
@@ -373,21 +373,25 @@ pub fn resolve_tag_handle(handle: &str, suffix: &str) -> Result<String, String> 
 }
 
 /// Check if tag is a standard YAML 1.2 tag
+#[must_use] 
 pub fn is_standard_tag(uri: &str) -> bool {
     uri.starts_with("tag:yaml.org,2002:")
 }
 
 /// Get YAML 1.2 standard tag name from URI
+#[must_use] 
 pub fn get_standard_tag_name(uri: &str) -> Option<&str> {
     uri.strip_prefix("tag:yaml.org,2002:")
 }
 
 /// Create local tag URI
+#[must_use] 
 pub fn create_local_tag(suffix: &str) -> String {
     format!("!{suffix}")
 }
 
 /// Create global tag URI
+#[must_use] 
 pub fn create_global_tag(type_name: &str) -> String {
     format!("tag:yaml.org,2002:{type_name}")
 }

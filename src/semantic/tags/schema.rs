@@ -20,6 +20,7 @@ pub struct SchemaProcessor<'input> {
 
 impl<'input> SchemaProcessor<'input> {
     /// Create new schema processor with all schemas initialized
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             core_schema: CoreSchema::new(),
@@ -41,6 +42,7 @@ impl<'input> SchemaProcessor<'input> {
     }
 
     /// Infer scalar type from content with pattern matching
+    #[must_use] 
     pub fn infer_scalar_type(&self, scalar_value: &str) -> YamlType {
         // Fast path for common values
         match scalar_value {
@@ -66,6 +68,7 @@ impl<'input> SchemaProcessor<'input> {
     }
 
     /// Check if string matches integer pattern
+    #[must_use] 
     pub fn is_integer_pattern(&self, value: &str) -> bool {
         if value.is_empty() {
             return false;
@@ -89,6 +92,7 @@ impl<'input> SchemaProcessor<'input> {
     }
 
     /// Check if string matches float pattern
+    #[must_use] 
     pub fn is_float_pattern(&self, value: &str) -> bool {
         // Special float values
         match value {
@@ -134,27 +138,29 @@ impl<'input> SchemaProcessor<'input> {
     }
 
     /// Check if string matches timestamp pattern
+    #[must_use] 
     pub fn is_timestamp_pattern(&self, value: &str) -> bool {
         // Simplified timestamp check - full ISO 8601 would be more complex
         value.len() >= 10 && value.chars().nth(4) == Some('-') && value.chars().nth(7) == Some('-')
     }
 
     /// Check if string matches binary pattern
+    #[must_use] 
     pub fn is_binary_pattern(&self, value: &str) -> bool {
         // Must be at least 4 characters and have proper base64 structure
         if value.len() < 4 || !value.len().is_multiple_of(4) {
             return false;
         }
-        
+
         // Must contain mix of alphanumeric and base64 chars, not just letters
         let has_digits = value.chars().any(|c| c.is_ascii_digit());
         let has_base64_chars = value.chars().any(|c| matches!(c, '+' | '/' | '='));
-        
+
         // If it's all letters, it's probably text, not base64
         if value.chars().all(|c| c.is_ascii_alphabetic()) {
             return false;
         }
-        
+
         // All characters must be valid base64
         value
             .chars()
@@ -169,12 +175,13 @@ impl<'input> SchemaProcessor<'input> {
     }
 
     /// Get custom type definition
+    #[must_use] 
     pub fn get_custom_type(&self, tag_name: &str) -> Option<&CustomTypeDefinition<'input>> {
         self.custom_types.get(tag_name)
     }
 
     /// Set current schema type
-    pub fn set_schema(&mut self, schema_type: SchemaType) {
+    pub const fn set_schema(&mut self, schema_type: SchemaType) {
         self.current_schema = schema_type;
     }
 
@@ -196,6 +203,7 @@ pub struct CoreSchema {
 
 impl CoreSchema {
     /// Create new core schema with all type resolvers
+    #[must_use] 
     pub fn new() -> Self {
         let mut resolvers = HashMap::new();
 
@@ -249,40 +257,40 @@ impl CoreSchema {
         }
     }
 
-    fn resolve_null(_value: &str) -> Option<YamlType> {
+    const fn resolve_null(_value: &str) -> Option<YamlType> {
         Some(YamlType::Null)
     }
-    fn resolve_bool(_value: &str) -> Option<YamlType> {
+    const fn resolve_bool(_value: &str) -> Option<YamlType> {
         Some(YamlType::Bool)
     }
-    fn resolve_int(_value: &str) -> Option<YamlType> {
+    const fn resolve_int(_value: &str) -> Option<YamlType> {
         Some(YamlType::Int)
     }
-    fn resolve_float(_value: &str) -> Option<YamlType> {
+    const fn resolve_float(_value: &str) -> Option<YamlType> {
         Some(YamlType::Float)
     }
-    fn resolve_str(_value: &str) -> Option<YamlType> {
+    const fn resolve_str(_value: &str) -> Option<YamlType> {
         Some(YamlType::Str)
     }
-    fn resolve_binary(_value: &str) -> Option<YamlType> {
+    const fn resolve_binary(_value: &str) -> Option<YamlType> {
         Some(YamlType::Binary)
     }
-    fn resolve_timestamp(_value: &str) -> Option<YamlType> {
+    const fn resolve_timestamp(_value: &str) -> Option<YamlType> {
         Some(YamlType::Timestamp)
     }
-    fn resolve_seq(_value: &str) -> Option<YamlType> {
+    const fn resolve_seq(_value: &str) -> Option<YamlType> {
         Some(YamlType::Seq)
     }
-    fn resolve_map(_value: &str) -> Option<YamlType> {
+    const fn resolve_map(_value: &str) -> Option<YamlType> {
         Some(YamlType::Map)
     }
-    fn resolve_set(_value: &str) -> Option<YamlType> {
+    const fn resolve_set(_value: &str) -> Option<YamlType> {
         Some(YamlType::Set)
     }
-    fn resolve_omap(_value: &str) -> Option<YamlType> {
+    const fn resolve_omap(_value: &str) -> Option<YamlType> {
         Some(YamlType::Omap)
     }
-    fn resolve_pairs(_value: &str) -> Option<YamlType> {
+    const fn resolve_pairs(_value: &str) -> Option<YamlType> {
         Some(YamlType::Pairs)
     }
 }
@@ -295,14 +303,24 @@ pub struct JsonSchema {
 
 impl JsonSchema {
     /// Create new JSON schema (subset of core)
+    #[must_use] 
     pub fn new() -> Self {
         let mut resolvers = HashMap::new();
 
         // JSON-compatible types only - cast function items to TypeResolverFn for zero-allocation HashMap
-        resolvers.insert("tag:yaml.org,2002:null", Self::resolve_null as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:bool", Self::resolve_bool as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:null",
+            Self::resolve_null as TypeResolverFn,
+        );
+        resolvers.insert(
+            "tag:yaml.org,2002:bool",
+            Self::resolve_bool as TypeResolverFn,
+        );
         resolvers.insert("tag:yaml.org,2002:int", Self::resolve_int as TypeResolverFn);
-        resolvers.insert("tag:yaml.org,2002:float", Self::resolve_float as TypeResolverFn);
+        resolvers.insert(
+            "tag:yaml.org,2002:float",
+            Self::resolve_float as TypeResolverFn,
+        );
         resolvers.insert("tag:yaml.org,2002:str", Self::resolve_str as TypeResolverFn);
         resolvers.insert("tag:yaml.org,2002:seq", Self::resolve_seq as TypeResolverFn);
         resolvers.insert("tag:yaml.org,2002:map", Self::resolve_map as TypeResolverFn);
@@ -324,25 +342,25 @@ impl JsonSchema {
         }
     }
 
-    fn resolve_null(_value: &str) -> Option<YamlType> {
+    const fn resolve_null(_value: &str) -> Option<YamlType> {
         Some(YamlType::Null)
     }
-    fn resolve_bool(_value: &str) -> Option<YamlType> {
+    const fn resolve_bool(_value: &str) -> Option<YamlType> {
         Some(YamlType::Bool)
     }
-    fn resolve_int(_value: &str) -> Option<YamlType> {
+    const fn resolve_int(_value: &str) -> Option<YamlType> {
         Some(YamlType::Int)
     }
-    fn resolve_float(_value: &str) -> Option<YamlType> {
+    const fn resolve_float(_value: &str) -> Option<YamlType> {
         Some(YamlType::Float)
     }
-    fn resolve_str(_value: &str) -> Option<YamlType> {
+    const fn resolve_str(_value: &str) -> Option<YamlType> {
         Some(YamlType::Str)
     }
-    fn resolve_seq(_value: &str) -> Option<YamlType> {
+    const fn resolve_seq(_value: &str) -> Option<YamlType> {
         Some(YamlType::Seq)
     }
-    fn resolve_map(_value: &str) -> Option<YamlType> {
+    const fn resolve_map(_value: &str) -> Option<YamlType> {
         Some(YamlType::Map)
     }
 }
@@ -355,6 +373,7 @@ pub struct FailsafeSchema {
 
 impl FailsafeSchema {
     /// Create new failsafe schema (minimal types)
+    #[must_use] 
     pub fn new() -> Self {
         let mut resolvers = HashMap::new();
 
@@ -380,13 +399,13 @@ impl FailsafeSchema {
         }
     }
 
-    fn resolve_str(_value: &str) -> Option<YamlType> {
+    const fn resolve_str(_value: &str) -> Option<YamlType> {
         Some(YamlType::Str)
     }
-    fn resolve_seq(_value: &str) -> Option<YamlType> {
+    const fn resolve_seq(_value: &str) -> Option<YamlType> {
         Some(YamlType::Seq)
     }
-    fn resolve_map(_value: &str) -> Option<YamlType> {
+    const fn resolve_map(_value: &str) -> Option<YamlType> {
         Some(YamlType::Map)
     }
 }

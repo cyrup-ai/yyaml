@@ -47,7 +47,7 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Get current position marker
     #[inline]
-    pub fn mark(&self) -> Marker {
+    pub const fn mark(&self) -> Marker {
         self.state.mark()
     }
 
@@ -91,19 +91,19 @@ impl<T: Iterator<Item = char>> Scanner<T> {
 
     /// Check if stream has started
     #[inline]
-    pub fn stream_started(&self) -> bool {
+    pub const fn stream_started(&self) -> bool {
         self.state.stream_started()
     }
 
     /// Check if stream has ended
     #[inline]
-    pub fn stream_ended(&self) -> bool {
+    pub const fn stream_ended(&self) -> bool {
         self.state.stream_ended()
     }
 
     /// Get scanner configuration
     #[inline]
-    pub fn config(&self) -> &ScannerConfig {
+    pub const fn config(&self) -> &ScannerConfig {
         &self.config
     }
 
@@ -383,50 +383,85 @@ impl<T: Iterator<Item = char>> Scanner<T> {
     }
 
     /// Check if scanner is at a valid BOM position per YAML 1.2
-    #[inline] 
+    #[inline]
     fn is_at_valid_bom_position(&mut self) -> Result<bool, ScanError> {
         let mark = self.state.mark();
-        
+
         // YAML 1.2 Rule 1: Stream start (position 0) - BOM always valid
         if mark.index == 0 {
             return Ok(true);
         }
-        
+
         // YAML 1.2 Rule 2: BOM only valid at document boundaries, not inside content
         if !self.state.at_line_start() {
             return Ok(false);
         }
-        
+
         // YAML 1.2 Rule 3: Before explicit document start marker (---)
-        if self.state.peek_char_at(0) == Some('-') &&
-           self.state.peek_char_at(1) == Some('-') &&
-           self.state.peek_char_at(2) == Some('-') {
+        if self.state.peek_char_at(0) == Some('-')
+            && self.state.peek_char_at(1) == Some('-')
+            && self.state.peek_char_at(2) == Some('-')
+        {
             // Verify boundary after --- per YAML 1.2 specification
             match self.state.peek_char_at(3) {
                 Some(' ') | Some('\t') | Some('\n') | Some('\r') | None => return Ok(true),
                 _ => {} // Not a valid document marker, continue checking
             }
         }
-        
+
         // YAML 1.2 Rule 4: Before document end marker (...)
-        if self.state.peek_char_at(0) == Some('.') &&
-           self.state.peek_char_at(1) == Some('.') &&
-           self.state.peek_char_at(2) == Some('.') {
-            // Verify boundary after ... per YAML 1.2 specification  
+        if self.state.peek_char_at(0) == Some('.')
+            && self.state.peek_char_at(1) == Some('.')
+            && self.state.peek_char_at(2) == Some('.')
+        {
+            // Verify boundary after ... per YAML 1.2 specification
             match self.state.peek_char_at(3) {
                 Some(' ') | Some('\t') | Some('\n') | Some('\r') | None => return Ok(true),
                 _ => {} // Not a valid document marker, continue checking
             }
         }
-        
+
         // YAML 1.2 Rule 5: Implicit document start (single-document streams)
         // BOM valid at start of first content line after stream start
         if mark.line == 1 && mark.col == 0 {
             return Ok(true);
         }
-        
+
         // YAML 1.2 Rule 6: Inside document content - BOM invalid
         Ok(false)
+    }
+
+    /// Process structural separation using existing infrastructure
+    pub fn process_structural_separation(
+        &mut self,
+        context: &mut crate::parser::grammar::ParametricContext,
+        n: i32,
+    ) -> Result<(), ScanError> {
+        crate::parser::structural_productions::StructuralProductions::process_separation(
+            &mut self.state,
+            context,
+            n,
+        )
+    }
+
+    /// Validate structural indentation using existing system
+    pub fn validate_structural_indent(
+        &mut self,
+        context: &crate::parser::grammar::ParametricContext,
+        n: i32,
+    ) -> Result<bool, ScanError> {
+        crate::parser::structural_productions::StructuralProductions::validate_exact_indent(
+            &mut self.state,
+            context,
+            n,
+        )
+    }
+
+    /// Skip comments using existing utilities
+    pub fn skip_structural_comments(&mut self) -> Result<Vec<String>, ScanError> {
+        crate::parser::structural_productions::StructuralProductions::skip_comment_lines(
+            &mut self.state,
+        )
     }
 }
 

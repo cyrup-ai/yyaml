@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use yyaml::{from_str, Mapping, Sequence};
+use yyaml::{Mapping, Sequence, from_str};
 
 #[derive(Debug, Deserialize, PartialEq)]
 struct TestStruct {
@@ -13,7 +13,7 @@ struct TestMapping {
 
 #[test]
 fn test_null_to_sequence() {
-    let yaml = "thing:\n";  // This parses as { thing: null }
+    let yaml = "thing:\n"; // This parses as { thing: null }
     let result: TestStruct = from_str(yaml).expect("Failed to deserialize null to sequence");
     assert_eq!(result.thing.len(), 0);
     println!("✅ Successfully deserialized null to empty sequence");
@@ -21,7 +21,7 @@ fn test_null_to_sequence() {
 
 #[test]
 fn test_null_to_mapping() {
-    let yaml = "thing:\n";  // This parses as { thing: null }
+    let yaml = "thing:\n"; // This parses as { thing: null }
     let result: TestMapping = from_str(yaml).expect("Failed to deserialize null to mapping");
     assert_eq!(result.thing.len(), 0);
     println!("✅ Successfully deserialized null to empty mapping");

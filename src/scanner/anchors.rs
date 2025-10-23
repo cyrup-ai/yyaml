@@ -59,23 +59,20 @@ fn scan_name<T: Iterator<Item = char>>(
 
     // Check for invalid first character
     if let Some(first_char) = result.chars().next()
-        && !is_valid_first_anchor_char(first_char) {
-            return Err(ScanError::new(
-                start_mark,
-                &format!(
-                    "invalid first character '{first_char}' in {name_type} name"
-                ),
-            ));
-        }
+        && !is_valid_first_anchor_char(first_char)
+    {
+        return Err(ScanError::new(
+            start_mark,
+            &format!("invalid first character '{first_char}' in {name_type} name"),
+        ));
+    }
 
     // Validate all characters are proper anchor chars
     for (i, ch) in result.chars().enumerate() {
         if !is_anchor_char(ch) {
             return Err(ScanError::new(
                 start_mark,
-                &format!(
-                    "invalid character '{ch}' at position {i} in {name_type} name"
-                ),
+                &format!("invalid character '{ch}' at position {i} in {name_type} name"),
             ));
         }
     }
@@ -145,7 +142,7 @@ fn is_valid_first_anchor_char(ch: char) -> bool {
 
 /// Check if character is in document marker context (---, ...)
 #[inline]
-fn is_document_marker_context(_ch: char) -> bool {
+const fn is_document_marker_context(_ch: char) -> bool {
     // This is a simplified check - in real implementation,
     // we'd need to check if we're at start of line with
     // proper sequence
@@ -154,7 +151,7 @@ fn is_document_marker_context(_ch: char) -> bool {
 
 /// Check if character is a Unicode format character that should be excluded
 #[inline]
-fn is_unicode_format_char(ch: char) -> bool {
+const fn is_unicode_format_char(ch: char) -> bool {
     // Unicode format characters that might cause issues
     matches!(
         ch,
@@ -178,11 +175,10 @@ pub fn validate_anchor_name(name: &str) -> Result<(), String> {
 
     // Check first character
     if let Some(first) = name.chars().next()
-        && !is_valid_first_anchor_char(first) {
-            return Err(format!(
-                "invalid first character '{first}' in anchor name"
-            ));
-        }
+        && !is_valid_first_anchor_char(first)
+    {
+        return Err(format!("invalid first character '{first}' in anchor name"));
+    }
 
     // Check all characters
     for (i, ch) in name.chars().enumerate() {
@@ -223,6 +219,7 @@ fn is_reserved_anchor_name(name: &str) -> bool {
 }
 
 /// Generate unique anchor name with prefix
+#[must_use] 
 pub fn generate_unique_anchor_name(prefix: &str, counter: usize) -> String {
     if prefix.is_empty() {
         format!("anchor_{counter}")
@@ -233,12 +230,14 @@ pub fn generate_unique_anchor_name(prefix: &str, counter: usize) -> String {
 
 /// Check if two anchor names are equivalent (case-sensitive comparison)
 #[inline]
+#[must_use] 
 pub fn anchor_names_equal(name1: &str, name2: &str) -> bool {
     // YAML anchor names are case-sensitive
     name1 == name2
 }
 
 /// Normalize anchor name for consistent storage
+#[must_use] 
 pub fn normalize_anchor_name(name: &str) -> String {
     // YAML anchor names should not be normalized - they are case-sensitive
     // and should be stored exactly as written

@@ -3,11 +3,11 @@
 //! This module provides a generic Value type that can represent any YAML content
 //! and integrates seamlessly with serde serialization/deserialization.
 
-use crate::yaml::Yaml;
 use crate::Error;
-use serde::{de, ser, Deserialize, Serialize};
-use std::collections::BTreeMap;
+use crate::yaml::Yaml;
+use serde::{Deserialize, Serialize, de, ser};
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Index;
 
@@ -19,7 +19,7 @@ pub struct Tag {
 
 impl Tag {
     pub fn new<S: Into<String>>(name: S) -> Self {
-        Tag { name: name.into() }
+        Self { name: name.into() }
     }
 }
 
@@ -31,15 +31,17 @@ pub struct TaggedValue {
 }
 
 impl TaggedValue {
-    pub fn new(tag: Tag, value: Value) -> Self {
-        TaggedValue { tag, value }
+    #[must_use] 
+    pub const fn new(tag: Tag, value: Value) -> Self {
+        Self { tag, value }
     }
 }
 
 /// A serde-compatible value type that can represent any YAML content
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Value {
     /// A null value
+    #[default]
     Null,
     /// A boolean value
     Bool(bool),
@@ -61,9 +63,10 @@ pub type Sequence = Vec<Value>;
 /// Sequence creation helper functions
 pub mod sequence {
     use super::Value;
-    
+
     /// Create a sequence from a Vec (for test compatibility)
-    pub fn from_vec(vec: Vec<Value>) -> Vec<Value> {
+    #[must_use] 
+    pub const fn from_vec(vec: Vec<Value>) -> Vec<Value> {
         vec
     }
 }
@@ -83,10 +86,10 @@ pub enum Number {
 impl PartialEq for Number {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Number::Integer(a), Number::Integer(b)) => a == b,
-            (Number::Float(a), Number::Float(b)) => a == b,
-            (Number::Integer(a), Number::Float(b)) => *a as f64 == *b,
-            (Number::Float(a), Number::Integer(b)) => *a == *b as f64,
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Integer(a), Self::Float(b)) => *a as f64 == *b,
+            (Self::Float(a), Self::Integer(b)) => *a == *b as f64,
         }
     }
 }
@@ -95,12 +98,7 @@ impl Eq for Number {}
 
 impl PartialOrd for Number {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (Number::Integer(a), Number::Integer(b)) => a.partial_cmp(b),
-            (Number::Float(a), Number::Float(b)) => a.partial_cmp(b),
-            (Number::Integer(a), Number::Float(b)) => (*a as f64).partial_cmp(b),
-            (Number::Float(a), Number::Integer(b)) => a.partial_cmp(&(*b as f64)),
-        }
+        Some(self.cmp(other))
     }
 }
 
@@ -112,13 +110,13 @@ impl Ord for Number {
 
 impl From<i64> for Number {
     fn from(value: i64) -> Self {
-        Number::Integer(value)
+        Self::Integer(value)
     }
 }
 
 impl From<f64> for Number {
     fn from(value: f64) -> Self {
-        Number::Float(value)
+        Self::Float(value)
     }
 }
 
@@ -127,43 +125,45 @@ impl std::str::FromStr for Number {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
-        
+
         // Handle special float values
         match s {
-            ".nan" | "NaN" => return Ok(Number::Float(f64::NAN)),
-            ".inf" | "inf" | "Infinity" => return Ok(Number::Float(f64::INFINITY)),
-            "-.inf" | "-inf" | "-Infinity" => return Ok(Number::Float(f64::NEG_INFINITY)),
+            ".nan" | "NaN" => return Ok(Self::Float(f64::NAN)),
+            ".inf" | "inf" | "Infinity" => return Ok(Self::Float(f64::INFINITY)),
+            "-.inf" | "-inf" | "-Infinity" => return Ok(Self::Float(f64::NEG_INFINITY)),
             _ => {}
         }
-        
+
         // Try integer first
         if let Ok(i) = s.parse::<i64>() {
-            return Ok(Number::Integer(i));
+            return Ok(Self::Integer(i));
         }
-        
+
         // Try float
         if let Ok(f) = s.parse::<f64>() {
-            return Ok(Number::Float(f));
+            return Ok(Self::Float(f));
         }
-        
+
         Err(Error::Custom(format!("Invalid number: {}", s)))
     }
 }
 
 impl Number {
     /// Get the number as an f64
-    pub fn as_f64(&self) -> Option<f64> {
+    #[must_use] 
+    pub const fn as_f64(&self) -> Option<f64> {
         match self {
-            Number::Float(f) => Some(*f),
-            Number::Integer(i) => Some(*i as f64),
+            Self::Float(f) => Some(*f),
+            Self::Integer(i) => Some(*i as f64),
         }
     }
 
     /// Get the number as an i64
+    #[must_use] 
     pub fn as_i64(&self) -> Option<i64> {
         match self {
-            Number::Integer(i) => Some(*i),
-            Number::Float(f) => {
+            Self::Integer(i) => Some(*i),
+            Self::Float(f) => {
                 if f.fract() == 0.0 && *f >= i64::MIN as f64 && *f <= i64::MAX as f64 {
                     Some(*f as i64)
                 } else {
@@ -174,92 +174,108 @@ impl Number {
     }
 
     /// Check if the number is an integer
-    pub fn is_i64(&self) -> bool {
-        matches!(self, Number::Integer(_))
+    #[must_use] 
+    pub const fn is_i64(&self) -> bool {
+        matches!(self, Self::Integer(_))
     }
 
     /// Check if the number is a float
-    pub fn is_f64(&self) -> bool {
-        matches!(self, Number::Float(_))
+    #[must_use] 
+    pub const fn is_f64(&self) -> bool {
+        matches!(self, Self::Float(_))
     }
 }
 
 impl Value {
     /// Check if the value is an f64
-    pub fn is_f64(&self) -> bool {
-        matches!(self, Value::Number(Number::Float(_)))
+    #[must_use] 
+    pub const fn is_f64(&self) -> bool {
+        matches!(self, Self::Number(Number::Float(_)))
     }
 
     /// Check if the value is an i64
-    pub fn is_i64(&self) -> bool {
-        matches!(self, Value::Number(Number::Integer(_)))
+    #[must_use] 
+    pub const fn is_i64(&self) -> bool {
+        matches!(self, Self::Number(Number::Integer(_)))
     }
 
     /// Check if the value is a number
-    pub fn is_number(&self) -> bool {
-        matches!(self, Value::Number(_))
+    #[must_use] 
+    pub const fn is_number(&self) -> bool {
+        matches!(self, Self::Number(_))
     }
 
     /// Check if the value is a string
-    pub fn is_string(&self) -> bool {
-        matches!(self, Value::String(_))
+    #[must_use] 
+    pub const fn is_string(&self) -> bool {
+        matches!(self, Self::String(_))
     }
 
     /// Check if the value is a boolean
-    pub fn is_bool(&self) -> bool {
-        matches!(self, Value::Bool(_))
+    #[must_use] 
+    pub const fn is_bool(&self) -> bool {
+        matches!(self, Self::Bool(_))
     }
 
     /// Check if the value is a sequence
-    pub fn is_sequence(&self) -> bool {
-        matches!(self, Value::Sequence(_))
+    #[must_use] 
+    pub const fn is_sequence(&self) -> bool {
+        matches!(self, Self::Sequence(_))
     }
 
     /// Check if the value is a mapping
-    pub fn is_mapping(&self) -> bool {
-        matches!(self, Value::Mapping(_))
+    #[must_use] 
+    pub const fn is_mapping(&self) -> bool {
+        matches!(self, Self::Mapping(_))
     }
-    
+
     /// Apply YAML merge keys (<<) to merge referenced mappings into this mapping
     /// This is a zero-allocation, in-place operation for blazing performance
     pub fn apply_merge(&mut self) -> Result<(), Error> {
-        if let Value::Mapping(map) = self {
+        if let Self::Mapping(map) = self {
             // Look for merge keys (<<)
-            let merge_key = Value::String("<<".to_string());
+            let merge_key = Self::String("<<".to_string());
             if let Some(merge_value) = map.get(&merge_key).cloned() {
                 // Remove the merge key before processing to avoid infinite recursion
                 map.remove(&merge_key);
-                
+
                 match merge_value {
                     // Single mapping to merge
-                    Value::Mapping(merge_map) => {
+                    Self::Mapping(merge_map) => {
                         // Merge entries that don't already exist (existing keys take precedence)
                         for (k, v) in merge_map.iter() {
                             map.entry(k.clone()).or_insert_with(|| v.clone());
                         }
                     }
                     // Sequence of mappings to merge
-                    Value::Sequence(merge_seq) => {
+                    Self::Sequence(merge_seq) => {
                         // Process in reverse order so first items in sequence have precedence
                         for merge_item in merge_seq.iter().rev() {
-                            if let Value::Mapping(merge_map) = merge_item {
+                            if let Self::Mapping(merge_map) = merge_item {
                                 for (k, v) in merge_map.iter() {
                                     map.entry(k.clone()).or_insert_with(|| v.clone());
                                 }
                             }
                         }
                     }
-                    _ => return Err(Error::Custom("Merge value must be a mapping or sequence of mappings".to_string())),
+                    _ => {
+                        return Err(Error::Custom(
+                            "Merge value must be a mapping or sequence of mappings".to_string(),
+                        ));
+                    }
                 }
             }
             Ok(())
         } else {
-            Err(Error::Custom("apply_merge can only be called on mappings".to_string()))
+            Err(Error::Custom(
+                "apply_merge can only be called on mappings".to_string(),
+            ))
         }
     }
-    
+
     /// Get value as deserializer for serde integration
-    pub fn into_deserializer(self) -> Deserializer {
+    #[must_use] 
+    pub const fn into_deserializer(self) -> Deserializer {
         Deserializer::new(self)
     }
     /// Create Value from a Yaml type
@@ -267,106 +283,107 @@ impl Value {
         match yaml {
             Yaml::Real(s) => {
                 if let Ok(f) = s.parse::<f64>() {
-                    Value::Number(Number::Float(f))
+                    Self::Number(Number::Float(f))
                 } else {
-                    Value::String(s.clone())
+                    Self::String(s.clone())
                 }
             }
-            Yaml::Integer(i) => Value::Number(Number::Integer(*i)),
-            Yaml::String(s) => Value::String(s.clone()),
-            Yaml::Boolean(b) => Value::Bool(*b),
+            Yaml::Integer(i) => Self::Number(Number::Integer(*i)),
+            Yaml::String(s) => Self::String(s.clone()),
+            Yaml::Boolean(b) => Self::Bool(*b),
             Yaml::Array(arr) => {
-                let seq: Vec<Value> = arr.iter().map(Value::from_yaml).collect();
-                Value::Sequence(seq)
+                let seq: Vec<Self> = arr.iter().map(Self::from_yaml).collect();
+                Self::Sequence(seq)
             }
             Yaml::Hash(hash) => {
                 let mut map = BTreeMap::new();
                 for (k, v) in hash.iter() {
-                    map.insert(Value::from_yaml(k), Value::from_yaml(v));
+                    map.insert(Self::from_yaml(k), Self::from_yaml(v));
                 }
-                Value::Mapping(map)
+                Self::Mapping(map)
             }
-            Yaml::Alias(_) => Value::Null, // Aliases should be resolved before this point
+            Yaml::Alias(_) => Self::Null, // Aliases should be resolved before this point
             Yaml::Tagged(tag_name, boxed_yaml) => {
                 // Preserve tagged content instead of extracting it
-                Value::Tagged(Box::new(TaggedValue {
+                Self::Tagged(Box::new(TaggedValue {
                     tag: Tag::new(tag_name.clone()),
-                    value: Value::from_yaml(boxed_yaml),
+                    value: Self::from_yaml(boxed_yaml),
                 }))
             }
-            Yaml::Null | Yaml::BadValue => Value::Null,
+            Yaml::Null | Yaml::BadValue => Self::Null,
         }
     }
 
     /// Check if the value is null
-    pub fn is_null(&self) -> bool {
-        matches!(self, Value::Null)
+    #[must_use] 
+    pub const fn is_null(&self) -> bool {
+        matches!(self, Self::Null)
     }
 
     /// Get the value as a boolean if it is one
-    pub fn as_bool(&self) -> Option<bool> {
+    #[must_use] 
+    pub const fn as_bool(&self) -> Option<bool> {
         match self {
-            Value::Bool(b) => Some(*b),
+            Self::Bool(b) => Some(*b),
             _ => None,
         }
     }
 
     /// Get the value as an i64 if it is an integer
-    pub fn as_i64(&self) -> Option<i64> {
+    #[must_use] 
+    pub const fn as_i64(&self) -> Option<i64> {
         match self {
-            Value::Number(Number::Integer(i)) => Some(*i),
+            Self::Number(Number::Integer(i)) => Some(*i),
             _ => None,
         }
     }
 
     /// Get the value as an f64 if it is a float
-    pub fn as_f64(&self) -> Option<f64> {
+    #[must_use] 
+    pub const fn as_f64(&self) -> Option<f64> {
         match self {
-            Value::Number(Number::Float(f)) => Some(*f),
-            Value::Number(Number::Integer(i)) => Some(*i as f64),
+            Self::Number(Number::Float(f)) => Some(*f),
+            Self::Number(Number::Integer(i)) => Some(*i as f64),
             _ => None,
         }
     }
 
     /// Get the value as a string if it is one
+    #[must_use] 
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            Value::String(s) => Some(s),
+            Self::String(s) => Some(s),
             _ => None,
         }
     }
 
     /// Get the value as a sequence if it is one
-    pub fn as_sequence(&self) -> Option<&Sequence> {
+    #[must_use] 
+    pub const fn as_sequence(&self) -> Option<&Sequence> {
         match self {
-            Value::Sequence(seq) => Some(seq),
+            Self::Sequence(seq) => Some(seq),
             _ => None,
         }
     }
 
     /// Get the value as a mapping if it is one
-    pub fn as_mapping(&self) -> Option<&Mapping> {
+    #[must_use] 
+    pub const fn as_mapping(&self) -> Option<&Mapping> {
         match self {
-            Value::Mapping(map) => Some(map),
+            Self::Mapping(map) => Some(map),
             _ => None,
         }
-    }
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value::Null
     }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Null => write!(f, "null"),
-            Value::Bool(b) => write!(f, "{}", b),
-            Value::Number(n) => write!(f, "{}", n),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Sequence(seq) => {
+            Self::Null => write!(f, "null"),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Sequence(seq) => {
                 write!(f, "[")?;
                 for (i, v) in seq.iter().enumerate() {
                     if i > 0 {
@@ -376,7 +393,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            Value::Mapping(map) => {
+            Self::Mapping(map) => {
                 write!(f, "{{")?;
                 for (i, (k, v)) in map.iter().enumerate() {
                     if i > 0 {
@@ -386,7 +403,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
-            Value::Tagged(tagged) => {
+            Self::Tagged(tagged) => {
                 write!(f, "{}:{}", tagged.tag.name, tagged.value)
             }
         }
@@ -396,8 +413,8 @@ impl fmt::Display for Value {
 impl fmt::Display for Number {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Number::Integer(i) => write!(f, "{}", i),
-            Number::Float(n) => write!(f, "{}", n),
+            Self::Integer(i) => write!(f, "{}", i),
+            Self::Float(n) => write!(f, "{}", n),
         }
     }
 }
@@ -409,12 +426,12 @@ impl Serialize for Value {
         S: ser::Serializer,
     {
         match self {
-            Value::Null => serializer.serialize_unit(),
-            Value::Bool(b) => serializer.serialize_bool(*b),
-            Value::Number(n) => n.serialize(serializer),
-            Value::String(s) => serializer.serialize_str(s),
-            Value::Sequence(seq) => seq.serialize(serializer),
-            Value::Mapping(map) => {
+            Self::Null => serializer.serialize_unit(),
+            Self::Bool(b) => serializer.serialize_bool(*b),
+            Self::Number(n) => n.serialize(serializer),
+            Self::String(s) => serializer.serialize_str(s),
+            Self::Sequence(seq) => seq.serialize(serializer),
+            Self::Mapping(map) => {
                 use serde::ser::SerializeMap;
                 let mut map_serializer = serializer.serialize_map(Some(map.len()))?;
                 for (k, v) in map {
@@ -422,7 +439,7 @@ impl Serialize for Value {
                 }
                 map_serializer.end()
             }
-            Value::Tagged(tagged) => {
+            Self::Tagged(tagged) => {
                 // For serialization, we just serialize the inner value
                 // The tag information might be lost in this process
                 tagged.value.serialize(serializer)
@@ -437,15 +454,15 @@ impl Serialize for Number {
         S: ser::Serializer,
     {
         match self {
-            Number::Integer(i) => serializer.serialize_i64(*i),
-            Number::Float(f) => serializer.serialize_f64(*f),
+            Self::Integer(i) => serializer.serialize_i64(*i),
+            Self::Float(f) => serializer.serialize_f64(*f),
         }
     }
 }
 
 // Serde deserialization
 impl<'de> Deserialize<'de> for Value {
-    fn deserialize<D>(deserializer: D) -> Result<Value, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
@@ -529,7 +546,7 @@ impl<'de> Deserialize<'de> for Value {
 }
 
 impl<'de> Deserialize<'de> for Number {
-    fn deserialize<D>(deserializer: D) -> Result<Number, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: de::Deserializer<'de>,
     {
@@ -578,14 +595,19 @@ pub struct DocumentIterator {
 
 impl DocumentIterator {
     /// Create new iterator from parsed documents
-    pub fn new(docs: Vec<crate::yaml::Yaml>) -> Self {
+    #[must_use] 
+    pub const fn new(docs: Vec<crate::yaml::Yaml>) -> Self {
         Self { docs, index: 0 }
     }
-    
+}
+
+impl Iterator for DocumentIterator {
+    type Item = Deserializer;
+
     /// Get next document deserializer with blazing performance
     /// Returns Some(deserializer) for valid documents, None when exhausted
     /// Handles errors internally for ergonomic API matching test expectations
-    pub fn next(&mut self) -> Option<Deserializer> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.docs.len() {
             let yaml = &self.docs[self.index];
             self.index += 1;
@@ -599,9 +621,9 @@ impl DocumentIterator {
 
 /// Support for iterator interface
 impl IntoIterator for Deserializer {
-    type Item = Result<Deserializer, crate::Error>;
-    type IntoIter = std::iter::Once<Result<Deserializer, crate::Error>>;
-    
+    type Item = Result<Self, crate::Error>;
+    type IntoIter = std::iter::Once<Result<Self, crate::Error>>;
+
     fn into_iter(self) -> Self::IntoIter {
         std::iter::once(Ok(self))
     }
@@ -610,51 +632,49 @@ impl IntoIterator for Deserializer {
 /// Blazing-fast indexing support for Value with zero allocation
 /// Supports both sequence indexing by usize and mapping access by Value key
 impl Index<usize> for Value {
-    type Output = Value;
-    
+    type Output = Self;
+
     /// Index into sequences with bounds checking for safety
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            Value::Sequence(seq) => {
-                seq.get(index).unwrap_or(&Value::Null)
-            }
-            _ => &Value::Null,
+            Self::Sequence(seq) => seq.get(index).unwrap_or(&Self::Null),
+            _ => &Self::Null,
         }
     }
 }
 
-impl Index<&Value> for Value {
-    type Output = Value;
-    
+impl Index<&Self> for Value {
+    type Output = Self;
+
     /// Index into mappings by key with zero allocation lookup
-    fn index(&self, key: &Value) -> &Self::Output {
+    fn index(&self, key: &Self) -> &Self::Output {
         match self {
-            Value::Mapping(map) => {
-                map.get(key).unwrap_or(&Value::Null)
-            }
-            _ => &Value::Null,
+            Self::Mapping(map) => map.get(key).unwrap_or(&Self::Null),
+            _ => &Self::Null,
         }
     }
 }
 
 impl Index<&str> for Value {
-    type Output = Value;
-    
+    type Output = Self;
+
     /// Index into mappings by string key for ergonomic access
     fn index(&self, key: &str) -> &Self::Output {
-        let key_value = Value::String(key.to_string());
+        let key_value = Self::String(key.to_string());
         self.index(&key_value)
     }
 }
 
 impl Deserializer {
     /// Create a new deserializer from a Value
-    pub fn new(value: Value) -> Self {
+    #[must_use] 
+    pub const fn new(value: Value) -> Self {
         Self { value }
     }
-    
+
     /// Parse a YAML string and return a high-performance document iterator
     /// This matches the expected test API: deserializer.next() -> Option<Result<Deserializer, Error>>
+    #[must_use] 
     pub fn parse_str(s: &str) -> DocumentIterator {
         use crate::parser::YamlLoader;
         match YamlLoader::load_from_str(s) {
@@ -662,9 +682,10 @@ impl Deserializer {
             Err(_) => DocumentIterator::new(vec![]), // Empty iterator on parse error
         }
     }
-    
+
     /// Add into_deserializer method for serde compatibility
-    pub fn into_deserializer(self) -> Self {
+    #[must_use] 
+    pub const fn into_deserializer(self) -> Self {
         self
     }
 }
@@ -676,14 +697,15 @@ pub struct DeserializerIter {
 }
 
 impl DeserializerIter {
-    pub fn new(docs: Vec<crate::yaml::Yaml>) -> Self {
+    #[must_use] 
+    pub const fn new(docs: Vec<crate::yaml::Yaml>) -> Self {
         Self { docs, index: 0 }
     }
 }
 
 impl Iterator for DeserializerIter {
     type Item = Result<Deserializer, crate::Error>;
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.docs.len() {
             let yaml = &self.docs[self.index];
@@ -730,7 +752,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
             Value::Tagged(tagged) => {
                 // For deserialization, we deserialize the inner value
                 // The tag information is preserved in the Value structure
-                let inner_deserializer = Deserializer::new(tagged.value);
+                let inner_deserializer = Self::new(tagged.value);
                 inner_deserializer.deserialize_any(visitor)
             }
         }
@@ -855,7 +877,9 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         match self.value {
             Value::String(s) => {
                 let mut chars = s.chars();
-                let ch = chars.next().ok_or_else(|| Error::Custom("expected char".to_string()))?;
+                let ch = chars
+                    .next()
+                    .ok_or_else(|| Error::Custom("expected char".to_string()))?;
                 if chars.next().is_some() {
                     return Err(Error::Custom("expected single character".to_string()));
                 }
@@ -919,11 +943,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         }
     }
 
-    fn deserialize_unit_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value, Error>
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value, Error>
     where
         V: de::Visitor<'de>,
     {
@@ -1036,7 +1056,7 @@ impl<I> SeqDeserializer<I>
 where
     I: Iterator<Item = Value>,
 {
-    fn new(iter: I) -> Self {
+    const fn new(iter: I) -> Self {
         Self { iter }
     }
 }
@@ -1067,7 +1087,7 @@ impl<I> MapDeserializer<I>
 where
     I: Iterator<Item = (Value, Value)>,
 {
-    fn new(iter: I) -> Self {
+    const fn new(iter: I) -> Self {
         Self { iter, value: None }
     }
 }

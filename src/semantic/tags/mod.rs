@@ -47,36 +47,42 @@ pub type FastTagRegistry<'input> = TagRegistry<'input>;
 
 /// Create a new tag resolver with optimized settings for performance
 #[inline]
+#[must_use] 
 pub fn create_fast_resolver<'input>() -> TagResolver<'input> {
     TagResolver::with_capacity(256, 16) // Optimized for typical YAML files
 }
 
 /// Create a new tag resolver with minimal memory footprint
 #[inline]
+#[must_use] 
 pub fn create_minimal_resolver<'input>() -> TagResolver<'input> {
     TagResolver::with_capacity(32, 4) // Minimal for small files
 }
 
 /// Create a new tag resolver for large documents
 #[inline]
+#[must_use] 
 pub fn create_large_resolver<'input>() -> TagResolver<'input> {
     TagResolver::with_capacity(1024, 32) // Optimized for large files
 }
 
 /// Create a tag registry with default YAML 1.2 prefixes
 #[inline]
+#[must_use] 
 pub fn create_registry<'input>() -> TagRegistry<'input> {
     TagRegistry::new()
 }
 
 /// Create a schema processor with all standard schemas
 #[inline]
+#[must_use] 
 pub fn create_schema_processor<'input>() -> SchemaProcessor<'input> {
     SchemaProcessor::new()
 }
 
 /// Quick tag type inference from scalar value
 #[inline]
+#[must_use] 
 pub fn infer_scalar_type(value: &str) -> YamlType {
     let processor = SchemaProcessor::new();
     processor.infer_scalar_type(value)
@@ -84,13 +90,15 @@ pub fn infer_scalar_type(value: &str) -> YamlType {
 
 /// Check if a tag is a standard YAML 1.2 tag
 #[inline]
+#[must_use] 
 pub fn is_standard_yaml_tag(tag: &str) -> bool {
     tag.starts_with("tag:yaml.org,2002:")
 }
 
 /// Get the standard tag URI for a YAML type
 #[inline]
-pub fn get_standard_tag_uri(yaml_type: &YamlType) -> Option<&'static str> {
+#[must_use] 
+pub const fn get_standard_tag_uri(yaml_type: &YamlType) -> Option<&'static str> {
     yaml_type.standard_tag_uri()
 }
 
@@ -132,6 +140,7 @@ pub fn validate_tag_format(tag: &str) -> Result<(), String> {
 }
 
 /// Get recommended tag for deprecated tags
+#[must_use] 
 pub fn get_recommended_tag(deprecated_tag: &str) -> Option<&'static str> {
     match deprecated_tag {
         "tag:yaml.org,2002:python/none" => Some("tag:yaml.org,2002:null"),
@@ -143,6 +152,7 @@ pub fn get_recommended_tag(deprecated_tag: &str) -> Option<&'static str> {
 }
 
 /// Check if a tag is deprecated
+#[must_use] 
 pub fn is_deprecated_tag(tag: &str) -> bool {
     get_recommended_tag(tag).is_some()
 }
@@ -172,7 +182,8 @@ impl Default for ResolverConfig {
 
 impl ResolverConfig {
     /// Create configuration optimized for speed
-    pub fn fast() -> Self {
+    #[must_use] 
+    pub const fn fast() -> Self {
         Self {
             tag_cache_size: 512,
             registry_capacity: 512,
@@ -183,7 +194,8 @@ impl ResolverConfig {
     }
 
     /// Create configuration optimized for memory
-    pub fn minimal() -> Self {
+    #[must_use] 
+    pub const fn minimal() -> Self {
         Self {
             tag_cache_size: 32,
             registry_capacity: 32,
@@ -194,7 +206,8 @@ impl ResolverConfig {
     }
 
     /// Create configuration with full debugging
-    pub fn debug() -> Self {
+    #[must_use] 
+    pub const fn debug() -> Self {
         Self {
             tag_cache_size: 128,
             registry_capacity: 128,
@@ -205,6 +218,7 @@ impl ResolverConfig {
     }
 
     /// Apply configuration to create resolver
+    #[must_use] 
     pub fn create_resolver<'input>(&self) -> TagResolver<'input> {
         TagResolver::with_capacity(self.registry_capacity, self.custom_resolver_capacity)
     }
@@ -216,7 +230,8 @@ pub struct TagStatsAggregator {
 }
 
 impl TagStatsAggregator {
-    pub fn new() -> Self {
+    #[must_use] 
+    pub const fn new() -> Self {
         Self {
             resolvers: Vec::new(),
         }
@@ -226,6 +241,7 @@ impl TagStatsAggregator {
         self.resolvers.push(stats);
     }
 
+    #[must_use] 
     pub fn get_aggregate_stats(&self) -> AggregateTagStatistics {
         let mut aggregate = AggregateTagStatistics::default();
 

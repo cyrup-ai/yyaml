@@ -29,6 +29,7 @@ pub struct TagRegistry<'input> {
 
 impl<'input> TagRegistry<'input> {
     /// Create new tag registry with default prefixes and optimized settings
+    #[must_use] 
     pub fn new() -> Self {
         let mut tag_prefixes = HashMap::with_capacity(8);
 
@@ -48,6 +49,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Create new registry with specified initial capacity for optimization
+    #[must_use] 
     pub fn with_capacity(tag_capacity: usize, prefix_capacity: usize) -> Self {
         let mut registry = Self::new();
         registry.resolved_tags.reserve(tag_capacity);
@@ -64,6 +66,7 @@ impl<'input> TagRegistry<'input> {
 
     /// Get tag prefix for a given handle
     #[inline]
+    #[must_use] 
     pub fn get_tag_prefix(&self, handle: &str) -> Option<&Cow<'input, str>> {
         self.tag_prefixes.get(handle)
     }
@@ -98,11 +101,13 @@ impl<'input> TagRegistry<'input> {
 
     /// Get resolved tag by name (read-only access)
     #[inline]
+    #[must_use] 
     pub fn get_tag_readonly(&self, tag_name: &str) -> Option<&ResolvedTag<'input>> {
         self.resolved_tags.get(tag_name)
     }
 
     /// Get all resolved tags as a vector
+    #[must_use] 
     pub fn all_tags(&self) -> Vec<&ResolvedTag<'input>> {
         self.resolved_tags.values().collect()
     }
@@ -114,31 +119,35 @@ impl<'input> TagRegistry<'input> {
 
     /// Check if tag exists in registry
     #[inline]
+    #[must_use] 
     pub fn contains_tag(&self, tag_name: &str) -> bool {
         self.resolved_tags.contains_key(tag_name)
     }
 
     /// Get number of registered tags
     #[inline]
+    #[must_use] 
     pub fn len(&self) -> usize {
         self.resolved_tags.len()
     }
 
     /// Check if registry is empty
     #[inline]
+    #[must_use] 
     pub fn is_empty(&self) -> bool {
         self.resolved_tags.is_empty()
     }
 
     /// Set current schema type
     #[inline]
-    pub fn set_schema_type(&mut self, schema_type: SchemaType) {
+    pub const fn set_schema_type(&mut self, schema_type: SchemaType) {
         self.schema_type = schema_type;
     }
 
     /// Get current schema type
     #[inline]
-    pub fn schema_type(&self) -> SchemaType {
+    #[must_use] 
+    pub const fn schema_type(&self) -> SchemaType {
         self.schema_type
     }
 
@@ -157,6 +166,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get tags by type filter
+    #[must_use] 
     pub fn get_tags_by_type(&self, yaml_type: &YamlType) -> Vec<&ResolvedTag<'input>> {
         self.resolved_tags
             .values()
@@ -165,6 +175,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get most frequently accessed tags
+    #[must_use] 
     pub fn get_frequent_tags(&self, limit: usize) -> Vec<(&String, &usize)> {
         let mut access_vec: Vec<_> = self.access_cache.iter().collect();
         access_vec.sort_by(|a, b| b.1.cmp(a.1));
@@ -172,6 +183,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get standard YAML tags only
+    #[must_use] 
     pub fn get_standard_tags(&self) -> Vec<&ResolvedTag<'input>> {
         self.resolved_tags
             .values()
@@ -180,6 +192,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get custom tags only
+    #[must_use] 
     pub fn get_custom_tags(&self) -> Vec<&ResolvedTag<'input>> {
         self.resolved_tags
             .values()
@@ -188,6 +201,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get deprecated tags
+    #[must_use] 
     pub fn get_deprecated_tags(&self) -> Vec<&ResolvedTag<'input>> {
         self.resolved_tags
             .values()
@@ -196,6 +210,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get registry performance metrics
+    #[must_use] 
     pub fn get_metrics(&self) -> TagMetrics {
         let _cache_hit_rate = if self.lookup_count > 0 {
             (self.cache_hits as f64 / self.lookup_count as f64) * 100.0
@@ -222,6 +237,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Get comprehensive tag statistics
+    #[must_use] 
     pub fn get_statistics(&self) -> TagStatistics {
         let mut stats = TagStatistics {
             total_resolved: self.resolved_tags.len(),
@@ -292,6 +308,7 @@ impl<'input> TagRegistry<'input> {
     }
 
     /// Export registry data for serialization/debugging
+    #[must_use] 
     pub fn export_data(&self) -> RegistryExportData<'input> {
         RegistryExportData {
             resolved_tags: self.resolved_tags.clone(),
@@ -338,6 +355,7 @@ impl<'input> Default for TagRegistry<'input> {
 // Thread-safe registry operations (if needed)
 impl<'input> TagRegistry<'input> {
     /// Get thread-safe clone of tag data
+    #[must_use] 
     pub fn get_thread_safe_snapshot(&self) -> HashMap<String, YamlType> {
         self.resolved_tags
             .iter()

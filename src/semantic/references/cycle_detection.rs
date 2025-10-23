@@ -27,6 +27,7 @@ pub struct CycleDetector {
 impl CycleDetector {
     /// Create new cycle detector with optimized settings
     #[inline]
+    #[must_use] 
     pub fn new() -> Self {
         Self {
             detection_algorithm: CycleDetectionAlgorithm::DepthFirstSearch,
@@ -74,9 +75,10 @@ impl CycleDetector {
 
         for node_id in graph.get_all_node_ids() {
             if !self.visited_nodes.contains(&node_id)
-                && let Some(cycle) = self.dfs_visit(node_id, graph)? {
-                    cycles.push(cycle);
-                }
+                && let Some(cycle) = self.dfs_visit(node_id, graph)?
+            {
+                cycles.push(cycle);
+            }
         }
 
         Ok(CycleDetectionResult {
@@ -193,7 +195,8 @@ impl CycleDetector {
 
     /// Classify type of cycle - blazing-fast pattern recognition
     #[inline]
-    pub fn classify_cycle_type(&self, cycle_nodes: &[ReferenceId]) -> CycleType {
+    #[must_use] 
+    pub const fn classify_cycle_type(&self, cycle_nodes: &[ReferenceId]) -> CycleType {
         match cycle_nodes.len() {
             1 => CycleType::SelfReference,
             2 => CycleType::DirectCycle,
@@ -203,6 +206,7 @@ impl CycleDetector {
     }
 
     /// Assess severity of cycle - intelligent risk analysis
+    #[must_use] 
     pub fn assess_cycle_severity(
         &self,
         cycle_nodes: &[ReferenceId],
@@ -247,6 +251,7 @@ impl CycleDetector {
     }
 
     /// Build cycle path description for debugging
+    #[must_use] 
     pub fn build_cycle_path(
         &self,
         cycle_nodes: &[ReferenceId],
@@ -286,19 +291,21 @@ impl CycleDetector {
 
     /// Set maximum detection depth
     #[inline]
-    pub fn set_max_depth(&mut self, max_depth: usize) {
+    pub const fn set_max_depth(&mut self, max_depth: usize) {
         self.max_depth = max_depth;
     }
 
     /// Get current detection algorithm
     #[inline]
-    pub fn get_algorithm(&self) -> CycleDetectionAlgorithm {
+    #[must_use] 
+    pub const fn get_algorithm(&self) -> CycleDetectionAlgorithm {
         self.detection_algorithm
     }
 
     /// Get performance metrics from last detection
     #[inline]
-    pub fn get_performance_metrics(&self) -> &DetectionMetrics {
+    #[must_use] 
+    pub const fn get_performance_metrics(&self) -> &DetectionMetrics {
         &self.performance_metrics
     }
 
@@ -310,12 +317,14 @@ impl CycleDetector {
 
     /// Get cache size for memory optimization
     #[inline]
+    #[must_use] 
     pub fn cache_size(&self) -> usize {
         self.cycle_cache.len()
     }
 
     /// Check if detection is cached for a node
     #[inline]
+    #[must_use] 
     pub fn is_cached(&self, node_id: ReferenceId) -> bool {
         self.cycle_cache.contains_key(&node_id)
     }

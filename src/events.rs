@@ -8,6 +8,8 @@ pub enum Event {
     StreamEnd,
     DocumentStart,
     DocumentEnd,
+    YamlDirective(u32, u32),
+    TagDirective(String, String),
     Alias(usize),
     Scalar(String, TScalarStyle, usize, Option<TokenType>),
     SequenceStart(usize),
