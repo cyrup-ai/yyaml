@@ -5,7 +5,7 @@
 
 use crate::error::ScanError;
 use crate::parser::character_productions::CharacterProductions;
-use crate::parser::grammar::{ChompingMode, Context, ParametricContext};
+use crate::parser::grammar::{ChompingMode, Context as YamlContext, ParametricContext};
 use crate::scanner::state::ScannerState;
 use crate::scanner::utils::{consume_line_break, skip_whitespace_and_comments};
 
@@ -85,10 +85,10 @@ impl StructuralProductions {
         n: i32,
     ) -> Result<(), ScanError> {
         match context.current_context {
-            Context::BlockOut | Context::BlockIn => {
+            YamlContext::BlockOut | YamlContext::BlockIn => {
                 Self::process_block_line_prefix(state, context, n)
             }
-            Context::FlowOut | Context::FlowIn => Self::process_flow_line_prefix(state, context, n),
+            YamlContext::FlowOut | YamlContext::FlowIn => Self::process_flow_line_prefix(state, context, n),
             _ => Ok(()),
         }
     }
@@ -208,7 +208,7 @@ impl StructuralProductions {
         n: i32,
     ) -> Result<(), ScanError> {
         match context.current_context {
-            Context::BlockKey | Context::FlowKey => {
+            YamlContext::BlockKey | YamlContext::FlowKey => {
                 // USE existing whitespace skipping
                 while let Ok(ch) = state.peek_char() {
                     if CharacterProductions::is_white(ch) {

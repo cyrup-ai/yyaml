@@ -1,7 +1,7 @@
 use crate::error::ScanError;
 use crate::events::{TScalarStyle, TokenType};
 use crate::linked_hash_map::LinkedHashMap;
-use crate::parser::grammar::{Context, ParametricContext};
+use crate::parser::grammar::{Context as YamlContext, ParametricContext};
 use crate::scanner::Scanner;
 use crate::yaml::Yaml;
 use std::collections::HashMap;
@@ -192,7 +192,7 @@ impl<T: Iterator<Item = char>> StateMachine<T> {
 
     fn handle_document_content(&mut self) {
         // Document content starts at indent 0, BLOCK-OUT context
-        self.context.push_context(Context::BlockOut, 0);
+        self.context.push_context(YamlContext::BlockOut, 0);
         self.state = State::BlockNode;
     }
 
@@ -404,7 +404,7 @@ impl<T: Iterator<Item = char>> StateMachine<T> {
     fn handle_block_mapping_first_key(&mut self) -> Result<(), ScanError> {
         // Block mapping key uses BLOCK-KEY context at n+1
         let n = self.context.current_indent();
-        self.context.push_context(Context::BlockKey, n + 1);
+        self.context.push_context(YamlContext::BlockKey, n + 1);
 
         self.state = State::BlockMappingKey;
         self.handle_mapping_key()
@@ -483,7 +483,7 @@ impl<T: Iterator<Item = char>> StateMachine<T> {
 
                 // Use EXISTING calculate_block_indent method from ParametricContext
                 let value_indent = self.context.calculate_block_indent(key_indent, 1); // n+1 minimum
-                self.context.push_context(Context::BlockIn, value_indent);
+                self.context.push_context(YamlContext::BlockIn, value_indent);
 
                 // Handle tags and other tokens after the colon
                 loop {
@@ -586,7 +586,7 @@ impl<T: Iterator<Item = char>> StateMachine<T> {
     fn handle_flow_sequence_first_entry(&mut self) -> Result<(), ScanError> {
         // Flow sequence switches to FLOW-IN context
         let current_indent = self.context.current_indent();
-        self.context.push_context(Context::FlowIn, current_indent);
+        self.context.push_context(YamlContext::FlowIn, current_indent);
 
         self.state = State::FlowSequenceEntry;
         Ok(())
@@ -847,11 +847,11 @@ impl<T: Iterator<Item = char>> StateMachine<T> {
 
     const fn can_accept_token(&self, token: &TokenType) -> bool {
         match self.context.current_context {
-            Context::FlowIn | Context::FlowOut => {
+            YamlContext::FlowIn | YamlContext::FlowOut => {
                 // Flow contexts cannot have block entries
                 !matches!(token, TokenType::BlockEntry)
             }
-            Context::BlockKey => {
+            YamlContext::BlockKey => {
                 // Block key context has restricted character set
                 !matches!(
                     token,

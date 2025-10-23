@@ -5,7 +5,7 @@
 
 use crate::error::ScanError;
 use crate::parser::character_productions::CharacterProductions;
-use crate::parser::grammar::{Context, ParametricContext};
+use crate::parser::grammar::{Context as YamlContext, ParametricContext};
 use crate::parser::structural_productions::StructuralProductions;
 use crate::scanner::state::ScannerState;
 
@@ -36,11 +36,11 @@ impl FlowProductions {
 
         // Context-dependent parsing
         match context.current_context {
-            Context::FlowKey | Context::BlockKey => {
+            YamlContext::FlowKey | YamlContext::BlockKey => {
                 // Single line only - [nb-double-one-line]
                 Self::parse_double_quoted_single_line(state, &mut content)?
             }
-            Context::FlowIn | Context::FlowOut => {
+            YamlContext::FlowIn | YamlContext::FlowOut => {
                 // Multi-line with folding - [nb-double-multi-line(n)]
                 Self::parse_double_quoted_multi_line(state, &mut content, n)?
             }
@@ -169,11 +169,11 @@ impl FlowProductions {
 
         // Additional context-specific restrictions
         match context.current_context {
-            Context::FlowIn | Context::FlowOut => {
+            YamlContext::FlowIn | YamlContext::FlowOut => {
                 // Flow context: additional restrictions for flow indicators
                 !matches!(ch, '[' | ']' | '{' | '}' | ',')
             }
-            Context::FlowKey => {
+            YamlContext::FlowKey => {
                 // Flow key context: stricter rules
                 !matches!(ch, '[' | ']' | '{' | '}' | ',' | ':' | '?' | '#')
             }
@@ -290,7 +290,7 @@ impl FlowProductions {
 
         // Context-specific continuation rules
         match context.current_context {
-            Context::FlowIn | Context::FlowOut => {
+            YamlContext::FlowIn | YamlContext::FlowOut => {
                 // Flow context: check for collection terminators
                 if matches!(ch, ':' | ',' | ']' | '}') {
                     // Need lookahead to determine if this is structure or content

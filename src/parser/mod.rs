@@ -14,6 +14,6 @@ pub mod structural_productions;
 pub use ast::*;
 pub use character_productions::CharacterProductions;
 pub use flow::FlowProductions;
-pub use grammar::ParametricContext;
+pub use grammar::{ChompingMode, ParametricContext, YamlContext};
 pub use loader::YamlLoader;
 pub use state_machine::{State, StateMachine};
